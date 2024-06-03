@@ -1,0 +1,59 @@
+{
+    "folders": [
+        {
+            "path": "ladybird",
+            "index_exclude_patterns": [
+                "*.c",
+                "*.cc",
+                "*.cpp",
+                "*.m",
+                "*.mm",
+                "*.h",
+                "*.hh",
+                "*.hpp",
+            ],
+            "folder_exclude_patterns": [
+                ".devcontainer",
+                "Build",
+            ],
+        },
+        {
+            "name": "generated",
+            "path": "ladybird/Build/Lagom/Userland/Libraries",
+            "index_exclude_patterns": ["*"],
+            "file_include_patterns": [
+                "*.h",
+                "*.cpp",
+            ],
+        },
+        {
+            "name": "downloaded",
+            "path": "ladybird/Build/caches",
+            "index_exclude_patterns": ["*"],
+        },
+        {
+            "path": "libjs-test262",
+            "folder_exclude_patterns": [
+                "Build",
+            ],
+        },
+    ],
+    "settings": {
+        "copy-paths": {
+            "c_family_includes_use_brackets": true,
+            "c_family_includes_strip_prefixes": [
+                "Userland/Libraries",
+                "Userland/Services",
+            ],
+        },
+        "format": {
+            "clang-format": {
+                "on_save": true,
+            },
+            // "gn": {
+            //     "path": "$HOME/workspace/ladybird/Toolchain/Local/gn/bin",
+            //     "on_save": true,
+            // },
+        },
+    },
+}
