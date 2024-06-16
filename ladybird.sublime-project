@@ -19,7 +19,7 @@
         },
         {
             "name": "generated",
-            "path": "ladybird/Build/Lagom/Userland/Libraries",
+            "path": "ladybird/Build/ladybird/Lagom/Userland/Libraries",
             "index_exclude_patterns": ["*"],
             "file_include_patterns": [
                 "*.h",
@@ -48,6 +48,7 @@
         },
         "format": {
             "clang-format": {
+                // "path": "/opt/homebrew/opt/llvm/bin",
                 "on_save": true,
             },
             // "gn": {
@@ -55,5 +56,12 @@
             //     "on_save": true,
             // },
         },
+        // "LSP": {
+        //     "clangd": {
+        //         "initializationOptions": {
+        //             "custom_command": [ "/opt/homebrew/opt/llvm/bin/clangd" ],
+        //         },
+        //     },
+        // },
     },
 }
