@@ -32,7 +32,7 @@ static ErrorOr<ByteBuffer> decode_base64_impl(StringView input, simdutf::base64_
     return output;
 }
 
-static ErrorOr<String> encode_base64_impl(StringView input, simdutf::base64_options options)
+static ErrorOr<String> encode_base64_impl(StringView input, simdutf::base64_options options, OmitPadding omit_padding)
 {
     Vector<u8> output;
 
@@ -46,12 +46,19 @@ static ErrorOr<String> encode_base64_impl(StringView input, simdutf::base64_opti
         reinterpret_cast<char*>(output.data()),
         options);
 
-    if (options == simdutf::base64_url) {
-        for (size_t i = size_written; i < output.size(); ++i)
-            output[i] = '=';
+    if (options == simdutf::base64_default && omit_padding == OmitPadding::Yes) {
+        while (size_written > 0 && output[size_written - 1] == '=')
+            --size_written;
     }
 
-    return String::from_utf8_without_validation(output);
+    if (options == simdutf::base64_url && omit_padding == OmitPadding::No) {
+        for (size_t i = size_written; i < output.size(); ++i) {
+            output[i] = '=';
+            ++size_written;
+        }
+    }
+
+    return String::from_utf8_without_validation(output.span().slice(0, size_written));
 }
 
 ErrorOr<ByteBuffer> decode_base64(StringView input)
@@ -64,14 +71,14 @@ ErrorOr<ByteBuffer> decode_base64url(StringView input)
     return decode_base64_impl(input, simdutf::base64_url);
 }
 
-ErrorOr<String> encode_base64(ReadonlyBytes input)
+ErrorOr<String> encode_base64(ReadonlyBytes input, OmitPadding omit_padding)
 {
-    return encode_base64_impl(input, simdutf::base64_default);
+    return encode_base64_impl(input, simdutf::base64_default, omit_padding);
 }
 
-ErrorOr<String> encode_base64url(ReadonlyBytes input)
+ErrorOr<String> encode_base64url(ReadonlyBytes input, OmitPadding omit_padding)
 {
-    return encode_base64_impl(input, simdutf::base64_url);
+    return encode_base64_impl(input, simdutf::base64_url, omit_padding);
 }
 
 }
