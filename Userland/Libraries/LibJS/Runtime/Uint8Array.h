@@ -6,10 +6,23 @@
 
 #pragma once
 
+#include <AK/ByteBuffer.h>
+#include <AK/Optional.h>
+#include <AK/StringView.h>
 #include <LibJS/Forward.h>
 #include <LibJS/Heap/GCPtr.h>
+#include <LibJS/Runtime/Completion.h>
+#include <LibJS/Runtime/Value.h>
 
 namespace JS {
+
+class Uint8ArrayConstructorHelpers {
+public:
+    static void initialize(Realm&, Object& constructor);
+
+private:
+    JS_DECLARE_NATIVE_FUNCTION(from_base64);
+};
 
 class Uint8ArrayPrototypeHelpers {
 public:
@@ -20,7 +33,14 @@ private:
     JS_DECLARE_NATIVE_FUNCTION(to_hex);
 };
 
+struct FromBase64Result {
+    size_t read { 0 };          // [[Read]]
+    ByteBuffer bytes;           // [[Bytes]]
+    Optional<Completion> error; // [[Error]]
+};
+
 ThrowCompletionOr<NonnullGCPtr<TypedArrayBase>> validate_uint8_array(VM&);
 ThrowCompletionOr<ByteBuffer> get_uint8_array_bytes(VM&, TypedArrayBase const&);
+FromBase64Result from_base64(VM&, StringView string, StringView alphabet, StringView last_chunk_handling, size_t max_length = MAX_ARRAY_LIKE_INDEX);
 
 }

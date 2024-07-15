@@ -14,6 +14,14 @@
 
 namespace JS {
 
+void Uint8ArrayConstructorHelpers::initialize(Realm& realm, Object& constructor)
+{
+    auto& vm = constructor.vm();
+
+    static constexpr u8 attr = Attribute::Writable | Attribute::Configurable;
+    constructor.define_native_function(realm, vm.names.fromBase64, from_base64, 1, attr);
+}
+
 void Uint8ArrayPrototypeHelpers::initialize(Realm& realm, Object& prototype)
 {
     auto& vm = prototype.vm();
@@ -98,6 +106,51 @@ JS_DEFINE_NATIVE_FUNCTION(Uint8ArrayPrototypeHelpers::to_hex)
     return PrimitiveString::create(vm, MUST(out.to_string()));
 }
 
+// 3 Uint8Array.fromBase64 ( string [ , options ] ), https://tc39.es/proposal-arraybuffer-base64/spec/#sec-uint8array.frombase64
+JS_DEFINE_NATIVE_FUNCTION(Uint8ArrayConstructorHelpers::from_base64)
+{
+    auto string_value = vm.argument(0);
+    auto options_value = vm.argument(1);
+
+    // 1. If string is not a String, throw a TypeError exception.
+    if (!string_value.is_string())
+        return vm.throw_completion<TypeError>(ErrorType::NotAString, string_value);
+
+    // 2. Let opts be ? GetOptionsObject(options).
+    auto* options = TRY(Temporal::get_options_object(vm, options_value));
+
+    // 3. Let alphabet be ? Get(opts, "alphabet").
+    auto alphabet = TRY(options->get(vm.names.alphabet));
+
+    // 4. If alphabet is undefined, set alphabet to "base64".
+    if (alphabet.is_undefined())
+        alphabet = PrimitiveString::create(vm, "base64"sv);
+
+    // 5. If alphabet is neither "base64" nor "base64url", throw a TypeError exception.
+    if (!alphabet.is_string() || !alphabet.as_string().utf8_string_view().is_one_of("base64"sv, "base64url"sv))
+        return vm.throw_completion<TypeError>(ErrorType::OptionIsNotValidValue, alphabet, "alphabet"sv);
+
+    // 6. Let lastChunkHandling be ? Get(opts, "lastChunkHandling").
+    auto last_chunk_handling = TRY(options->get(vm.names.lastChunkHandling));
+
+    // 7. If lastChunkHandling is undefined, set lastChunkHandling to "loose".
+    if (last_chunk_handling.is_undefined())
+        last_chunk_handling = PrimitiveString::create(vm, "loose"sv);
+
+    // 8. If lastChunkHandling is not one of "loose", "strict", or "stop-before-partial", throw a TypeError exception.
+    if (!last_chunk_handling.is_string() || !last_chunk_handling.as_string().utf8_string_view().is_one_of("loose"sv, "strict"sv, "stop-before-partial"sv))
+        return vm.throw_completion<TypeError>(ErrorType::OptionIsNotValidValue, last_chunk_handling, "lastChunkHandling"sv);
+
+    // 9. Let result be FromBase64(string, alphabet, lastChunkHandling).
+    // 10. If result.[[Error]] is not none, then
+    //     a. Throw result.[[Error]].
+    // 11. Let resultLength be the length of result.[[Bytes]].
+    // 12. Let ta be ? AllocateTypedArray("Uint8Array", %Uint8Array%, "%Uint8Array.prototype%", resultLength).
+    // 13. Set the value at each index of ta.[[ViewedArrayBuffer]].[[ArrayBufferData]] to the value at the corresponding index of result.[[Bytes]].
+    // 14. Return ta.
+    return js_undefined();
+}
+
 // 7 ValidateUint8Array ( ta ), https://tc39.es/proposal-arraybuffer-base64/spec/#sec-validateuint8array
 ThrowCompletionOr<NonnullGCPtr<TypedArrayBase>> validate_uint8_array(VM& vm)
 {
@@ -154,6 +207,19 @@ ThrowCompletionOr<ByteBuffer> get_uint8_array_bytes(VM& vm, TypedArrayBase const
 
     // 9. Return bytes.
     return bytes;
+}
+
+// 10.3 FromBase64 ( string, alphabet, lastChunkHandling [ , maxLength ] ), https://tc39.es/proposal-arraybuffer-base64/spec/#sec-frombase64
+FromBase64Result from_base64(VM& vm, StringView string, StringView alphabet, [[maybe_unused]] StringView last_chunk_handling, [[maybe_unused]] size_t max_length)
+{
+    auto decoded = alphabet == "base64"sv ? decode_base64(string) : decode_base64url(string);
+
+    if (decoded.is_error()) {
+        auto error = vm.throw_completion<SyntaxError>(decoded.error().string_literal());
+        return { .read = 0, .bytes = {}, .error = move(error) };
+    }
+
+    return { .read = 0, .bytes = decoded.release_value(), .error = {} };
 }
 
 }
