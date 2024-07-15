@@ -532,6 +532,7 @@ namespace JS {
     P(toExponential)                         \
     P(toFixed)                               \
     P(toGMTString)                           \
+    P(toHex)                                 \
     P(toInstant)                             \
     P(toISOString)                           \
     P(toJSON)                                \
