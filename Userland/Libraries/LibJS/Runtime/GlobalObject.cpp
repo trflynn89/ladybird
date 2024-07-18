@@ -447,70 +447,149 @@ static ThrowCompletionOr<ByteString> encode(VM& vm, ByteString const& string, St
     return encoded_builder.to_byte_string();
 }
 
-// 19.2.6.6 Decode ( string, preserveEscapeSet ), https://tc39.es/ecma262/#sec-decode
-// FIXME: Add spec comments to this implementation. It deviates a lot, so that's a bit tricky.
-static ThrowCompletionOr<ByteString> decode(VM& vm, ByteString const& string, StringView reserved_set)
+// 19.2.6.7 ParseHexOctet ( string, position )
+static Optional<u8> parse_hex_octet(StringView string, size_t position)
 {
-    StringBuilder decoded_builder;
-    auto code_point_start_offset = 0u;
-    auto expected_continuation_bytes = 0;
-    for (size_t k = 0; k < string.length(); k++) {
+    // 1. Let len be the length of string.
+    // 2. Assert: position + 2 ≤ len.
+    ASSERT(position + 2 <= string.length());
+
+    // 3. Let hexDigits be the substring of string from position to position + 2.
+    auto hex_digits = string.substring_view(position, 2);
+
+    // 4. Let parseResult be ParseText(hexDigits, HexDigits[~Sep]).
+    auto parse_result = AK::StringUtils::convert_to_uint_from_hex(hex_digits, TrimWhitespace::No);
+
+    // 5. If parseResult is not a Parse Node, return parseResult.
+    if (!parse_result.has_value())
+        return {};
+
+    // 6. Let n be the MV of parseResult.
+    // 7. Assert: n is in the inclusive interval from 0 to 255.
+    ASSERT(*parse_result <= 255);
+
+    // 8. Return n.
+    return static_cast<u8>(*parse_result);
+}
+
+// 19.2.6.6 Decode ( string, preserveEscapeSet ), https://tc39.es/ecma262/#sec-decode
+static ThrowCompletionOr<String> decode(VM& vm, StringView string, StringView preserve_escape_set)
+{
+    // 1. Let len be the length of string.
+    auto length = string.length();
+
+    // 2. Let R be the empty String.
+    StringBuilder result(string.length());
+
+    // 3. Let k be 0.
+    // 4. Repeat, while k < len,
+    for (size_t k = 0; k < length; ++k) {
+        // a. Let C be the code unit at index k within string.
         auto code_unit = string[k];
-        if (code_unit != '%') {
-            if (expected_continuation_bytes > 0)
+
+        // b. Let S be C.
+
+        // c. If C is the code unit 0x0025 (PERCENT SIGN), then
+        if (code_unit == '%') {
+            // i. If k + 3 > len, throw a URIError exception.
+            if (k + 3 > length)
                 return vm.throw_completion<URIError>(ErrorType::URIMalformed);
 
-            decoded_builder.append(code_unit);
-            continue;
-        }
+            // ii. Let escape be the substring of string from k to k + 3.
+            auto escape = string.substring_view(k, 3);
 
-        if (k + 2 >= string.length())
-            return vm.throw_completion<URIError>(ErrorType::URIMalformed);
+            // iii. Let B be ParseHexOctet(string, k + 1).
+            auto octet = parse_hex_octet(string, k + 1);
 
-        auto first_digit = decode_hex_digit(string[k + 1]);
-        if (first_digit >= 16)
-            return vm.throw_completion<URIError>(ErrorType::URIMalformed);
-
-        auto second_digit = decode_hex_digit(string[k + 2]);
-        if (second_digit >= 16)
-            return vm.throw_completion<URIError>(ErrorType::URIMalformed);
-
-        u8 decoded_code_unit = (first_digit << 4) | second_digit;
-        k += 2;
-        if (expected_continuation_bytes > 0) {
-            decoded_builder.append(decoded_code_unit);
-            expected_continuation_bytes--;
-            if (expected_continuation_bytes == 0 && !Utf8View(decoded_builder.string_view().substring_view(code_point_start_offset)).validate())
+            // iv. If B is not an integer, throw a URIError exception.
+            if (!octet.has_value())
                 return vm.throw_completion<URIError>(ErrorType::URIMalformed);
-            continue;
+
+            // v. Set k to k + 2.
+            k += 2;
+
+            // vi. Let n be the number of leading 1 bits in B.
+            auto leading_ones = count_leading_zeroes_safe(static_cast<u8>(~(*octet)));
+
+            // vii. If n = 0, then
+            if (leading_ones == 0) {
+                // 1. Let asciiChar be the code unit whose numeric value is B.
+                auto ascii_char = static_cast<char>(*octet);
+
+                // 2. If preserveEscapeSet contains asciiChar, set S to escape. Otherwise, set S to asciiChar.
+                if (preserve_escape_set.contains(ascii_char))
+                    result.append(escape);
+                else
+                    result.append(ascii_char);
+            }
+            // viii. Else,
+            else {
+                // 1. If n = 1 or n > 4, throw a URIError exception.
+                if (leading_ones == 1 || leading_ones > 4)
+                    return vm.throw_completion<URIError>(ErrorType::URIMalformed);
+
+                // 2. Let Octets be « B ».
+                Vector<u8, 4> octets { *octet };
+
+                // 3. Let j be 1.
+                // 4. Repeat, while j < n,
+                for (size_t j = 1; j < static_cast<size_t>(leading_ones); ++j, k += 2) {
+                    // a. Set k to k + 1.
+                    ++k;
+
+                    // b. If k + 3 > len, throw a URIError exception.
+                    if (k + 3 > length)
+                        return vm.throw_completion<URIError>(ErrorType::URIMalformed);
+
+                    // c. If the code unit at index k within string is not the code unit 0x0025 (PERCENT SIGN), throw a URIError exception.
+                    if (string[k] != '%')
+                        return vm.throw_completion<URIError>(ErrorType::URIMalformed);
+
+                    // d. Let continuationByte be ParseHexOctet(string, k + 1).
+                    auto continuation_byte = parse_hex_octet(string, k + 1);
+
+                    // e. If continuationByte is not an integer, throw a URIError exception.
+                    if (!continuation_byte.has_value())
+                        return vm.throw_completion<URIError>(ErrorType::URIMalformed);
+
+                    // f. Append continuationByte to Octets.
+                    octets.append(*continuation_byte);
+
+                    // g. Set k to k + 2.
+                    // h. Set j to j + 1.
+                }
+
+                // 5. Assert: The length of Octets is n.
+                ASSERT(octets.size() == static_cast<size_t>(leading_ones));
+
+                // 6. If Octets does not contain a valid UTF-8 encoding of a Unicode code point, throw a URIError exception.
+                Utf8View utf8 { StringView { octets.span() } };
+                if (!utf8.validate())
+                    return vm.throw_completion<URIError>(ErrorType::URIMalformed);
+
+                // 7. Let V be the code point obtained by applying the UTF-8 transformation to Octets, that is, from a List of octets into a 21-bit value.
+                auto code_point = *utf8.begin();
+
+                // 8. Set S to UTF16EncodeCodePoint(V).
+                result.append_code_point(code_point);
+            }
+        } else {
+            result.append(code_unit);
         }
 
-        if (decoded_code_unit < 0x80) {
-            if (reserved_set.contains(static_cast<char>(decoded_code_unit)))
-                decoded_builder.append(string.substring_view(k - 2, 3));
-            else
-                decoded_builder.append(decoded_code_unit);
-            continue;
-        }
-
-        auto leading_ones = count_leading_zeroes_safe(static_cast<u8>(~decoded_code_unit));
-        if (leading_ones == 1 || leading_ones > 4)
-            return vm.throw_completion<URIError>(ErrorType::URIMalformed);
-
-        code_point_start_offset = decoded_builder.length();
-        decoded_builder.append(decoded_code_unit);
-        expected_continuation_bytes = leading_ones - 1;
+        // d. Set R to the string-concatenation of R and S.
+        // e. Set k to k + 1.
     }
-    if (expected_continuation_bytes > 0)
-        return vm.throw_completion<URIError>(ErrorType::URIMalformed);
-    return decoded_builder.to_byte_string();
+
+    // 5. Return R.
+    return result.to_string_without_validation();
 }
 
 // 19.2.6.1 decodeURI ( encodedURI ), https://tc39.es/ecma262/#sec-decodeuri-encodeduri
 JS_DEFINE_NATIVE_FUNCTION(GlobalObject::decode_uri)
 {
     // 1. Let uriString be ? ToString(encodedURI).
-    auto uri_string = TRY(vm.argument(0).to_byte_string(vm));
+    auto uri_string = TRY(vm.argument(0).to_string(vm));
 
     // 2. Let preserveEscapeSet be ";/?:@&=+$,#".
     // 3. Return ? Decode(uriString, preserveEscapeSet).
@@ -524,7 +603,7 @@ JS_DEFINE_NATIVE_FUNCTION(GlobalObject::decode_uri_component)
     auto encoded_uri_component = vm.argument(0);
 
     // 1. Let componentString be ? ToString(encodedURIComponent).
-    auto uri_string = TRY(encoded_uri_component.to_byte_string(vm));
+    auto uri_string = TRY(encoded_uri_component.to_string(vm));
 
     // 2. Let preserveEscapeSet be the empty String.
     // 3. Return ? Decode(componentString, preserveEscapeSet).
