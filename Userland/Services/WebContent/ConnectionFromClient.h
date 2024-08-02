@@ -132,6 +132,7 @@ private:
 
     virtual void take_document_screenshot(u64 page_id) override;
     virtual void take_dom_node_screenshot(u64 page_id, i32 node_id) override;
+    virtual void paint_to_pdf(u64 page_id) override;
 
     virtual void request_internal_page_info(u64 page_id, WebView::PageInfoType) override;
 

@@ -96,6 +96,7 @@ public:
     [[nodiscard]] JS::GCPtr<DOM::Node> currently_focused_area();
 
     void paint(Web::DevicePixelRect const&, Painting::BackingStore&, Web::PaintOptions);
+    void paint_to_pdf(DevicePixelSize);
 
 private:
     TraversableNavigable(JS::NonnullGCPtr<Page>);

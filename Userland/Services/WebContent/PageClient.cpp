@@ -218,6 +218,11 @@ void PageClient::paint(Web::DevicePixelRect const& content_rect, Web::Painting::
     page().top_level_traversable()->paint(content_rect, target, paint_options);
 }
 
+void PageClient::paint_to_pdf()
+{
+    page().top_level_traversable()->paint_to_pdf(content_size());
+}
+
 void PageClient::set_viewport_size(Web::DevicePixelSize const& size)
 {
     page().top_level_traversable()->set_viewport_size(page().device_to_css_size(size));
