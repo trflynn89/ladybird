@@ -15,7 +15,9 @@
 #include <core/SkPathBuilder.h>
 #include <core/SkPathEffect.h>
 #include <core/SkRRect.h>
+#include <core/SkStream.h>
 #include <core/SkSurface.h>
+#include <docs/SkPDFDocument.h>
 #include <effects/SkDashPathEffect.h>
 #include <effects/SkGradientShader.h>
 #include <effects/SkImageFilters.h>
@@ -47,13 +49,29 @@
 
 namespace Web::Painting {
 
-class DisplayListPlayerSkia::SkiaSurface {
+class SkiaSurface {
 public:
-    SkCanvas& canvas() const { return *m_surface->getCanvas(); }
+    virtual ~SkiaSurface() = default;
 
-    SkiaSurface(sk_sp<SkSurface> surface)
+    virtual SkCanvas& canvas() const = 0;
+    virtual sk_sp<SkSurface> make_surface(int width, int height) = 0;
+};
+
+class DefaultSkiaSurface : public SkiaSurface {
+public:
+    explicit DefaultSkiaSurface(sk_sp<SkSurface> surface)
         : m_surface(move(surface))
     {
+    }
+
+    virtual SkCanvas& canvas() const override
+    {
+        return *m_surface->getCanvas();
+    }
+
+    virtual sk_sp<SkSurface> make_surface(int width, int height) override
+    {
+        return m_surface->makeSurface(width, height);
     }
 
     void read_into_bitmap(Gfx::Bitmap& bitmap)
@@ -63,13 +81,42 @@ public:
         m_surface->readPixels(pixmap, 0, 0);
     }
 
-    sk_sp<SkSurface> make_surface(int width, int height)
+private:
+    sk_sp<SkSurface> m_surface;
+};
+
+class PDFSkiaSurface : public SkiaSurface {
+public:
+    explicit PDFSkiaSurface(Gfx::IntSize size)
+        : m_pdf_stream("/tmp/document.pdf")
+        , m_pdf_document(SkPDF::MakeDocument(&m_pdf_stream))
     {
-        return m_surface->makeSurface(width, height);
+        m_pdf_page = m_pdf_document->beginPage(static_cast<float>(size.width()), static_cast<float>(size.height()));
+    }
+
+    virtual SkCanvas& canvas() const override
+    {
+        return *m_pdf_page;
+    }
+
+    virtual sk_sp<SkSurface> make_surface(int width, int height) override
+    {
+        return m_pdf_page->makeSurface(SkImageInfo::Make(width, height, kBGRA_8888_SkColorType, kPremul_SkAlphaType));
+    }
+
+    void flush()
+    {
+        m_pdf_document->endPage();
+        m_pdf_document->close();
+        m_pdf_stream.flush();
+
+        dbgln("FINISHED PDF");
     }
 
 private:
-    sk_sp<SkSurface> m_surface;
+    SkFILEWStream m_pdf_stream;
+    sk_sp<SkDocument> m_pdf_document;
+    SkCanvas* m_pdf_page { nullptr };
 };
 
 #ifdef USE_VULKAN
@@ -133,10 +180,10 @@ DisplayListPlayerSkia::DisplayListPlayerSkia(SkiaBackendContext& context, Gfx::B
 {
     VERIFY(bitmap.format() == Gfx::BitmapFormat::BGRA8888);
     auto surface = static_cast<SkiaVulkanBackendContext&>(context).create_surface(bitmap.width(), bitmap.height());
-    m_surface = make<SkiaSurface>(surface);
-    m_flush_context = [&bitmap, &surface = m_surface, &context] {
+    m_surface = make<DefaultSkiaSurface>(surface);
+    m_flush_context = [&bitmap, &surface = static_cast<DefaultSkiaSurface&>(*m_surface), &context] {
         context.flush_and_submit();
-        surface->read_into_bitmap(bitmap);
+        surface.read_into_bitmap(bitmap);
     };
 }
 #endif
@@ -190,7 +237,7 @@ DisplayListPlayerSkia::DisplayListPlayerSkia(SkiaBackendContext& context, Core::
         dbgln("Failed to create Skia surface from Metal texture");
         VERIFY_NOT_REACHED();
     }
-    m_surface = make<SkiaSurface>(surface);
+    m_surface = make<DefaultSkiaSurface>(surface);
     m_flush_context = [&context] mutable {
         context.flush_and_submit();
     };
@@ -203,7 +250,16 @@ DisplayListPlayerSkia::DisplayListPlayerSkia(Gfx::Bitmap& bitmap)
     auto image_info = SkImageInfo::Make(bitmap.width(), bitmap.height(), kBGRA_8888_SkColorType, kPremul_SkAlphaType);
     auto surface = SkSurfaces::WrapPixels(image_info, bitmap.begin(), bitmap.pitch());
     VERIFY(surface);
-    m_surface = make<SkiaSurface>(surface);
+    m_surface = make<DefaultSkiaSurface>(surface);
+}
+
+DisplayListPlayerSkia::DisplayListPlayerSkia(ForPDF, Gfx::IntSize size)
+{
+    m_surface = make<PDFSkiaSurface>(size);
+
+    m_flush_context = [&surface = static_cast<PDFSkiaSurface&>(*m_surface)] mutable {
+        surface.flush();
+    };
 }
 
 DisplayListPlayerSkia::~DisplayListPlayerSkia()
@@ -383,7 +439,7 @@ static SkSamplingOptions to_skia_sampling_options(Gfx::ScalingMode scaling_mode)
         apply_mask_painted_from(*command.text_clip, MASK_RECT); \
     }
 
-DisplayListPlayerSkia::SkiaSurface& DisplayListPlayerSkia::surface() const
+SkiaSurface& DisplayListPlayerSkia::surface() const
 {
     return static_cast<SkiaSurface&>(*m_surface);
 }
@@ -1310,7 +1366,7 @@ void DisplayListPlayerSkia::apply_mask_painted_from(DisplayList& display_list, G
     auto mask_surface = m_surface->make_surface(rect.width(), rect.height());
 
     auto previous_surface = move(m_surface);
-    m_surface = make<SkiaSurface>(mask_surface);
+    m_surface = make<DefaultSkiaSurface>(mask_surface);
     surface().canvas().translate(-rect.x(), -rect.y());
     execute(display_list);
     m_surface = move(previous_surface);

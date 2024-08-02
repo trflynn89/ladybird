@@ -1237,4 +1237,18 @@ void TraversableNavigable::paint(DevicePixelRect const& content_rect, Painting::
     }
 }
 
+void TraversableNavigable::paint_to_pdf(DevicePixelSize size)
+{
+    auto display_list = Painting::DisplayList::create();
+    Painting::DisplayListRecorder display_list_recorder(display_list);
+
+    Gfx::IntRect bitmap_rect { {}, size.to_type<int>() };
+    display_list_recorder.fill_rect(bitmap_rect, CSS::SystemColor::canvas());
+
+    record_display_list(display_list_recorder, {});
+
+    Painting::DisplayListPlayerSkia player(Painting::DisplayListPlayerSkia::ForPDF {}, bitmap_rect.size());
+    player.execute(display_list);
+}
+
 }

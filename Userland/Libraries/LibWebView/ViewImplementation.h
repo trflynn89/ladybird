@@ -135,6 +135,8 @@ public:
     NonnullRefPtr<Core::Promise<LexicalPath>> take_dom_node_screenshot(i32);
     virtual void did_receive_screenshot(Badge<WebContentClient>, Gfx::ShareableBitmap const&);
 
+    void paint_to_pdf();
+
     ErrorOr<LexicalPath> dump_gc_graph();
 
     void set_user_style_sheet(String source);

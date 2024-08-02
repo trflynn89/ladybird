@@ -792,6 +792,12 @@ void ConnectionFromClient::take_dom_node_screenshot(u64 page_id, i32 node_id)
     page->queue_screenshot_task(node_id);
 }
 
+void ConnectionFromClient::paint_to_pdf(u64 page_id)
+{
+    if (auto page = this->page(page_id); page.has_value())
+        page->paint_to_pdf();
+}
+
 Messages::WebContentServer::DumpGcGraphResponse ConnectionFromClient::dump_gc_graph(u64)
 {
     auto gc_graph_json = Web::Bindings::main_thread_vm().heap().dump_graph();

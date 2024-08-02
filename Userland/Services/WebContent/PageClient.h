@@ -44,6 +44,7 @@ public:
     virtual void paint_next_frame() override;
     virtual void process_screenshot_requests() override;
     virtual void paint(Web::DevicePixelRect const& content_rect, Web::Painting::BackingStore&, Web::PaintOptions = {}) override;
+    virtual void paint_to_pdf() override;
 
     void set_palette_impl(Gfx::PaletteImpl&);
     void set_viewport_size(Web::DevicePixelSize const&);

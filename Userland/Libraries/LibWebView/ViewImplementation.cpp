@@ -559,6 +559,11 @@ void ViewImplementation::did_receive_screenshot(Badge<WebContentClient>, Gfx::Sh
     m_pending_screenshot = nullptr;
 }
 
+void ViewImplementation::paint_to_pdf()
+{
+    client().async_paint_to_pdf(page_id());
+}
+
 ErrorOr<LexicalPath> ViewImplementation::dump_gc_graph()
 {
     auto gc_graph_json = client().dump_gc_graph(page_id());
