@@ -212,6 +212,13 @@ void PageClient::paint(Web::DevicePixelRect const& content_rect, Web::Painting::
     page().top_level_traversable()->paint(content_rect, target, paint_options);
 }
 
+void PageClient::paint_to_pdf()
+{
+    // US-Letter: 8.5in x 11.0in (816px x 1056px)
+    static constexpr Web::DevicePixelSize size { 816, 1056 };
+    page().top_level_traversable()->paint_to_pdf(size);
+}
+
 void PageClient::set_viewport_size(Web::DevicePixelSize const& size)
 {
     page().top_level_traversable()->set_viewport_size(page().device_to_css_size(size));

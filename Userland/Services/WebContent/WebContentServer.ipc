@@ -63,6 +63,8 @@ endpoint WebContentServer
     take_document_screenshot(u64 page_id) =|
     take_dom_node_screenshot(u64 page_id, Web::UniqueNodeID node_id) =|
 
+    paint_to_pdf(u64 page_id) =|
+
     request_internal_page_info(u64 page_id, WebView::PageInfoType type) =|
 
     run_javascript(u64 page_id, ByteString js_source) =|

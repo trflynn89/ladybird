@@ -1214,6 +1214,11 @@ static void copy_data_to_clipboard(StringView data, NSPasteboardType pasteboard_
         });
 }
 
+- (void)saveToPDF:(id)sender
+{
+    m_web_view_bridge->paint_to_pdf();
+}
+
 - (void)openLink:(id)sender
 {
     m_web_view_bridge->on_link_click(m_context_menu_url, {}, 0);
@@ -1310,6 +1315,11 @@ static void copy_data_to_clipboard(StringView data, NSPasteboardType pasteboard_
                                                         keyEquivalent:@""]];
         [_page_context_menu addItem:[[NSMenuItem alloc] initWithTitle:@"Take Full Screenshot"
                                                                action:@selector(takeFullScreenshot:)
+                                                        keyEquivalent:@""]];
+        [_page_context_menu addItem:[NSMenuItem separatorItem]];
+
+        [_page_context_menu addItem:[[NSMenuItem alloc] initWithTitle:@"Save to PDF"
+                                                               action:@selector(saveToPDF:)
                                                         keyEquivalent:@""]];
         [_page_context_menu addItem:[NSMenuItem separatorItem]];
 

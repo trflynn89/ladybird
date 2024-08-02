@@ -631,6 +631,11 @@ void ViewImplementation::did_receive_internal_page_info(Badge<WebContentClient>,
     m_pending_info_request = nullptr;
 }
 
+void ViewImplementation::paint_to_pdf()
+{
+    client().async_paint_to_pdf(page_id());
+}
+
 ErrorOr<LexicalPath> ViewImplementation::dump_gc_graph()
 {
     auto promise = request_internal_page_info(PageInfoType::GCGraph);

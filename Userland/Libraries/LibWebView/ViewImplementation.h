@@ -150,6 +150,8 @@ public:
     NonnullRefPtr<Core::Promise<String>> request_internal_page_info(PageInfoType);
     void did_receive_internal_page_info(Badge<WebContentClient>, PageInfoType, String const&);
 
+    void paint_to_pdf();
+
     ErrorOr<LexicalPath> dump_gc_graph();
 
     void set_user_style_sheet(String source);

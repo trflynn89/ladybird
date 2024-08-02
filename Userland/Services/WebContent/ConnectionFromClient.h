@@ -132,6 +132,8 @@ private:
     virtual void take_document_screenshot(u64 page_id) override;
     virtual void take_dom_node_screenshot(u64 page_id, Web::UniqueNodeID const& node_id) override;
 
+    virtual void paint_to_pdf(u64 page_id) override;
+
     virtual void request_internal_page_info(u64 page_id, WebView::PageInfoType) override;
 
     virtual Messages::WebContentServer::GetLocalStorageEntriesResponse get_local_storage_entries(u64 page_id) override;

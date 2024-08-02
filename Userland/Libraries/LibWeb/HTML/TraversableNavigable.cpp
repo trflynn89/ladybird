@@ -1373,17 +1373,22 @@ JS::GCPtr<DOM::Node> TraversableNavigable::currently_focused_area()
     return candidate;
 }
 
+static void refresh_all_navigable_scroll_states()
+{
+    for (auto& navigable : all_navigables()) {
+        if (auto active_document = navigable->active_document(); active_document && active_document->paintable()) {
+            active_document->paintable()->refresh_scroll_state();
+        }
+    }
+}
+
 void TraversableNavigable::paint(DevicePixelRect const& content_rect, Painting::BackingStore& target, PaintOptions paint_options)
 {
     auto document = active_document();
     if (!document)
         return;
 
-    for (auto& navigable : all_navigables()) {
-        if (auto active_document = navigable->active_document(); active_document && active_document->paintable()) {
-            active_document->paintable()->refresh_scroll_state();
-        }
-    }
+    refresh_all_navigable_scroll_states();
 
     DOM::Document::PaintConfig paint_config;
     paint_config.paint_overlay = paint_options.paint_overlay == PaintOptions::PaintOverlay::Yes;
@@ -1428,6 +1433,25 @@ void TraversableNavigable::paint(DevicePixelRect const& content_rect, Painting::
     default:
         VERIFY_NOT_REACHED();
     }
+}
+
+void TraversableNavigable::paint_to_pdf(DevicePixelSize size)
+{
+    auto document = active_document();
+    if (!document)
+        return;
+
+    refresh_all_navigable_scroll_states();
+
+    DOM::Document::PaintConfig paint_config;
+    paint_config.canvas_fill_rect = Gfx::IntRect { {}, size.to_type<int>() };
+
+    auto display_list = document->record_display_list(paint_config);
+    if (!display_list)
+        return;
+
+    Painting::DisplayListPlayerSkia player(Painting::DisplayListPlayerSkia::ForPDF {}, paint_config.canvas_fill_rect->size());
+    player.execute(*display_list);
 }
 
 }

@@ -506,6 +506,11 @@ Tab::Tab(BrowserWindow* window, RefPtr<WebView::WebContentClient> parent_client,
         take_screenshot(WebView::ViewImplementation::ScreenshotType::Full);
     });
 
+    auto* paint_to_pdf_action = new QAction("Print to PDF", this);
+    QObject::connect(paint_to_pdf_action, &QAction::triggered, this, [this]() {
+        view().paint_to_pdf();
+    });
+
     m_page_context_menu = new QMenu("Context menu", this);
     m_page_context_menu->addAction(&m_window->go_back_action());
     m_page_context_menu->addAction(&m_window->go_forward_action());
@@ -519,6 +524,8 @@ Tab::Tab(BrowserWindow* window, RefPtr<WebView::WebContentClient> parent_client,
     m_page_context_menu->addSeparator();
     m_page_context_menu->addAction(take_visible_screenshot_action);
     m_page_context_menu->addAction(take_full_screenshot_action);
+    m_page_context_menu->addSeparator();
+    m_page_context_menu->addAction(paint_to_pdf_action);
     m_page_context_menu->addSeparator();
     m_page_context_menu->addAction(&m_window->view_source_action());
     m_page_context_menu->addAction(&m_window->inspect_dom_node_action());

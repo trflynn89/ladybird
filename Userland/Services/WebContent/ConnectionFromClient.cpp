@@ -939,6 +939,12 @@ void ConnectionFromClient::request_internal_page_info(u64 page_id, WebView::Page
     async_did_get_internal_page_info(page_id, type, MUST(builder.to_string()));
 }
 
+void ConnectionFromClient::paint_to_pdf(u64 page_id)
+{
+    if (auto page = this->page(page_id); page.has_value())
+        page->paint_to_pdf();
+}
+
 Messages::WebContentServer::GetSelectedTextResponse ConnectionFromClient::get_selected_text(u64 page_id)
 {
     if (auto page = this->page(page_id); page.has_value())

@@ -20,6 +20,8 @@
 
 namespace Web::Painting {
 
+class SkiaSurface;
+
 class SkiaBackendContext {
     AK_MAKE_NONCOPYABLE(SkiaBackendContext);
     AK_MAKE_NONMOVABLE(SkiaBackendContext);
@@ -34,6 +36,9 @@ public:
 class DisplayListPlayerSkia : public DisplayListPlayer {
 public:
     DisplayListPlayerSkia(Gfx::Bitmap&);
+
+    struct ForPDF { };
+    DisplayListPlayerSkia(ForPDF, Gfx::IntSize);
 
 #ifdef USE_VULKAN
     static OwnPtr<SkiaBackendContext> create_vulkan_context(Core::VulkanContext&);
@@ -86,7 +91,6 @@ private:
 
     bool would_be_fully_clipped_by_painter(Gfx::IntRect) const override;
 
-    class SkiaSurface;
     SkiaSurface& surface() const;
 
     OwnPtr<SkiaSurface> m_surface;
