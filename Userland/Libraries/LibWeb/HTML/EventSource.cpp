@@ -88,6 +88,7 @@ WebIDL::ExceptionOr<JS::NonnullGCPtr<EventSource>> EventSource::construct_impl(J
     // 14. Let processEventSourceEndOfBody given response res be the following step: if res is not a network error, then
     //     reestablish the connection.
     auto process_event_source_end_of_body = [event_source](JS::NonnullGCPtr<Fetch::Infrastructure::Response> response) {
+        dbgln("!!! process_event_source_end_of_body is_network_error={}", response->is_network_error());
         if (!response->is_network_error())
             event_source->reestablish_the_connection();
     };
@@ -112,6 +113,12 @@ WebIDL::ExceptionOr<JS::NonnullGCPtr<EventSource>> EventSource::construct_impl(J
             return content_type->essence() == "text/event-stream"sv;
         };
 
+        dbgln("!!! process_response is_aborted_network_error={} is_network_error={} status={} is_text_stream={}",
+            response->is_aborted_network_error(),
+            response->is_network_error(),
+            response->status(),
+            content_type_is_text_event_stream());
+
         // 1. If res is an aborted network error, then fail the connection.
         if (response->is_aborted_network_error()) {
             event_source->fail_the_connection();
@@ -131,12 +138,15 @@ WebIDL::ExceptionOr<JS::NonnullGCPtr<EventSource>> EventSource::construct_impl(J
             event_source->announce_the_connection();
 
             auto process_body_chunk = JS::create_heap_function(realm.heap(), [event_source](ByteBuffer body) {
+                dbgln("!!! process_body_chunk body='{}'", StringView { body }.trim_whitespace().replace("\n"sv, "\\n"sv, AK::ReplaceMode::All));
                 event_source->interpret_response(body);
             });
             auto process_end_of_body = JS::create_heap_function(realm.heap(), []() {
+                dbgln("!!! process_end_of_body");
                 // This case is handled by `process_event_source_end_of_body` above.
             });
-            auto process_body_error = JS::create_heap_function(realm.heap(), [](JS::Value) {
+            auto process_body_error = JS::create_heap_function(realm.heap(), [](JS::Value error) {
+                dbgln("!!! process_body_error error={}", error);
                 // This case is handled by `process_event_source_end_of_body` above.
             });
 
@@ -156,7 +166,10 @@ EventSource::EventSource(JS::Realm& realm)
 {
 }
 
-EventSource::~EventSource() = default;
+EventSource::~EventSource()
+{
+    dbgln("!!! ~EventSource");
+}
 
 void EventSource::initialize(JS::Realm& realm)
 {
@@ -171,6 +184,8 @@ void EventSource::initialize(JS::Realm& realm)
 // https://html.spec.whatwg.org/multipage/server-sent-events.html#garbage-collection
 void EventSource::finalize()
 {
+    dbgln("!!! finalize");
+
     // If an EventSource object is garbage collected while its connection is still open, the user agent must abort any
     // instance of the fetch algorithm opened by this EventSource.
     if (m_ready_state != ReadyState::Closed) {
@@ -245,7 +260,7 @@ void EventSource::forcibly_close()
     // permanently), the user agent must abort any instances of the fetch algorithm started for this EventSource
     // object, and must set the readyState attribute to CLOSED.
     if (m_fetch_controller)
-        m_fetch_controller->abort(realm(), {});
+        m_fetch_controller->stop_fetch();
 
     m_ready_state = ReadyState::Closed;
 }

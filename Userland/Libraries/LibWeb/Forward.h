@@ -19,8 +19,10 @@ class PageClient;
 class PaintContext;
 class Resource;
 class ResourceLoader;
-enum class TraversalDecision;
+class ResourceLoaderConnectorRequest;
 class XMLDocumentBuilder;
+
+enum class TraversalDecision;
 }
 
 namespace Web::Painting {

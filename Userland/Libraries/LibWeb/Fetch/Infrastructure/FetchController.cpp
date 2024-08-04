@@ -10,6 +10,7 @@
 #include <LibWeb/Fetch/Infrastructure/FetchController.h>
 #include <LibWeb/Fetch/Infrastructure/FetchParams.h>
 #include <LibWeb/HTML/EventLoop/EventLoop.h>
+#include <LibWeb/Loader/ResourceLoader.h>
 #include <LibWeb/WebIDL/DOMException.h>
 
 namespace Web::Fetch::Infrastructure {
@@ -88,6 +89,10 @@ void FetchController::abort(JS::Realm& realm, Optional<JS::Value> error)
     // FIXME: 4. Let serializedError be StructuredSerialize(error). If that threw an exception, catch it, and let serializedError be StructuredSerialize(fallbackError).
     // FIXME: 5. Set controller’s serialized abort reason to serializedError.
     (void)error;
+
+    // AD-HOC: Stop the protocol request.
+    if (m_ongoing_protocol_request)
+        m_ongoing_protocol_request->stop();
 }
 
 // FIXME: https://fetch.spec.whatwg.org/#deserialize-a-serialized-abort-reason
@@ -97,6 +102,10 @@ void FetchController::terminate()
 {
     // To terminate a fetch controller controller, set controller’s state to "terminated".
     m_state = State::Terminated;
+
+    // AD-HOC: Stop the protocol request.
+    if (m_ongoing_protocol_request)
+        m_ongoing_protocol_request->stop();
 }
 
 void FetchController::stop_fetch()
@@ -106,7 +115,7 @@ void FetchController::stop_fetch()
     // AD-HOC: Some HTML elements need to stop an ongoing fetching process without causing any network error to be raised
     //         (which abort() and terminate() will both do). This is tricky because the fetch process runs across several
     //         nested Platform::EventLoopPlugin::deferred_invoke() invocations. For now, we "stop" the fetch process by
-    //         cancelling any queued fetch tasks and then ignoring any callbacks.
+    //         cancelling any queued fetch tasks, then ignoring any callbacks, and stopping the protocol request.
     auto ongoing_fetch_tasks = move(m_ongoing_fetch_tasks);
 
     HTML::main_thread_event_loop().task_queue().remove_tasks_matching([&](auto const& task) {
@@ -119,6 +128,10 @@ void FetchController::stop_fetch()
         auto fetch_algorithms = FetchAlgorithms::create(vm, {});
         m_fetch_params->set_algorithms(fetch_algorithms);
     }
+
+    if (m_ongoing_protocol_request) {
+        m_ongoing_protocol_request->stop();
+    }
 }
 
 void FetchController::fetch_task_queued(u64 fetch_task_id, int event_id)
@@ -129,6 +142,11 @@ void FetchController::fetch_task_queued(u64 fetch_task_id, int event_id)
 void FetchController::fetch_task_complete(u64 fetch_task_id)
 {
     m_ongoing_fetch_tasks.remove(fetch_task_id);
+}
+
+void FetchController::set_protocol_request(RefPtr<ResourceLoaderConnectorRequest> protocol_request)
+{
+    m_ongoing_protocol_request = move(protocol_request);
 }
 
 }

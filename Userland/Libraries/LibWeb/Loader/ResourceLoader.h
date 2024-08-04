@@ -83,7 +83,7 @@ public:
     using OnDataReceived = JS::SafeFunction<void(ReadonlyBytes data)>;
     using OnComplete = JS::SafeFunction<void(bool success, Optional<StringView> error_message)>;
 
-    void load_unbuffered(LoadRequest&, OnHeadersReceived, OnDataReceived, OnComplete);
+    RefPtr<ResourceLoaderConnectorRequest> load_unbuffered(LoadRequest&, OnHeadersReceived, OnDataReceived, OnComplete);
 
     ResourceLoaderConnector& connector() { return *m_connector; }
 

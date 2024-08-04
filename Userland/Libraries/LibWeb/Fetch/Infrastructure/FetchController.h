@@ -17,6 +17,10 @@
 #include <LibWeb/Fetch/Infrastructure/FetchTimingInfo.h>
 #include <LibWeb/Forward.h>
 
+namespace Web {
+class ResourceLoaderConnectorRequest;
+}
+
 namespace Web::Fetch::Infrastructure {
 
 // https://fetch.spec.whatwg.org/#fetch-controller
@@ -53,6 +57,8 @@ public:
     void fetch_task_queued(u64 fetch_task_id, int event_id);
     void fetch_task_complete(u64 fetch_task_id);
 
+    void set_protocol_request(RefPtr<ResourceLoaderConnectorRequest> protocol_request);
+
 private:
     FetchController();
 
@@ -86,6 +92,8 @@ private:
 
     HashMap<u64, int> m_ongoing_fetch_tasks;
     u64 m_next_fetch_task_id { 0 };
+
+    RefPtr<ResourceLoaderConnectorRequest> m_ongoing_protocol_request;
 };
 
 }

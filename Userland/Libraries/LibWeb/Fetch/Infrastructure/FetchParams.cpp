@@ -13,7 +13,7 @@ namespace Web::Fetch::Infrastructure {
 
 JS_DEFINE_ALLOCATOR(FetchParams);
 
-FetchParams::FetchParams(JS::NonnullGCPtr<Request> request, JS::NonnullGCPtr<FetchAlgorithms> algorithms, JS::NonnullGCPtr<FetchController> controller, JS::NonnullGCPtr<FetchTimingInfo> timing_info)
+FetchParams::FetchParams(JS::NonnullGCPtr<Request> request, JS::NonnullGCPtr<FetchAlgorithms const> algorithms, JS::NonnullGCPtr<FetchController> controller, JS::NonnullGCPtr<FetchTimingInfo> timing_info)
     : m_request(request)
     , m_algorithms(algorithms)
     , m_controller(controller)
@@ -27,6 +27,16 @@ JS::NonnullGCPtr<FetchParams> FetchParams::create(JS::VM& vm, JS::NonnullGCPtr<R
     auto algorithms = Infrastructure::FetchAlgorithms::create(vm, {});
     auto controller = Infrastructure::FetchController::create(vm);
     return vm.heap().allocate_without_realm<FetchParams>(request, algorithms, controller, timing_info);
+}
+
+JS::NonnullGCPtr<FetchParams> FetchParams::clone(JS::VM& vm, JS::NonnullGCPtr<Request> request) const
+{
+    auto fetch_params = vm.heap().allocate_without_realm<FetchParams>(request, m_algorithms, m_controller, m_timing_info);
+    fetch_params->set_task_destination(m_task_destination);
+    fetch_params->set_cross_origin_isolated_capability(m_cross_origin_isolated_capability);
+    fetch_params->set_preloaded_response_candidate(m_preloaded_response_candidate);
+
+    return fetch_params;
 }
 
 void FetchParams::visit_edges(JS::Cell::Visitor& visitor)

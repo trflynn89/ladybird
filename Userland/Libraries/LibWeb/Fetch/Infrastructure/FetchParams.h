@@ -29,6 +29,8 @@ public:
 
     [[nodiscard]] static JS::NonnullGCPtr<FetchParams> create(JS::VM&, JS::NonnullGCPtr<Request>, JS::NonnullGCPtr<FetchTimingInfo>);
 
+    [[nodiscard]] JS::NonnullGCPtr<FetchParams> clone(JS::VM&, JS::NonnullGCPtr<Request>) const;
+
     [[nodiscard]] JS::NonnullGCPtr<Request> request() const { return m_request; }
     [[nodiscard]] JS::NonnullGCPtr<FetchController> controller() const { return m_controller; }
     [[nodiscard]] JS::NonnullGCPtr<FetchTimingInfo> timing_info() const { return m_timing_info; }
@@ -51,7 +53,7 @@ public:
     [[nodiscard]] bool is_canceled() const;
 
 private:
-    FetchParams(JS::NonnullGCPtr<Request>, JS::NonnullGCPtr<FetchAlgorithms>, JS::NonnullGCPtr<FetchController>, JS::NonnullGCPtr<FetchTimingInfo>);
+    FetchParams(JS::NonnullGCPtr<Request>, JS::NonnullGCPtr<FetchAlgorithms const>, JS::NonnullGCPtr<FetchController>, JS::NonnullGCPtr<FetchTimingInfo>);
 
     virtual void visit_edges(JS::Cell::Visitor&) override;
 

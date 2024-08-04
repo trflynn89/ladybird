@@ -439,7 +439,7 @@ void ResourceLoader::load(LoadRequest& request, SuccessCallback success_callback
         error_callback(not_implemented_error, {}, {}, {});
 }
 
-void ResourceLoader::load_unbuffered(LoadRequest& request, OnHeadersReceived on_headers_received, OnDataReceived on_data_received, OnComplete on_complete)
+RefPtr<ResourceLoaderConnectorRequest> ResourceLoader::load_unbuffered(LoadRequest& request, OnHeadersReceived on_headers_received, OnDataReceived on_data_received, OnComplete on_complete)
 {
     auto const& url = request.url();
 
@@ -448,19 +448,19 @@ void ResourceLoader::load_unbuffered(LoadRequest& request, OnHeadersReceived on_
 
     if (should_block_request(request)) {
         on_complete(false, "Request was blocked"sv);
-        return;
+        return {};
     }
 
     if (!url.scheme().is_one_of("http"sv, "https"sv)) {
         // FIXME: Non-network requests from fetch should not go through this path.
         on_complete(false, "Cannot establish connection non-network scheme"sv);
-        return;
+        return {};
     }
 
     auto protocol_request = start_network_request(request);
     if (!protocol_request) {
         on_complete(false, "Failed to start network request"sv);
-        return;
+        return {};
     }
 
     auto protocol_headers_received = [this, on_headers_received = move(on_headers_received), request](auto const& response_headers, auto status_code) {
@@ -485,6 +485,7 @@ void ResourceLoader::load_unbuffered(LoadRequest& request, OnHeadersReceived on_
     };
 
     protocol_request->set_unbuffered_request_callbacks(move(protocol_headers_received), move(protocol_data_received), move(protocol_complete));
+    return protocol_request;
 }
 
 RefPtr<ResourceLoaderConnectorRequest> ResourceLoader::start_network_request(LoadRequest const& request)

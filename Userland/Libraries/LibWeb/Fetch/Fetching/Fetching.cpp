@@ -1585,12 +1585,7 @@ WebIDL::ExceptionOr<JS::NonnullGCPtr<PendingResponse>> http_network_or_cache_fet
 
             // 2. Set httpFetchParams to a copy of fetchParams.
             // 3. Set httpFetchParams’s request to httpRequest.
-            auto new_http_fetch_params = Infrastructure::FetchParams::create(vm, *http_request, fetch_params.timing_info());
-            new_http_fetch_params->set_algorithms(fetch_params.algorithms());
-            new_http_fetch_params->set_task_destination(fetch_params.task_destination());
-            new_http_fetch_params->set_cross_origin_isolated_capability(fetch_params.cross_origin_isolated_capability());
-            new_http_fetch_params->set_preloaded_response_candidate(fetch_params.preloaded_response_candidate());
-            http_fetch_params = new_http_fetch_params;
+            http_fetch_params = fetch_params.clone(vm, *http_request);
         }
 
         // 3. Let includeCredentials be true if one of
@@ -2279,7 +2274,8 @@ WebIDL::ExceptionOr<JS::NonnullGCPtr<PendingResponse>> nonstandard_resource_load
             }
         };
 
-        ResourceLoader::the().load_unbuffered(load_request, move(on_headers_received), move(on_data_received), move(on_complete));
+        auto protocol_request = ResourceLoader::the().load_unbuffered(load_request, move(on_headers_received), move(on_data_received), move(on_complete));
+        fetch_params.controller()->set_protocol_request(move(protocol_request));
     } else {
         auto on_load_success = [&realm, &vm, request, pending_response](auto data, auto& response_headers, auto status_code) {
             dbgln_if(WEB_FETCH_DEBUG, "Fetch: ResourceLoader load for '{}' complete", request->url());
