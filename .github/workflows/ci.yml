@@ -1,6 +1,6 @@
 name: CI
 
-on: [push, pull_request]
+on: [push]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || format('{0}-{1}', github.ref, github.run_number) }}
@@ -8,35 +8,14 @@ concurrency:
 
 jobs:
   Lagom:
-    if: github.repository == 'LadybirdBrowser/ladybird'
-
     strategy:
       fail-fast: false
       matrix:
-        os_name: ['Linux']
-        os: [ubuntu-22.04]
+        os_name: ['macOS']
+        os: [macos-13]
         fuzzer: ['NO_FUZZ']
-        toolchain: ['GNU']
+        toolchain: ['Clang']
         clang_plugins: [false]
-
-        include:
-          - os_name: 'Linux'
-            os: ubuntu-22.04
-            fuzzer: 'NO_FUZZ'
-            toolchain: 'Clang'
-            clang_plugins: true
-
-          - os_name: 'macOS'
-            os: macos-14
-            fuzzer: 'NO_FUZZ'
-            toolchain: 'Clang'
-            clang_plugins: false
-
-          - os_name: 'Linux'
-            os: ubuntu-22.04
-            fuzzer: 'FUZZ'
-            toolchain: 'Clang'
-            clang_plugins: false
 
     uses: ./.github/workflows/lagom-template.yml
     with:
