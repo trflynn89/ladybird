@@ -119,7 +119,8 @@ private:
     Gfx::IntRect maximize_the_window();
     Gfx::IntRect iconify_the_window();
 
-    ErrorOr<void, Web::WebDriver::Error> wait_for_navigation_to_complete();
+    using OnNavigationComplete = JS::NonnullGCPtr<JS::HeapFunction<void(Web::WebDriver::Response)>>;
+    void wait_for_navigation_to_complete(OnNavigationComplete);
 
     Gfx::IntPoint calculate_absolute_position_of_element(JS::NonnullGCPtr<Web::Geometry::DOMRect> rect);
     Gfx::IntRect calculate_absolute_rect_of_element(Web::DOM::Element const& element);
@@ -156,6 +157,9 @@ private:
     JS::Handle<Web::HTML::BrowsingContext> m_current_top_level_browsing_context;
 
     JS::Handle<JS::Cell> m_action_executor;
+
+    JS::Handle<Web::DOM::DocumentObserver> m_document_observer;
+    JS::Handle<Web::HTML::NavigationObserver> m_navigation_observer;
 };
 
 }
