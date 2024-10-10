@@ -183,6 +183,24 @@ ErrorOr<void, Web::WebDriver::Error> Session::ensure_current_window_handle_is_va
     return Web::WebDriver::Error::from_code(Web::WebDriver::ErrorCode::NoSuchWindow, "Window not found"sv);
 }
 
+Web::WebDriver::Response Session::navigate_to(JsonValue payload) const
+{
+    ScopeGuard guard { [&]() { web_content_connection().on_navigation_complete = nullptr; } };
+
+    Optional<Web::WebDriver::Response> response;
+    web_content_connection().on_navigation_complete = [&](auto result) {
+        response = move(result);
+    };
+
+    TRY(web_content_connection().navigate_to(move(payload)));
+
+    Core::EventLoop::current().spin_until([&]() {
+        return response.has_value();
+    });
+
+    return response.release_value();
+}
+
 Web::WebDriver::Response Session::execute_script(JsonValue payload, ScriptMode mode) const
 {
     ScopeGuard guard { [&]() { web_content_connection().on_script_executed = nullptr; } };
