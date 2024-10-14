@@ -11,7 +11,7 @@ def main() -> int:
     script_dir = pathlib.Path(__file__).parent.resolve()
 
     git_repo = "https://github.com/microsoft/vcpkg.git"
-    git_rev = "2960d7d80e8d09c84ae8abf15c12196c2ca7d39a"  # 2024.09.30
+    git_rev = "369cb5c76ab32408b87fa3f7557e0660b375e582"  # 2024.10.14
 
     tarball_dir = script_dir / "Tarballs"
     tarball_dir.mkdir(parents=True, exist_ok=True)
