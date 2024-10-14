@@ -10,7 +10,7 @@ def main() -> int:
     script_dir = pathlib.Path(__file__).parent.resolve()
 
     git_repo = "https://github.com/microsoft/vcpkg.git"
-    git_rev = "b322364f06308bdd24823f9d8f03fe0cc86fd46f"  # 2024.12.16
+    git_rev = "bea476a80218a581bcb5318595849520217c825e"  # 2025.2.4
 
     build_dir = script_dir.parent / "Build"
     build_dir.mkdir(parents=True, exist_ok=True)
