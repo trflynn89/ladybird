@@ -29,6 +29,7 @@ interface Internals {
     undefined spoofCurrentURL(USVString url);
 
     InternalAnimationTimeline createInternalAnimationTimeline();
+    undefined updateAnimationsWithTimeOffset(long long milliseconds);
 
     undefined simulateDragStart(double x, double y, DOMString mimeType, DOMString contents);
     undefined simulateDragMove(double x, double y);

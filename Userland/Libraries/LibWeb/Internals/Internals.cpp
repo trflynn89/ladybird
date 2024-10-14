@@ -14,6 +14,7 @@
 #include <LibWeb/HTML/BrowsingContext.h>
 #include <LibWeb/HTML/HTMLElement.h>
 #include <LibWeb/HTML/Window.h>
+#include <LibWeb/HighResolutionTime/Performance.h>
 #include <LibWeb/Internals/Internals.h>
 #include <LibWeb/Page/InputEvent.h>
 #include <LibWeb/Page/Page.h>
@@ -155,6 +156,14 @@ JS::NonnullGCPtr<InternalAnimationTimeline> Internals::create_internal_animation
 {
     auto& realm = this->realm();
     return realm.heap().allocate<InternalAnimationTimeline>(realm, realm);
+}
+
+void Internals::update_animations_with_time_offset(WebIDL::LongLong milliseconds)
+{
+    auto performance = internals_window().performance();
+    performance->set_timer_offset_for_testing({}, AK::Duration::from_milliseconds(milliseconds));
+
+    internals_window().associated_document().update_animations_and_send_events(performance->now());
 }
 
 void Internals::simulate_drag_start(double x, double y, String const& name, String const& contents)

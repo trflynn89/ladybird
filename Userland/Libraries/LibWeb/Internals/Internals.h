@@ -39,6 +39,7 @@ public:
     void spoof_current_url(String const& url);
 
     JS::NonnullGCPtr<InternalAnimationTimeline> create_internal_animation_timeline();
+    void update_animations_with_time_offset(WebIDL::LongLong milliseconds);
 
     void simulate_drag_start(double x, double y, String const& name, String const& contents);
     void simulate_drag_move(double x, double y);

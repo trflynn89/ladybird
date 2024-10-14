@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <AK/Badge.h>
+#include <AK/Time.h>
 #include <LibCore/ElapsedTimer.h>
 #include <LibWeb/DOM/EventTarget.h>
 #include <LibWeb/HTML/WindowOrWorkerGlobalScope.h>
@@ -22,7 +24,7 @@ class Performance final : public DOM::EventTarget {
 public:
     virtual ~Performance() override;
 
-    double now() const { return static_cast<double>(m_timer.elapsed_time().to_nanoseconds()) / 1e6; }
+    double now() const { return static_cast<double>((m_timer.elapsed_time() + m_timer_offset).to_nanoseconds()) / 1e6; }
     double time_origin() const;
 
     WebIDL::ExceptionOr<JS::NonnullGCPtr<UserTiming::PerformanceMark>> mark(String const& mark_name, UserTiming::PerformanceMarkOptions const& mark_options = {});
@@ -36,6 +38,8 @@ public:
 
     JS::GCPtr<NavigationTiming::PerformanceTiming> timing();
     JS::GCPtr<NavigationTiming::PerformanceNavigation> navigation();
+
+    void set_timer_offset_for_testing(Badge<Internals::Internals>, AK::Duration offset) { m_timer_offset = offset; }
 
 private:
     explicit Performance(JS::Realm&);
@@ -53,6 +57,7 @@ private:
     JS::GCPtr<NavigationTiming::PerformanceTiming> m_timing;
 
     Core::ElapsedTimer m_timer;
+    AK::Duration m_timer_offset;
 };
 
 }
