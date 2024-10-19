@@ -108,9 +108,7 @@ find_package(WebP REQUIRED)
 find_package(harfbuzz REQUIRED)
 
 target_link_libraries(LibGfx PRIVATE PkgConfig::WOFF2 JPEG::JPEG PNG::PNG avif WebP::webp WebP::webpdecoder
-            WebP::webpdemux WebP::libwebpmux harfbuzz)
-
-target_link_libraries(LibGfx PUBLIC skia)
+            WebP::webpdemux WebP::libwebpmux skia harfbuzz)
 
 if (NOT ANDROID)
     pkg_check_modules(Jxl REQUIRED IMPORTED_TARGET libjxl)

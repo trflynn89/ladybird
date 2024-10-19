@@ -8,35 +8,32 @@
 
 #include <AK/Error.h>
 #include <AK/Noncopyable.h>
+#include <AK/OwnPtr.h>
 #include <LibIPC/Forward.h>
-
-#include <core/SkColorSpace.h>
 
 namespace Gfx {
 
+struct SkiaColorSpace;
+
 class ColorSpace {
 public:
-    ColorSpace() = default;
-    AK_MAKE_DEFAULT_COPYABLE(ColorSpace);
-    AK_MAKE_DEFAULT_MOVABLE(ColorSpace);
-    ~ColorSpace() = default;
+    ColorSpace();
+    ColorSpace(OwnPtr<SkiaColorSpace>);
+    ~ColorSpace();
+
+    ColorSpace(ColorSpace const&);
+    ColorSpace(ColorSpace&&);
+
+    ColorSpace& operator=(ColorSpace const&);
+    ColorSpace& operator=(ColorSpace&&);
 
     static ErrorOr<ColorSpace> load_from_icc_bytes(ReadonlyBytes);
 
-    auto& color_space()
-    {
-        return m_color_space;
-    }
+    template<typename Type>
+    Type color_space() const;
 
 private:
-    template<typename T>
-    friend ErrorOr<void> IPC::encode(IPC::Encoder&, T const&);
-    template<typename T>
-    friend ErrorOr<T> IPC::decode(IPC::Decoder&);
-
-    explicit ColorSpace(sk_sp<SkColorSpace>&& ColorSpace);
-
-    sk_sp<SkColorSpace> m_color_space { nullptr };
+    OwnPtr<SkiaColorSpace> m_skia_color_space;
 };
 
 }
