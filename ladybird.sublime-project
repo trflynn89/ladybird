@@ -15,6 +15,7 @@
             "folder_exclude_patterns": [
                 ".devcontainer",
                 "Build",
+                "Tests/LibWeb/WPT",
                 "Toolchain/Build",
                 "Toolchain/Local",
                 "Toolchain/Tarballs",
@@ -22,7 +23,7 @@
         },
         {
             "name": "generated",
-            "path": "ladybird/Build/ladybird/Lagom/Userland/Libraries",
+            "path": "ladybird/Build/release/Lagom/Userland/Libraries",
             "index_exclude_patterns": ["*"],
             "file_include_patterns": [
                 "*.h",
@@ -30,9 +31,8 @@
             ],
         },
         {
-            "name": "downloaded",
-            "path": "ladybird/Build/caches",
-            "index_exclude_patterns": ["*"],
+            "name": "wpt",
+            "path": "ladybird/Tests/LibWeb/WPT/wpt",
         },
         {
             "path": "libjs-test262",
