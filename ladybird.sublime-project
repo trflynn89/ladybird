@@ -23,7 +23,7 @@
         },
         {
             "name": "generated",
-            "path": "ladybird/Build/release/Lagom/Userland/Libraries",
+            "path": "ladybird/Build/release/Lagom/Libraries",
             "index_exclude_patterns": ["*"],
             "file_include_patterns": [
                 "*.h",
@@ -45,8 +45,8 @@
         "copy-paths": {
             "c_family_includes_use_brackets": true,
             "c_family_includes_strip_prefixes": [
-                "Userland/Libraries",
-                "Userland/Services",
+                "Libraries",
+                "Services",
             ],
         },
         "format": {
