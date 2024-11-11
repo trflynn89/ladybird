@@ -13,11 +13,9 @@
 #include <AK/Optional.h>
 #include <AK/Span.h>
 #include <AK/Types.h>
-#include <AK/Vector.h>
+#include <AK/Utf16Data.h>
 
 namespace AK {
-
-using Utf16Data = Vector<u16, 1>;
 
 ErrorOr<Utf16Data> utf8_to_utf16(StringView, Endianness = Endianness::Host);
 ErrorOr<Utf16Data> utf8_to_utf16(Utf8View const&, Endianness = Endianness::Host);
