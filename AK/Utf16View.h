@@ -1,19 +1,17 @@
 /*
- * Copyright (c) 2021-2024, Tim Flynn <trflynn89@serenityos.org>
+ * Copyright (c) 2021-2024, Tim Flynn <trflynn89@ladybird.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #pragma once
 
-#include <AK/ByteString.h>
 #include <AK/Endian.h>
 #include <AK/Error.h>
 #include <AK/Format.h>
 #include <AK/Forward.h>
 #include <AK/Optional.h>
 #include <AK/Span.h>
-#include <AK/String.h>
 #include <AK/Types.h>
 #include <AK/Vector.h>
 
@@ -146,10 +144,7 @@ private:
 
 template<>
 struct AK::Formatter<AK::Utf16View> : Formatter<FormatString> {
-    ErrorOr<void> format(FormatBuilder& builder, AK::Utf16View const& value)
-    {
-        return builder.builder().try_append(value);
-    }
+    ErrorOr<void> format(FormatBuilder&, AK::Utf16View const&);
 };
 
 #if USING_AK_GLOBALLY

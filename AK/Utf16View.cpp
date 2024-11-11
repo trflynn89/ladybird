@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2021-2024, Tim Flynn <trflynn89@serenityos.org>
+ * Copyright (c) 2021-2024, Tim Flynn <trflynn89@ladybird.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/ByteString.h>
 #include <AK/CharacterTypes.h>
 #include <AK/Concepts.h>
+#include <AK/String.h>
 #include <AK/StringBuilder.h>
 #include <AK/StringView.h>
 #include <AK/Utf16View.h>
@@ -419,6 +421,11 @@ u32 Utf16CodePointIterator::operator*() const
 size_t Utf16CodePointIterator::length_in_code_units() const
 {
     return *(*this) < first_supplementary_plane_code_point ? 1 : 2;
+}
+
+ErrorOr<void> Formatter<Utf16View>::format(FormatBuilder& builder, AK::Utf16View const& value)
+{
+    return builder.builder().try_append(value);
 }
 
 }
