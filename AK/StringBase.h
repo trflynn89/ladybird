@@ -9,6 +9,7 @@
 #include <AK/Badge.h>
 #include <AK/Endian.h>
 #include <AK/Forward.h>
+#include <AK/Utf16Data.h>
 
 namespace AK::Detail {
 
@@ -63,6 +64,8 @@ public:
     {
         return (m_short_string.byte_count_and_short_string_flag & SHORT_STRING_FLAG) != 0;
     }
+
+    Utf16Data const& to_utf16() const;
 
     // Returns the underlying UTF-8 encoded bytes.
     // NOTE: There is no guarantee about null-termination.
@@ -130,6 +133,8 @@ private:
         m_short_string.byte_count_and_short_string_flag = (byte_count << 1) | SHORT_STRING_FLAG;
         return { m_short_string.storage, byte_count };
     }
+
+    void convert_to_non_short_string();
 
     void destroy_string();
 

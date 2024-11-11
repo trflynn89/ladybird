@@ -12,6 +12,7 @@
 #include <AK/RefCounted.h>
 #include <AK/StringBase.h>
 #include <AK/StringBuilder.h>
+#include <AK/Utf16View.h>
 #include <AK/kmalloc.h>
 
 namespace AK::Detail {
@@ -106,6 +107,16 @@ public:
     bool is_fly_string() const { return m_is_fly_string; }
     void set_fly_string(bool is_fly_string) const { m_is_fly_string = is_fly_string; }
 
+    Utf16Data const& utf16_data() const
+    {
+        if (!m_has_utf16_data) {
+            m_utf16_data = MUST(utf8_to_utf16(bytes_as_string_view()));
+            m_has_utf16_data = true;
+        }
+
+        return m_utf16_data;
+    }
+
     size_t byte_count() const { return m_byte_count; }
 
 private:
@@ -148,6 +159,9 @@ private:
     mutable bool m_has_hash { false };
     bool m_substring { false };
     mutable bool m_is_fly_string { false };
+
+    mutable bool m_has_utf16_data { false };
+    mutable Utf16Data m_utf16_data;
 
     alignas(SubstringData) u8 m_bytes_or_substring_data[0];
 };

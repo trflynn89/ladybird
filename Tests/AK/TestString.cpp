@@ -14,9 +14,18 @@
 #include <AK/MemoryStream.h>
 #include <AK/StringBuilder.h>
 #include <AK/Try.h>
+#include <AK/Utf16View.h>
 #include <AK/Utf8View.h>
 #include <AK/Vector.h>
 #include <ctype.h>
+
+TEST_CASE(to_utf16)
+{
+    auto foo = "foo"_string;
+    auto const& data = foo.to_utf16();
+
+    dbgln("!!! {}", Utf16View { data });
+}
 
 TEST_CASE(construct_empty)
 {

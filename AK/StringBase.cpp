@@ -56,6 +56,13 @@ StringBase& StringBase::operator=(StringBase const& other)
     return *this;
 }
 
+Utf16Data const& StringBase::to_utf16() const
+{
+    if (is_short_string())
+        const_cast<StringBase&>(*this).convert_to_non_short_string();
+    return m_data->utf16_data();
+}
+
 ReadonlyBytes StringBase::bytes() const
 {
     ASSERT(!is_invalid());
@@ -133,6 +140,18 @@ ErrorOr<StringBase> StringBase::substring_from_byte_offset_with_shared_superstri
         return result;
     }
     return StringBase { TRY(Detail::StringData::create_substring(*m_data, start, length)) };
+}
+
+void StringBase::convert_to_non_short_string()
+{
+    ASSERT(!is_invalid());
+    ASSERT(is_short_string());
+
+    u8* buffer = nullptr;
+    ShortString short_string = m_short_string;
+
+    m_data = &MUST(StringData::create_uninitialized(short_string.byte_count(), buffer)).leak_ref();
+    short_string.bytes().copy_to({ buffer, short_string.byte_count() });
 }
 
 void StringBase::destroy_string()
