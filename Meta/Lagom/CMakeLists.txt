@@ -414,6 +414,7 @@ set(lagom_standard_libraries
 if (ENABLE_GUI_TARGETS)
     list(APPEND lagom_standard_libraries
         Gfx
+        DevTools
         ImageDecoderClient
         Media
         WebView

@@ -41,6 +41,9 @@ private:
 
     virtual Optional<ByteString> ask_user_for_download_folder() const override;
 
+    virtual Vector<DevTools::TabDescription> tab_list() const override;
+    virtual void inspect_tab(DevTools::TabDescription const&, DevTools::DevToolsDelegate::OnTabInspectionComplete) const override;
+
     TaskManagerWindow* m_task_manager_window { nullptr };
     BrowserWindow* m_active_window { nullptr };
 };

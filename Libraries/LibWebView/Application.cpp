@@ -10,8 +10,11 @@
 #include <LibCore/StandardPaths.h>
 #include <LibCore/System.h>
 #include <LibCore/TimeZoneWatcher.h>
+#include <LibDevTools/Actors/CSSPropertiesActor.h>
+#include <LibDevTools/DevToolsServer.h>
 #include <LibFileSystem/FileSystem.h>
 #include <LibImageDecoderClient/Client.h>
+#include <LibWeb/CSS/PropertyID.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/CookieJar.h>
 #include <LibWebView/Database.h>
@@ -68,6 +71,7 @@ void Application::initialize(Main::Arguments const& arguments, URL::URL new_tab_
     bool allow_popups = false;
     bool disable_scripting = false;
     bool disable_sql_database = false;
+    Optional<u16> devtools_port;
     Optional<StringView> debug_process;
     Optional<StringView> profile_process;
     Optional<StringView> webdriver_content_ipc_path;
@@ -97,6 +101,7 @@ void Application::initialize(Main::Arguments const& arguments, URL::URL new_tab_
     args_parser.add_option(debug_process, "Wait for a debugger to attach to the given process name (WebContent, RequestServer, etc.)", "debug-process", 0, "process-name");
     args_parser.add_option(profile_process, "Enable callgrind profiling of the given process name (WebContent, RequestServer, etc.)", "profile-process", 0, "process-name");
     args_parser.add_option(webdriver_content_ipc_path, "Path to WebDriver IPC for WebContent", "webdriver-content-path", 0, "path", Core::ArgsParser::OptionHideMode::CommandLineAndMarkdown);
+    args_parser.add_option(devtools_port, "Set the Firefox DevTools port (EXPERIMENTAL)", "devtools", 0, "port");
     args_parser.add_option(log_all_js_exceptions, "Log all JavaScript exceptions", "log-all-js-exceptions");
     args_parser.add_option(enable_idl_tracing, "Enable IDL tracing", "enable-idl-tracing");
     args_parser.add_option(enable_http_cache, "Enable HTTP cache", "enable-http-cache");
@@ -156,6 +161,7 @@ void Application::initialize(Main::Arguments const& arguments, URL::URL new_tab_
                           ? DNSSettings(DNSOverTLS(dns_server_address.release_value(), *dns_server_port))
                           : DNSSettings(DNSOverUDP(dns_server_address.release_value(), *dns_server_port)))
                 : SystemDNS {}),
+        .devtools_port = devtools_port,
     };
 
     if (webdriver_content_ipc_path.has_value())
@@ -190,6 +196,7 @@ ErrorOr<void> Application::launch_services()
 {
     TRY(launch_request_server());
     TRY(launch_image_decoder_server());
+    TRY(launch_devtools_server());
     return {};
 }
 
@@ -226,6 +233,29 @@ ErrorOr<void> Application::launch_image_decoder_server()
     };
 
     return {};
+}
+
+ErrorOr<void> Application::launch_devtools_server()
+{
+    if (m_chrome_options.devtools_port.has_value())
+        m_devtools = TRY(DevTools::DevToolsServer::create(*this, *m_chrome_options.devtools_port));
+    return {};
+}
+
+Vector<DevTools::CSSProperty> Application::css_property_list() const
+{
+    Vector<DevTools::CSSProperty> property_list;
+
+    for (auto i = to_underlying(Web::CSS::first_property_id); i <= to_underlying(Web::CSS::last_property_id); ++i) {
+        auto property_id = static_cast<Web::CSS::PropertyID>(i);
+
+        DevTools::CSSProperty property;
+        property.name = Web::CSS::string_from_property_id(property_id).to_string().to_byte_string();
+        property.is_inherited = Web::CSS::is_inherited_property(property_id);
+        property_list.append(move(property));
+    }
+
+    return property_list;
 }
 
 int Application::execute()
@@ -313,6 +343,13 @@ ErrorOr<LexicalPath> Application::path_for_downloaded_file(StringView file) cons
         return Error::from_errno(ENOENT);
 
     return LexicalPath::join(downloads_directory, file);
+}
+
+void Application::refresh_tab_list()
+{
+    if (!m_devtools)
+        return;
+    m_devtools->refresh_tab_list();
 }
 
 }

@@ -5,6 +5,7 @@
  */
 
 #include <LibCore/ArgsParser.h>
+#include <LibDevTools/Actors/TabActor.h>
 #include <LibWebView/URL.h>
 #include <UI/Qt/Application.h>
 #include <UI/Qt/Settings.h>
@@ -95,6 +96,52 @@ Optional<ByteString> Application::ask_user_for_download_folder() const
         return {};
 
     return ak_byte_string_from_qstring(path);
+}
+
+Vector<DevTools::TabDescription> Application::tab_list() const
+{
+    if (!m_active_window)
+        return {};
+
+    Vector<DevTools::TabDescription> tabs;
+
+    m_active_window->for_each_tab([&](Tab& tab) {
+        tabs.empend(tab.view().id(), ak_byte_string_from_qstring(tab.title()), tab.view().url().to_byte_string());
+    });
+
+    return tabs;
+}
+
+void Application::inspect_tab(DevTools::TabDescription const& description, DevTools::DevToolsDelegate::OnTabInspectionComplete on_complete) const
+{
+    if (!m_active_window)
+        return;
+
+    bool found_tab = false;
+
+    m_active_window->for_each_tab([&](Tab& tab) {
+        if (found_tab || tab.view().id() != description.id)
+            return;
+
+        tab.view().on_received_dom_tree = [&tab, on_complete = move(on_complete)](ByteString const& dom_tree) {
+            tab.view().on_received_dom_tree = nullptr;
+
+            auto parsed_tree = JsonValue::from_string(dom_tree);
+
+            if (parsed_tree.is_error()) {
+                on_complete(parsed_tree.release_error());
+                return;
+            }
+
+            on_complete(parsed_tree.release_value());
+        };
+
+        tab.view().inspect_dom_tree();
+        found_tab = true;
+    });
+
+    if (!found_tab)
+        on_complete(Error::from_string_literal("Unable to locate tab"));
 }
 
 }

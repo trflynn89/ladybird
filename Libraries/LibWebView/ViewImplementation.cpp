@@ -24,7 +24,11 @@
 
 namespace WebView {
 
+// This has to start at 1 for Firefox DevTools.
+static u64 s_view_count = 1;
+
 ViewImplementation::ViewImplementation()
+    : m_id(s_view_count++)
 {
     m_repeated_crash_timer = Core::Timer::create_single_shot(1000, [this] {
         // Reset the "crashing a lot" counter after 1 second in case we just

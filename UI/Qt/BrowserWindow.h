@@ -106,6 +106,15 @@ public:
 
     Tab* current_tab() const { return m_current_tab; }
 
+    template<typename Callback>
+    void for_each_tab(Callback&& callback)
+    {
+        for (int i = 0; i < m_tabs_container->count(); ++i) {
+            auto& tab = as<Tab>(*m_tabs_container->widget(i));
+            callback(tab);
+        }
+    }
+
 public slots:
     void device_pixel_ratio_changed(qreal dpi);
     void tab_title_changed(int index, QString const&);
@@ -155,15 +164,6 @@ private:
     void debug_request(ByteString const& request, ByteString const& argument = "");
 
     void set_current_tab(Tab* tab);
-
-    template<typename Callback>
-    void for_each_tab(Callback&& callback)
-    {
-        for (int i = 0; i < m_tabs_container->count(); ++i) {
-            auto& tab = as<Tab>(*m_tabs_container->widget(i));
-            callback(tab);
-        }
-    }
 
     void create_close_button_for_tab(Tab*);
 
