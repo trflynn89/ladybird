@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <AK/Vector.h>
 #include <LibDevTools/Forward.h>
 
 namespace DevTools {
@@ -13,6 +14,8 @@ namespace DevTools {
 class DevToolsDelegate {
 public:
     virtual ~DevToolsDelegate() = default;
+
+    virtual Vector<TabDescription> tab_list() const { return {}; }
 };
 
 }

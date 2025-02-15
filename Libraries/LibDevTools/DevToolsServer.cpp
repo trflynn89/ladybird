@@ -45,6 +45,18 @@ DevToolsServer::DevToolsServer(DevToolsDelegate& delegate, NonnullRefPtr<Core::T
 
 DevToolsServer::~DevToolsServer() = default;
 
+void DevToolsServer::refresh_tab_list()
+{
+    if (!m_root_actor)
+        return;
+
+    m_actor_registry.remove_all_matching([](auto const&, auto const& actor) {
+        return is<TabActor>(*actor);
+    });
+
+    m_root_actor->send_tab_list_changed_message();
+}
+
 ErrorOr<void> DevToolsServer::on_new_client()
 {
     if (m_connection)
