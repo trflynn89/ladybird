@@ -6,6 +6,9 @@
 
 #pragma once
 
+#include <AK/Error.h>
+#include <AK/Function.h>
+#include <AK/JsonValue.h>
 #include <AK/Vector.h>
 #include <LibDevTools/Forward.h>
 
@@ -16,6 +19,10 @@ public:
     virtual ~DevToolsDelegate() = default;
 
     virtual Vector<TabDescription> tab_list() const { return {}; }
+    virtual Vector<CSSProperty> css_property_list() const { return {}; }
+
+    using OnTabInspectionComplete = Function<void(ErrorOr<JsonValue>)>;
+    virtual void inspect_tab(TabDescription const&, OnTabInspectionComplete) const { }
 };
 
 }
