@@ -433,4 +433,36 @@ void Application::evaluate_javascript(DevTools::TabDescription const& descriptio
     view->js_console_input(move(script));
 }
 
+void Application::listen_for_console_messages(DevTools::TabDescription const& description, OnReceivedConsoleMessage on_received_console_message, OnReceivedConsoleMessages on_received_console_messages) const
+{
+    dbgln("!!!!!!!!!!!!!!");
+
+    auto view = ViewImplementation::find_view_by_id(description.id);
+    if (!view.has_value())
+        return;
+
+    view->on_received_console_message = move(on_received_console_message);
+    view->on_received_console_messages = move(on_received_console_messages);
+    view->js_console_request_messages(0);
+}
+
+void Application::request_console_messages(DevTools::TabDescription const& description, i32 start_index) const
+{
+    auto view = ViewImplementation::find_view_by_id(description.id);
+    if (!view.has_value())
+        return;
+
+    view->js_console_request_messages(start_index);
+}
+
+void Application::stop_listening_for_console_messages(DevTools::TabDescription const& description) const
+{
+    auto view = ViewImplementation::find_view_by_id(description.id);
+    if (!view.has_value())
+        return;
+
+    view->on_received_console_message = nullptr;
+    view->on_received_console_messages = nullptr;
+}
+
 }

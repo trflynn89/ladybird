@@ -106,14 +106,61 @@ void DevToolsConsoleClient::report_exception(JS::Error const& exception, bool in
 
 void DevToolsConsoleClient::send_messages(i32 start_index)
 {
-    (void)start_index;
+    dbgln("@@@ send_messages {}", start_index);
+
+    // FIXME: Cap the number of messages we send at once?
+    auto messages_to_send = m_message_log.size() - start_index;
+    if (messages_to_send < 1) {
+        // When the console is first created, it requests any messages that happened before
+        // then, by requesting with start_index=0. If we don't have any messages at all, that
+        // is still a valid request, and we can just ignore it.
+        if (start_index != 0)
+            m_client->console_peer_did_misbehave("Requested non-existent console message index.");
+        return;
+    }
+
+    // FIXME: Replace with a single Vector of message structs
+    Vector<String> message_types;
+    Vector<String> messages;
+    message_types.ensure_capacity(messages_to_send);
+    messages.ensure_capacity(messages_to_send);
+
+    for (size_t i = start_index; i < m_message_log.size(); i++) {
+        auto& message = m_message_log[i];
+        switch (message.type) {
+        case ConsoleOutput::Type::HTML:
+            message_types.append("html"_string);
+            break;
+        case ConsoleOutput::Type::Clear:
+            message_types.append("clear"_string);
+            break;
+        case ConsoleOutput::Type::BeginGroup:
+            message_types.append("group"_string);
+            break;
+        case ConsoleOutput::Type::BeginGroupCollapsed:
+            message_types.append("groupCollapsed"_string);
+            break;
+        case ConsoleOutput::Type::EndGroup:
+            message_types.append("groupEnd"_string);
+            break;
+        }
+
+        messages.append(message.data);
+    }
+
+    m_client->did_get_js_console_messages(start_index, move(message_types), move(messages));
 }
 
 // 2.3. Printer(logLevel, args[, options]), https://console.spec.whatwg.org/#printer
 JS::ThrowCompletionOr<JS::Value> DevToolsConsoleClient::printer(JS::Console::LogLevel log_level, PrinterArguments arguments)
 {
-    (void)log_level;
-    (void)arguments;
+    // FIXME: Implement table and trace logging.
+    if (log_level == JS::Console::LogLevel::Table || log_level == JS::Console::LogLevel::Trace)
+        return JS::js_undefined();
+
+    auto output = TRY(generically_format_values(arguments.get<GC::RootVector<JS::Value>>()));
+    dbgln("!!! {}", output);
+
     return JS::js_undefined();
 }
 

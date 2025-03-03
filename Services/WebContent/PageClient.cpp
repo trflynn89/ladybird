@@ -398,6 +398,11 @@ void PageClient::page_did_set_browser_zoom(double factor)
 
     auto& event_loop = Web::HTML::main_thread_event_loop();
     event_loop.spin_until(GC::create_function(event_loop.heap(), [&]() {
+        event_loop.spin_until(GC::create_function(event_loop.heap(), [&]() {
+            dbgln("!!! Spin");
+            return false;
+        }));
+
         return !m_pending_set_browser_zoom_request || !is_connection_open();
     }));
 }

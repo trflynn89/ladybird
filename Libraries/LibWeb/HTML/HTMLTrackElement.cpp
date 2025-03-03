@@ -94,7 +94,7 @@ void HTMLTrackElement::inserted()
     //         https://html.spec.whatwg.org/multipage/media.html#honor-user-preferences-for-automatic-text-track-selection
     m_track->set_mode(Bindings::TextTrackMode::Hidden);
 
-    start_the_track_processing_model();
+    // start_the_track_processing_model();
 }
 
 // https://html.spec.whatwg.org/multipage/media.html#dom-track-readystate

@@ -12,6 +12,8 @@
 #include <LibDevTools/Actors/InspectorActor.h>
 #include <LibDevTools/Actors/TabActor.h>
 #include <LibDevTools/Actors/ThreadActor.h>
+#include <LibDevTools/DevToolsDelegate.h>
+#include <LibDevTools/DevToolsServer.h>
 
 namespace DevTools {
 
@@ -28,9 +30,25 @@ FrameActor::FrameActor(DevToolsServer& devtools, String name, WeakPtr<TabActor> 
     , m_inspector(move(inspector))
     , m_thread(move(thread))
 {
+    if (auto tab = m_tab.strong_ref()) {
+        devtools.delegate().listen_for_console_messages(
+            tab->description(),
+            [weak_self = make_weak_ptr<FrameActor>()](i32 message_index) {
+                if (auto self = weak_self.strong_ref())
+                    self->received_console_message(message_index);
+            },
+            [weak_self = make_weak_ptr<FrameActor>()](i32 start_index, Vector<String> const& message_types, Vector<String> const& messages) {
+                if (auto self = weak_self.strong_ref())
+                    self->received_console_messages(start_index, message_types, messages);
+            });
+    }
 }
 
-FrameActor::~FrameActor() = default;
+FrameActor::~FrameActor()
+{
+    if (auto tab = m_tab.strong_ref())
+        devtools().delegate().stop_listening_for_console_messages(tab->description());
+}
 
 void FrameActor::handle_message(StringView type, JsonObject const&)
 {
@@ -38,8 +56,10 @@ void FrameActor::handle_message(StringView type, JsonObject const&)
     response.set("from"sv, name());
 
     if (type == "detach"sv) {
-        if (auto tab = m_tab.strong_ref())
+        if (auto tab = m_tab.strong_ref()) {
+            devtools().delegate().stop_listening_for_console_messages(tab->description());
             tab->reset_selected_node();
+        }
 
         send_message(move(response));
         return;
@@ -105,6 +125,54 @@ JsonObject FrameActor::serialize_target() const
         target.set("threadActor"sv, thread->name());
 
     return target;
+}
+
+void FrameActor::received_console_message(i32 message_index)
+{
+    if (message_index <= m_highest_received_message_index) {
+        dbgln("Notified about console message we already have");
+        return;
+    }
+    if (message_index <= m_highest_notified_message_index) {
+        dbgln("Notified about console message we're already aware of");
+        return;
+    }
+
+    m_highest_notified_message_index = message_index;
+
+    if (!m_waiting_for_messages)
+        request_console_messages();
+}
+
+void FrameActor::received_console_messages(i32 start_index, ReadonlySpan<String> message_types, ReadonlySpan<String> messages)
+{
+    auto end_index = start_index + static_cast<i32>(message_types.size()) - 1;
+    if (end_index <= m_highest_received_message_index) {
+        dbgln("Received old console messages");
+        return;
+    }
+
+    for (size_t i = 0; i < message_types.size(); ++i) {
+        auto const& type = message_types[i];
+        auto const& message = messages[i];
+        dbgln("!!! {} {}", type, message);
+    }
+
+    m_highest_received_message_index = end_index;
+    m_waiting_for_messages = false;
+
+    if (m_highest_received_message_index < m_highest_notified_message_index)
+        request_console_messages();
+}
+
+void FrameActor::request_console_messages()
+{
+    VERIFY(!m_waiting_for_messages);
+
+    if (auto tab = m_tab.strong_ref()) {
+        devtools().delegate().request_console_messages(m_tab->description(), m_highest_notified_message_index + 1);
+        m_waiting_for_messages = true;
+    }
 }
 
 }

@@ -38,6 +38,12 @@ public:
 
     using OnScriptEvaluationComplete = Function<void(ErrorOr<JsonValue>)>;
     virtual void evaluate_javascript(TabDescription const&, String, OnScriptEvaluationComplete) const { }
+
+    using OnReceivedConsoleMessage = Function<void(i32 message_id)>;
+    using OnReceivedConsoleMessages = Function<void(i32 start_index, Vector<String> const& message_types, Vector<String> const& messages)>;
+    virtual void listen_for_console_messages(TabDescription const&, OnReceivedConsoleMessage, OnReceivedConsoleMessages) const { }
+    virtual void request_console_messages(TabDescription const&, i32) const { }
+    virtual void stop_listening_for_console_messages(TabDescription const&) const { }
 };
 
 }
