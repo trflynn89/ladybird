@@ -417,6 +417,48 @@ void Application::clear_highlighted_dom_node(DevTools::TabDescription const& des
         view->clear_highlighted_dom_node();
 }
 
+template<typename Edit>
+static void edit_dom_node(DevTools::TabDescription const& description, Application::OnDOMNodeEditComplete on_complete, Edit&& edit)
+{
+    auto view = ViewImplementation::find_view_by_id(description.id);
+    if (!view.has_value()) {
+        on_complete(Error::from_string_literal("Unable to locate tab"));
+        return;
+    }
+
+    view->on_finshed_editing_dom_node = [&view = *view, on_complete = move(on_complete)](auto const& node_id) {
+        view.on_finshed_editing_dom_node = nullptr;
+
+        if (node_id.has_value())
+            on_complete({});
+        else
+            on_complete(Error::from_string_literal("Unable to edit DOM node"));
+    };
+
+    edit(*view);
+}
+
+void Application::set_dom_node_value(DevTools::TabDescription const& description, Web::UniqueNodeID node_id, String value, OnDOMNodeEditComplete on_complete) const
+{
+    edit_dom_node(description, move(on_complete), [&](auto& view) {
+        view.set_dom_node_text(node_id, move(value));
+    });
+}
+
+void Application::add_dom_node_attributes(DevTools::TabDescription const& description, Web::UniqueNodeID node_id, Vector<Attribute> replacement_attributes, OnDOMNodeEditComplete on_complete) const
+{
+    edit_dom_node(description, move(on_complete), [&](auto& view) {
+        view.add_dom_node_attributes(node_id, move(replacement_attributes));
+    });
+}
+
+void Application::replace_dom_node_attribute(DevTools::TabDescription const& description, Web::UniqueNodeID node_id, String name, Vector<Attribute> replacement_attributes, OnDOMNodeEditComplete on_complete) const
+{
+    edit_dom_node(description, move(on_complete), [&](auto& view) {
+        view.replace_dom_node_attribute(node_id, move(name), move(replacement_attributes));
+    });
+}
+
 void Application::evaluate_javascript(DevTools::TabDescription const& description, String script, OnScriptEvaluationComplete on_complete) const
 {
     auto view = ViewImplementation::find_view_by_id(description.id);
