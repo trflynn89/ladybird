@@ -37,6 +37,8 @@ public:
     static Optional<DOMNode> dom_node_for(WeakPtr<WalkerActor> const&, StringView actor);
     Optional<DOMNode> dom_node(StringView actor);
 
+    void new_dom_node_mutations(Vector<JsonValue>);
+
 private:
     WalkerActor(DevToolsServer&, String name, WeakPtr<TabActor>, JsonObject dom_tree);
 
@@ -49,6 +51,9 @@ private:
     WeakPtr<LayoutInspectorActor> m_layout_inspector;
 
     JsonObject m_dom_tree;
+
+    Vector<JsonValue> m_dom_node_mutations;
+    bool m_has_new_mutations_since_last_mutations_request { false };
 
     HashMap<JsonObject const*, JsonObject const*> m_dom_node_to_parent_map;
     HashMap<String, JsonObject const*> m_actor_to_dom_node_map;

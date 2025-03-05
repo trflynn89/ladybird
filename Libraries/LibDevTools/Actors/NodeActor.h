@@ -23,6 +23,8 @@ public:
 private:
     NodeActor(DevToolsServer&, String name, WeakPtr<WalkerActor>);
 
+    void finished_editing_dom_node(Vector<JsonValue> mutations, BlockToken);
+
     WeakPtr<WalkerActor> m_walker;
 };
 

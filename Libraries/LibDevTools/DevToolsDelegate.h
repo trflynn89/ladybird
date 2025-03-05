@@ -37,6 +37,9 @@ public:
     virtual void highlight_dom_node(TabDescription const&, Web::UniqueNodeID, Optional<Web::CSS::Selector::PseudoElement::Type>) const { }
     virtual void clear_highlighted_dom_node(TabDescription const&) const { }
 
+    using OnDOMNodeEditComplete = Function<void(ErrorOr<void>)>;
+    virtual void set_dom_node_value(TabDescription const&, Web::UniqueNodeID, String, OnDOMNodeEditComplete) const { }
+
     using OnScriptEvaluationComplete = Function<void(ErrorOr<JsonValue>)>;
     virtual void evaluate_javascript(TabDescription const&, String, OnScriptEvaluationComplete) const { }
 

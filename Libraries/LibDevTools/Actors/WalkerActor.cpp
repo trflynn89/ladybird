@@ -72,6 +72,15 @@ void WalkerActor::handle_message(StringView type, JsonObject const& message)
         return;
     }
 
+    if (type == "getMutations"sv) {
+        JsonArray mutations { move(m_dom_node_mutations) };
+        response.set("mutations"sv, move(mutations));
+        send_message(move(response));
+
+        m_has_new_mutations_since_last_mutations_request = false;
+        return;
+    }
+
     if (type == "getOffsetParent"sv) {
         response.set("node"sv, JsonValue {});
         send_message(move(response));
@@ -280,6 +289,21 @@ Optional<WalkerActor::DOMNode> WalkerActor::dom_node(StringView actor)
         node_id = dom_node.get_integer<Web::UniqueNodeID::Type>("id"sv).value();
 
     return DOMNode { .node = dom_node, .id = node_id, .pseudo_element = pseudo_element, .tab = tab.release_nonnull() };
+}
+
+void WalkerActor::new_dom_node_mutations(Vector<JsonValue> mutations)
+{
+    m_dom_node_mutations.extend(move(mutations));
+
+    if (m_has_new_mutations_since_last_mutations_request)
+        return;
+
+    JsonObject message;
+    message.set("from"sv, name());
+    message.set("type"sv, "newMutations"sv);
+    send_message(move(message));
+
+    m_has_new_mutations_since_last_mutations_request = true;
 }
 
 Optional<JsonObject const&> WalkerActor::find_node_by_selector(JsonObject const& node, StringView selector)
