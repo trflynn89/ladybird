@@ -968,6 +968,13 @@ static WebIDL::ExceptionOr<Navigable::NavigationParamsVariant> create_navigation
         }
         // 6. Otherwise, process the next manual redirect for fetchController.
         else {
+            // AD-HOC: If we are not able to continue in this process, request a new process from the UI.
+            if (!active_document.page().client().is_url_suitable_for_same_process_navigation(active_document.url(), current_url)) {
+                dbgln("!!! {}", current_url);
+                active_document.page().client().request_new_process_for_navigation(current_url);
+                return Navigable::NullOrError {};
+            }
+
             fetch_controller->process_next_manual_redirect();
         }
 
