@@ -898,10 +898,15 @@ EventResult EventHandler::handle_doubleclick(CSSPixelPoint viewport_position, CS
             if (!is<Painting::TextPaintable>(*result->paintable))
                 return EventResult::Accepted;
 
-            auto& hit_paintable = static_cast<Painting::TextPaintable const&>(*result->paintable);
+            auto const& hit_paintable = static_cast<Painting::TextPaintable const&>(*result->paintable);
             auto& hit_dom_node = const_cast<DOM::Text&>(as<DOM::Text>(*hit_paintable.dom_node()));
-            auto previous_boundary = hit_dom_node.word_segmenter().previous_boundary(result->index_in_node, Unicode::Segmenter::Inclusive::Yes).value_or(0);
-            auto next_boundary = hit_dom_node.word_segmenter().next_boundary(result->index_in_node).value_or(hit_dom_node.length());
+            auto const& text_for_rendering = hit_paintable.text_for_rendering();
+
+            auto& segmenter = word_segmenter();
+            segmenter.set_segmented_text(text_for_rendering);
+
+            auto previous_boundary = segmenter.previous_boundary(result->index_in_node, Unicode::Segmenter::Inclusive::Yes).value_or(0);
+            auto next_boundary = segmenter.next_boundary(result->index_in_node).value_or(text_for_rendering.byte_count());
 
             auto target = document.active_input_events_target();
             if (target) {
