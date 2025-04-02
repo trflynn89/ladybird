@@ -307,6 +307,7 @@ set(SOURCES
     Geometry/DOMRect.cpp
     Geometry/DOMRectList.cpp
     Geometry/DOMRectReadOnly.cpp
+    GPC/GlobalPrivacyControl.cpp
     HTML/AbstractWorker.cpp
     HTML/AnimatedBitmapDecodedImageData.cpp
     HTML/AnimationFrameCallbackDriver.cpp

@@ -1,5 +1,6 @@
 #import <Clipboard/Clipboard.idl>
 #import <CredentialManagement/CredentialsContainer.idl>
+#import <GPC/GlobalPrivacyControl.idl>
 #import <HTML/MimeTypeArray.idl>
 #import <HTML/NavigatorBeacon.idl>
 #import <HTML/NavigatorConcurrentHardware.idl>
@@ -67,6 +68,7 @@ interface mixin NavigatorAutomationInformation {
     readonly attribute boolean webdriver;
 };
 
+Navigator includes GlobalPrivacyControl;
 Navigator includes NavigatorBeacon;
 Navigator includes NavigatorID;
 Navigator includes NavigatorLanguage;

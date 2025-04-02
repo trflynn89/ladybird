@@ -1911,6 +1911,11 @@ WebIDL::ExceptionOr<GC::Ref<PendingResponse>> http_network_or_cache_fetch(JS::Re
             auto header = Infrastructure::Header::from_string_pair("DNT"sv, "1"sv);
             http_request->header_list()->append(move(header));
         }
+        // https://w3c.github.io/gpc/#the-sec-gpc-header-field-for-http-requests
+        if (ResourceLoader::the().enable_global_privacy_control() && !http_request->header_list()->contains("Sec-GPC"sv.bytes())) {
+            auto header = Infrastructure::Header::from_string_pair("Sec-GPC"sv, "1"sv);
+            http_request->header_list()->append(move(header));
+        }
 
         // 21. If includeCredentials is true, then:
         if (include_credentials == IncludeCredentials::Yes) {
