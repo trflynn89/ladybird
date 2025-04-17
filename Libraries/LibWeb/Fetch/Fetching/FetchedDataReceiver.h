@@ -21,17 +21,27 @@ public:
     virtual ~FetchedDataReceiver() override;
 
     void set_pending_promise(GC::Ref<WebIDL::Promise>);
-    void on_data_received(ReadonlyBytes);
+
+    enum class State {
+        Ongoing,
+        Complete,
+        Error,
+    };
+    void handle_network_bytes(ReadonlyBytes, State);
 
 private:
     FetchedDataReceiver(GC::Ref<Infrastructure::FetchParams const>, GC::Ref<Streams::ReadableStream>);
 
     virtual void visit_edges(Visitor& visitor) override;
 
+    void pull_bytes_into_stream(ByteBuffer);
+
     GC::Ref<Infrastructure::FetchParams const> m_fetch_params;
     GC::Ref<Streams::ReadableStream> m_stream;
     GC::Ptr<WebIDL::Promise> m_pending_promise;
+
     ByteBuffer m_buffer;
+    bool m_complete { false };
 };
 
 }

@@ -2322,11 +2322,13 @@ WebIDL::ExceptionOr<GC::Ref<PendingResponse>> nonstandard_resource_loader_file_o
     //        path. The buffer option should then be supplied to the steps below that allow us to buffer data up to a
     //        user-agent-defined limit (or not). However, we will need to fully use stream operations throughout the
     //        fetch process to enable this (e.g. Body::fully_read must use streams for this to work).
-    if (request->buffer_policy() == Infrastructure::Request::BufferPolicy::DoNotBufferResponse) {
+    if (true || request->buffer_policy() == Infrastructure::Request::BufferPolicy::DoNotBufferResponse) {
         HTML::TemporaryExecutionContext execution_context { realm, HTML::TemporaryExecutionContext::CallbacksEnabled::Yes };
 
         // 12. Let stream be a new ReadableStream.
         auto stream = realm.create<Streams::ReadableStream>(realm);
+
+        // 9. Let buffer be an empty byte sequence.
         auto fetched_data_receiver = realm.create<FetchedDataReceiver>(fetch_params, stream);
 
         // 10. Let pullAlgorithm be the followings steps:
@@ -2389,37 +2391,18 @@ WebIDL::ExceptionOr<GC::Ref<PendingResponse>> nonstandard_resource_loader_file_o
         // 16. Run these steps in parallel:
         //    FIXME: 1. Run these steps, but abort when fetchParams is canceled:
         auto on_data_received = GC::create_function(vm.heap(), [fetched_data_receiver](ReadonlyBytes bytes) {
-            // 1. If one or more bytes have been transmitted from response’s message body, then:
-            if (!bytes.is_empty()) {
-                // 1. Let bytes be the transmitted bytes.
-
-                // FIXME: 2. Let codings be the result of extracting header list values given `Content-Encoding` and response’s header list.
-                // FIXME: 3. Increase response’s body info’s encoded size by bytes’s length.
-                // FIXME: 4. Set bytes to the result of handling content codings given codings and bytes.
-                // FIXME: 5. Increase response’s body info’s decoded size by bytes’s length.
-                // FIXME: 6. If bytes is failure, then terminate fetchParams’s controller.
-
-                // 7. Append bytes to buffer.
-                fetched_data_receiver->on_data_received(bytes);
-
-                // FIXME: 8. If the size of buffer is larger than an upper limit chosen by the user agent, ask the user agent
-                //           to suspend the ongoing fetch.
-            }
+            fetched_data_receiver->handle_network_bytes(bytes, FetchedDataReceiver::State::Ongoing);
         });
 
-        auto on_complete = GC::create_function(vm.heap(), [&vm, &realm, pending_response, stream](bool success, Requests::RequestTimingInfo const&, Optional<StringView> error_message) {
+        auto on_complete = GC::create_function(vm.heap(), [&vm, &realm, pending_response, stream, fetched_data_receiver](bool success, Requests::RequestTimingInfo const&, Optional<StringView> error_message) {
             dbgln("FIXME: Implement on_complete timing info for unbuffered requests");
             HTML::TemporaryExecutionContext execution_context { realm, HTML::TemporaryExecutionContext::CallbacksEnabled::Yes };
 
-            // 16.1.1.2. Otherwise, if the bytes transmission for response’s message body is done normally and stream is readable,
-            //           then close stream, and abort these in-parallel steps.
             if (success) {
-                if (stream->is_readable())
-                    stream->close();
-            }
-            // 16.1.2.2. Otherwise, if stream is readable, error stream with a TypeError.
-            else {
-                auto error = MUST(String::formatted("Load failed: {}", error_message));
+                fetched_data_receiver->handle_network_bytes({}, FetchedDataReceiver::State::Complete);
+            } else {
+                // 16.1.2.2. Otherwise, if stream is readable, error stream with a TypeError.
+                auto error = MUST(String::formatted("Load failed: {}", error_message.value_or("Unknown error"sv)));
 
                 if (stream->is_readable())
                     stream->error(JS::TypeError::create(realm, error));
