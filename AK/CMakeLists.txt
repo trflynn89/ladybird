@@ -1,6 +1,7 @@
 set(SOURCES
     Assertions.cpp
     Base64.cpp
+    BigInteger.cpp
     ByteString.cpp
     ByteStringImpl.cpp
     CircularBuffer.cpp
@@ -44,8 +45,19 @@ endif()
 serenity_lib(AK ak)
 
 include(stacktrace)
+
+find_package(PkgConfig)
+
 configure_file(Backtrace.h.in Backtrace.h @ONLY)
 link_stacktrace_library(AK STD_DEFINITION AK_HAS_STD_STACKTRACE)
+
+pkg_check_modules(gmp REQUIRED IMPORTED_TARGET gmp)
+swizzle_target_properties_for_swift(PkgConfig::gmp)
+target_link_libraries(AK PRIVATE PkgConfig::gmp)
+
+pkg_check_modules(mpfr REQUIRED IMPORTED_TARGET mpfr)
+swizzle_target_properties_for_swift(PkgConfig::mpfr)
+target_link_libraries(AK PRIVATE PkgConfig::mpfr)
 
 find_package(simdutf REQUIRED)
 swizzle_target_properties_for_swift(simdutf::simdutf)

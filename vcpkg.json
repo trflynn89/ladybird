@@ -54,6 +54,7 @@
         "icu"
       ]
     },
+    "gmp",
     "icu",
     "libjpeg-turbo",
     "libjxl",
@@ -82,6 +83,7 @@
       "name": "mman",
       "platform": "windows"
     },
+    "mpfr",
     "openssl",
     {
       "name": "pthread",
@@ -153,6 +155,10 @@
       "version": "2.14.2#1"
     },
     {
+      "name": "gmp",
+      "version": "6.3.0#2"
+    },
+    {
       "name": "icu",
       "version": "76.1#0"
     },
@@ -183,6 +189,10 @@
     {
       "name": "mman",
       "version": "git-f5ff813#5"
+    },
+    {
+      "name": "mpfr",
+      "version": "4.2.1#0"
     },
     {
       "name": "openssl",

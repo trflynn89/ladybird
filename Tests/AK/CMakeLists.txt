@@ -5,6 +5,7 @@ set(AK_TEST_SOURCES
     TestAtomic.cpp
     TestBadge.cpp
     TestBase64.cpp
+    TestBigInteger.cpp
     TestBinaryHeap.cpp
     TestBinarySearch.cpp
     TestBitCast.cpp

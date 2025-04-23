@@ -2,7 +2,7 @@ set(TEST_SOURCES
     TestAES.cpp
     TestASN1.cpp
     TestBigFraction.cpp
-    TestBigInteger.cpp
+    # TestBigInteger.cpp
     TestCurves.cpp
     TestEd25519.cpp
     TestEd448.cpp
