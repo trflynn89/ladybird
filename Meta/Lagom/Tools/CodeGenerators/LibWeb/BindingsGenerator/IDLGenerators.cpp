@@ -172,6 +172,36 @@ static StringView sequence_storage_type_to_cpp_storage_type_name(SequenceStorage
     }
 }
 
+static Optional<Interface const&> find_imported_interface_for_type(Interface const& interface, StringView type)
+{
+    for (auto const& imported_interface : interface.imported_modules) {
+        if (imported_interface.name == type)
+            return imported_interface;
+    }
+
+    return {};
+}
+
+static bool is_nullable_element_type(Interface const& interface, Type const& type)
+{
+    if (!type.is_nullable())
+        return false;
+
+    if (type.name() == "Element"sv)
+        return true;
+
+    if (auto type_interface = find_imported_interface_for_type(interface, type.name()); type_interface.has_value()) {
+        do {
+            if (type_interface->name == "Element"sv)
+                return true;
+
+            type_interface = find_imported_interface_for_type(*type_interface, type_interface->parent_name);
+        } while (type_interface.has_value());
+    }
+
+    return false;
+}
+
 static bool is_nullable_sequence_of_single_type(Type const& type, StringView type_name)
 {
     if (!type.is_nullable() || !type.is_sequence())
@@ -3736,6 +3766,7 @@ static void generate_prototype_or_global_mixin_definitions(IDL::Interface const&
             continue;
         auto attribute_generator = generator.fork();
         attribute_generator.set("attribute.name", attribute.name);
+        attribute_generator.set("attribute.type", attribute.type->name());
         attribute_generator.set("attribute.getter_callback", attribute.getter_callback_name);
         attribute_generator.set("attribute.setter_callback", attribute.setter_callback_name);
 
@@ -4027,13 +4058,13 @@ JS_DEFINE_NATIVE_FUNCTION(@class_name@::@attribute.getter_callback@)
             }
             // If a reflected IDL attribute has the type T?, where T is either Element or an interface that inherits
             // from Element, then with attr being the reflected content attribute name:
-            // FIXME: Handle "an interface that inherits from Element".
-            else if (attribute.type->is_nullable() && attribute.type->name() == "Element") {
+            else if (is_nullable_element_type(interface, attribute.type)) {
                 // The getter steps are to return the result of running this's get the attr-associated element.
                 attribute_generator.append(R"~~~(
     static auto content_attribute = "@attribute.reflect_name@"_fly_string;
 
-    auto retval = impl->get_the_attribute_associated_element(content_attribute, TRY(throw_dom_exception_if_needed(vm, [&] { return impl->@attribute.cpp_name@(); })));
+    auto element = impl->get_the_attribute_associated_element(content_attribute, TRY(throw_dom_exception_if_needed(vm, [&] { return impl->@attribute.cpp_name@(); })));
+    GC::Ptr<@attribute.type@ const> retval = element ? &static_cast<@attribute.type@ const&>(*element) : nullptr;
 )~~~");
             }
             // If a reflected IDL attribute has the type FrozenArray<T>?, where T is either Element or an interface that
@@ -4175,7 +4206,7 @@ JS_DEFINE_NATIVE_FUNCTION(@class_name@::@attribute.setter_callback@)
                 // If a reflected IDL attribute has the type T?, where T is either Element or an interface that inherits
                 // from Element, then with attr being the reflected content attribute name:
                 // FIXME: Handle "an interface that inherits from Element".
-                else if (attribute.type->is_nullable() && attribute.type->name() == "Element") {
+                else if (is_nullable_element_type(interface, attribute.type)) {
                     // The setter steps are:
                     // 1. If the given value is null, then:
                     //     1. Set this's explicitly set attr-element to null.
