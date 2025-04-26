@@ -14,5 +14,6 @@ lagom_tool(GenerateWindowOrWorkerInterfaces SOURCES GenerateWindowOrWorkerInterf
 lagom_tool(GenerateAriaRoles                SOURCES GenerateAriaRoles.cpp LIBS LibMain)
 lagom_tool(GenerateWebGLRenderingContext    SOURCES GenerateWebGLRenderingContext.cpp BindingsGenerator/IDLGenerators.cpp LIBS LibMain LibIDL)
 lagom_tool(GenerateNamedCharacterReferences SOURCES GenerateNamedCharacterReferences.cpp LIBS LibMain)
+lagom_tool(GeneratePropertyNames            SOURCES GeneratePropertyNames.cpp LIBS LibMain)
 
 add_subdirectory(BindingsGenerator)

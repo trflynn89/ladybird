@@ -17,6 +17,7 @@
 
 namespace IDL {
 
+void generate_properties(IDL::Interface const&, StringBuilder&);
 void generate_namespace_header(IDL::Interface const&, StringBuilder&);
 void generate_namespace_implementation(IDL::Interface const&, StringBuilder&);
 void generate_constructor_header(IDL::Interface const&, StringBuilder&);

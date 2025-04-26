@@ -369,6 +369,7 @@ void Parser::parse_attribute(HashMap<ByteString, ByteString>& extended_attribute
 
     auto getter_callback_name = ByteString::formatted("{}_getter", attribute_callback_name);
     auto setter_callback_name = ByteString::formatted("{}_setter", attribute_callback_name);
+    auto property_name = ByteString::formatted("{}_property", attribute_callback_name);
 
     Attribute attribute {
         inherit,
@@ -378,6 +379,7 @@ void Parser::parse_attribute(HashMap<ByteString, ByteString>& extended_attribute
         move(extended_attributes),
         move(getter_callback_name),
         move(setter_callback_name),
+        move(property_name),
     };
     if (is_static == IsStatic::No)
         interface.attributes.append(move(attribute));
@@ -472,6 +474,8 @@ Function Parser::parse_function(HashMap<ByteString, ByteString>& extended_attrib
     assert_specific(';');
 
     Function function { move(return_type), name, move(parameters), move(extended_attributes), position, {}, false };
+
+    function.property_name = ByteString::formatted("{}_property", name.to_snakecase().replace("-"sv, "_"sv, ReplaceMode::All));
 
     // "Defining a special operation with an identifier is equivalent to separating the special operation out into its own declaration without an identifier."
     if (is_special_operation == IsSpecialOperation::No || (is_special_operation == IsSpecialOperation::Yes && !name.is_empty())) {
@@ -966,12 +970,15 @@ void Parser::parse_dictionary(Interface& interface)
 
         assert_specific(';');
 
+        auto property_name = ByteString::formatted("{}_property", name.to_snakecase().replace("-"sv, "_"sv, ReplaceMode::All));
+
         DictionaryMember member {
             required,
             move(type),
             move(name),
             move(extended_attributes),
             Optional<ByteString>(move(default_value)),
+            move(property_name),
         };
         dictionary.members.append(move(member));
     }

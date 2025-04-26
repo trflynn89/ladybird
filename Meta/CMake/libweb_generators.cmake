@@ -174,10 +174,14 @@ function (generate_html_implementation)
     set(LIBWEB_ALL_GENERATED_HEADERS ${LIBWEB_ALL_GENERATED_HEADERS} PARENT_SCOPE)
 endfunction()
 
+
 function (generate_js_bindings target)
     set(LIBWEB_INPUT_FOLDER "${CMAKE_CURRENT_SOURCE_DIR}")
     set(generated_idl_targets ${LIBWEB_ALL_GENERATED_IDL})
     list(TRANSFORM generated_idl_targets PREPEND "generate_")
+
+    set(BINDINGS_PROPERTIES)
+
     function(libweb_js_bindings class)
         cmake_parse_arguments(PARSE_ARGV 1 LIBWEB_BINDINGS "NAMESPACE;ITERABLE;ASYNC_ITERABLE;GLOBAL" "" "")
         get_filename_component(basename "${class}" NAME)
@@ -194,6 +198,8 @@ function (generate_js_bindings target)
                 "Bindings/${basename}Prototype.h"
                 "Bindings/${basename}Prototype.cpp"
             )
+
+            set(BINDINGS_PROPERTIES ${BINDINGS_PROPERTIES} "Bindings/${basename}.properties" PARENT_SCOPE)
         endif()
 
         if(LIBWEB_BINDINGS_ITERABLE)
@@ -267,15 +273,19 @@ function (generate_js_bindings target)
             DedicatedWorkerExposedInterfaces.cpp DedicatedWorkerExposedInterfaces.h
             SharedWorkerExposedInterfaces.cpp SharedWorkerExposedInterfaces.h
             ShadowRealmExposedInterfaces.cpp ShadowRealmExposedInterfaces.h
-            WindowExposedInterfaces.cpp WindowExposedInterfaces.h)
+            WindowExposedInterfaces.cpp WindowExposedInterfaces.h
+        )
+
         list(TRANSFORM exposed_interface_sources PREPEND "Bindings/")
         set(LIBWEB_ALL_IDL_FILES_ARGUMENT ${LIBWEB_ALL_IDL_FILES})
+
         if (WIN32)
             list(JOIN LIBWEB_ALL_IDL_FILES "\n" idl_file_list)
             file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/all_idl_files.txt" CONTENT "${idl_file_list}" NEWLINE_STYLE UNIX)
             set(LIBWEB_ALL_IDL_FILES "${CMAKE_CURRENT_BINARY_DIR}/all_idl_files.txt")
             set(LIBWEB_ALL_IDL_FILES_ARGUMENT "@${LIBWEB_ALL_IDL_FILES}")
         endif()
+
         add_custom_command(
             OUTPUT  ${exposed_interface_sources}
             COMMAND "${CMAKE_COMMAND}" -E make_directory "tmp"
@@ -293,8 +303,10 @@ function (generate_js_bindings target)
             VERBATIM
             DEPENDS Lagom::GenerateWindowOrWorkerInterfaces ${LIBWEB_ALL_IDL_FILES}
         )
-        target_sources(${target} PRIVATE ${exposed_interface_sources})
+
         add_custom_target(generate_exposed_interfaces DEPENDS ${exposed_interface_sources})
+        target_sources(${target} PRIVATE ${exposed_interface_sources})
+
         add_dependencies(all_generated generate_exposed_interfaces)
         add_dependencies(${target} generate_exposed_interfaces)
         add_dependencies(generate_exposed_interfaces ${generated_idl_targets})
@@ -311,8 +323,42 @@ function (generate_js_bindings target)
         set(LIBWEB_ALL_GENERATED_HEADERS ${LIBWEB_ALL_GENERATED_HEADERS} PARENT_SCOPE)
     endfunction()
 
+    function(generate_property_names)
+        set(properties_sources Bindings/PropertyNames.h Bindings/PropertyNames.cpp)
+
+        add_custom_command(
+            OUTPUT  ${properties_sources}
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "tmp"
+            COMMAND $<TARGET_FILE:Lagom::GeneratePropertyNames> -o "${CMAKE_CURRENT_BINARY_DIR}/tmp" ${BINDINGS_PROPERTIES}
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different tmp/PropertyNames.h "Bindings/PropertyNames.h"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different tmp/PropertyNames.cpp "Bindings/PropertyNames.cpp"
+            COMMAND "${CMAKE_COMMAND}" -E remove_directory "${CMAKE_CURRENT_BINARY_DIR}/tmp"
+            VERBATIM
+            DEPENDS Lagom::GeneratePropertyNames ${LIBWEB_ALL_IDL_FILES}
+        )
+
+        add_custom_target(generated_property_names DEPENDS ${properties_sources})
+        target_sources(${target} PRIVATE ${properties_sources})
+
+        add_dependencies(all_generated generated_property_names)
+        add_dependencies(${target} generated_property_names)
+        add_dependencies(generated_property_names ${generated_idl_targets})
+
+        list(TRANSFORM properties_sources PREPEND "${CMAKE_CURRENT_BINARY_DIR}/")
+        set(properties_headers ${properties_sources})
+        list(FILTER properties_headers INCLUDE REGEX "\.h$")
+
+        if (ENABLE_INSTALL_HEADERS)
+            install(FILES ${properties_headers} DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/LibWeb/Bindings")
+        endif()
+
+        list(APPEND LIBWEB_ALL_GENERATED_HEADERS ${properties_headers})
+        set(LIBWEB_ALL_GENERATED_HEADERS ${LIBWEB_ALL_GENERATED_HEADERS} PARENT_SCOPE)
+    endfunction()
+
     include("idl_files.cmake")
     generate_exposed_interface_files()
+    generate_property_names()
 
     set(LIBWEB_ALL_GENERATED_HEADERS ${LIBWEB_ALL_GENERATED_HEADERS} PARENT_SCOPE)
 endfunction()

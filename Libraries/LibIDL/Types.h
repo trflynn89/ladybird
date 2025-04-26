@@ -166,6 +166,9 @@ struct Function {
     size_t overload_index { 0 };
     bool is_overloaded { false };
 
+    // Added for convenience after parsing
+    ByteString property_name {};
+
     size_t shortest_length() const { return get_function_shortest_length(*this); }
 };
 
@@ -195,6 +198,7 @@ struct Attribute {
     // Added for convenience after parsing
     ByteString getter_callback_name;
     ByteString setter_callback_name;
+    ByteString property_name;
 };
 
 struct DictionaryMember {
@@ -203,6 +207,9 @@ struct DictionaryMember {
     ByteString name;
     HashMap<ByteString, ByteString> extended_attributes;
     Optional<ByteString> default_value;
+
+    // Added for convenience after parsing
+    ByteString property_name;
 };
 
 struct Dictionary {

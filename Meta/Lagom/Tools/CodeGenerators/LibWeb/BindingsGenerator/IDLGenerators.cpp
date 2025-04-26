@@ -936,16 +936,21 @@ static void generate_to_cpp(SourceGenerator& generator, ParameterType& parameter
 
             for (auto& member : members) {
                 dictionary_generator.set("member_key", member.name);
+
                 auto member_js_name = make_input_acceptable_cpp(member.name.to_snakecase());
                 auto member_value_name = ByteString::formatted("{}_value_{}", member_js_name, i);
                 auto member_property_value_name = ByteString::formatted("{}_property_value_{}", member_js_name, i);
+                auto member_property = ByteString::formatted("{}_property", member.name.to_snakecase().replace("-"sv, "_"sv, ReplaceMode::All));
+
                 dictionary_generator.set("member_name", member_js_name);
                 dictionary_generator.set("member_value_name", member_value_name);
                 dictionary_generator.set("member_property_value_name", member_property_value_name);
+                dictionary_generator.set("member_property", member_property);
+
                 dictionary_generator.append(R"~~~(
     auto @member_property_value_name@ = JS::js_undefined();
     if (@js_name@@js_suffix@.is_object())
-        @member_property_value_name@ = TRY(@js_name@@js_suffix@.as_object().get("@member_key@"_fly_string));
+        @member_property_value_name@ = TRY(@js_name@@js_suffix@.as_object().get(PropertyNames::@member_property@.as_string()));
 )~~~");
                 if (member.required) {
                     dictionary_generator.append(R"~~~(
@@ -3502,15 +3507,16 @@ void @class_name@::initialize(JS::Realm& realm)
         if (attribute.extended_attributes.contains("FIXME")) {
             auto fixme_attribute_generator = generator.fork();
             fixme_attribute_generator.set("attribute.name", attribute.name);
+            fixme_attribute_generator.set("attribute.property_name", attribute.property_name);
             fixme_attribute_generator.append(R"~~~(
-    @define_direct_property@("@attribute.name@"_fly_string, JS::js_undefined(), default_attributes | JS::Attribute::Unimplemented);
-            )~~~");
+    @define_direct_property@(PropertyNames::@attribute.property_name@, JS::js_undefined(), default_attributes | JS::Attribute::Unimplemented);)~~~");
             continue;
         }
 
         auto attribute_generator = generator.fork();
         attribute_generator.set("attribute.name", attribute.name);
         attribute_generator.set("attribute.getter_callback", attribute.getter_callback_name);
+        attribute_generator.set("attribute.property_name", attribute.property_name);
 
         if (!attribute.readonly || attribute.extended_attributes.contains("Replaceable"sv) || attribute.extended_attributes.contains("PutForwards"sv))
             attribute_generator.set("attribute.setter_callback", attribute.setter_callback_name);
@@ -3519,14 +3525,14 @@ void @class_name@::initialize(JS::Realm& realm)
 
         if (attribute.extended_attributes.contains("Unscopable")) {
             attribute_generator.append(R"~~~(
-    MUST(unscopable_object->create_data_property("@attribute.name@"_fly_string, JS::Value(true)));
-)~~~");
+    MUST(unscopable_object->create_data_property(PropertyNames::@attribute.property_name@, JS::Value(true)));)~~~");
         }
 
         attribute_generator.append(R"~~~(
-    @define_native_accessor@(realm, "@attribute.name@"_fly_string, @attribute.getter_callback@, @attribute.setter_callback@, default_attributes);
-)~~~");
+    @define_native_accessor@(realm, PropertyNames::@attribute.property_name@, @attribute.getter_callback@, @attribute.setter_callback@, default_attributes);)~~~");
     }
+
+    generator.append("\n");
 
     for (auto& function : interface.functions) {
         bool has_unforgeable_attribute = function.extended_attributes.contains("LegacyUnforgeable"sv);
@@ -3536,14 +3542,16 @@ void @class_name@::initialize(JS::Realm& realm)
         if (function.extended_attributes.contains("FIXME")) {
             auto fixme_function_generator = generator.fork();
             fixme_function_generator.set("function.name", function.name);
+            fixme_function_generator.set("function.property_name", function.property_name);
             fixme_function_generator.append(R"~~~(
-        @define_direct_property@("@function.name@"_fly_string, JS::js_undefined(), default_attributes | JS::Attribute::Unimplemented);
-            )~~~");
+    @define_direct_property@(PropertyNames::@function.property_name@, JS::js_undefined(), default_attributes | JS::Attribute::Unimplemented);)~~~");
         }
     }
 
     // https://webidl.spec.whatwg.org/#es-constants
     if (generate_unforgeables == GenerateUnforgeables::No) {
+        generator.append("\n");
+
         for (auto& constant : interface.constants) {
             // FIXME: Do constants need to be added to the unscopable list?
 
@@ -3553,10 +3561,11 @@ void @class_name@::initialize(JS::Realm& realm)
             generate_wrap_statement(constant_generator, constant.value, constant.type, interface, ByteString::formatted("auto constant_{}_value =", constant.name));
 
             constant_generator.append(R"~~~(
-    @define_direct_property@("@constant.name@"_fly_string, constant_@constant.name@_value, JS::Attribute::Enumerable);
-)~~~");
+    @define_direct_property@("@constant.name@"_fly_string, constant_@constant.name@_value, JS::Attribute::Enumerable);)~~~");
         }
     }
+
+    generator.append("\n");
 
     // https://webidl.spec.whatwg.org/#es-operations
     for (auto const& overload_set : interface.overload_sets) {
@@ -3565,22 +3574,25 @@ void @class_name@::initialize(JS::Realm& realm)
         if ((generate_unforgeables == GenerateUnforgeables::Yes && !has_unforgeable_attribute) || (generate_unforgeables == GenerateUnforgeables::No && has_unforgeable_attribute))
             continue;
 
+        auto snake_name = overload_set.key.to_snakecase();
+
         auto function_generator = generator.fork();
         function_generator.set("function.name", overload_set.key);
-        function_generator.set("function.name:snakecase", make_input_acceptable_cpp(overload_set.key.to_snakecase()));
+        function_generator.set("function.property_name", ByteString::formatted("{}_property", snake_name.replace("-"sv, "_"sv, AK::ReplaceMode::All)));
+        function_generator.set("function.name:snakecase", make_input_acceptable_cpp(snake_name));
         function_generator.set("function.length", ByteString::number(get_shortest_function_length(overload_set.value)));
 
         if (any_of(overload_set.value, [](auto const& function) { return function.extended_attributes.contains("Unscopable"); })) {
             VERIFY(all_of(overload_set.value, [](auto const& function) { return function.extended_attributes.contains("Unscopable"); }));
             function_generator.append(R"~~~(
-    MUST(unscopable_object->create_data_property("@function.name@"_fly_string, JS::Value(true)));
-)~~~");
+    MUST(unscopable_object->create_data_property(PropertyNames::@function.property_name@, JS::Value(true)));)~~~");
         }
 
         function_generator.append(R"~~~(
-    @define_native_function@(realm, "@function.name@"_fly_string, @function.name:snakecase@, @function.length@, default_attributes);
-)~~~");
+    @define_native_function@(realm, PropertyNames::@function.property_name@, @function.name:snakecase@, @function.length@, default_attributes);)~~~");
     }
+
+    generator.append("\n");
 
     bool should_generate_stringifier = true;
     if (interface.stringifier_attribute.has_value()) {
@@ -3593,8 +3605,7 @@ void @class_name@::initialize(JS::Realm& realm)
         // FIXME: Do stringifiers need to be added to the unscopable list?
         auto stringifier_generator = generator.fork();
         stringifier_generator.append(R"~~~(
-    @define_native_function@(realm, "toString"_fly_string, to_string, 0, default_attributes);
-)~~~");
+    @define_native_function@(realm, vm.names.toString, to_string, 0, default_attributes);)~~~");
     }
 
     // https://webidl.spec.whatwg.org/#define-the-iteration-methods
@@ -3602,16 +3613,14 @@ void @class_name@::initialize(JS::Realm& realm)
     if (interface.indexed_property_getter.has_value() && generate_unforgeables == GenerateUnforgeables::No) {
         auto iterator_generator = generator.fork();
         iterator_generator.append(R"~~~(
-    @define_direct_property@(vm.well_known_symbol_iterator(), realm.intrinsics().array_prototype()->get_without_side_effects(vm.names.values), JS::Attribute::Configurable | JS::Attribute::Writable);
-)~~~");
+    @define_direct_property@(vm.well_known_symbol_iterator(), realm.intrinsics().array_prototype()->get_without_side_effects(vm.names.values), JS::Attribute::Configurable | JS::Attribute::Writable);)~~~");
 
         if (interface.value_iterator_type.has_value()) {
             iterator_generator.append(R"~~~(
     @define_direct_property@(vm.names.entries, realm.intrinsics().array_prototype()->get_without_side_effects(vm.names.entries), default_attributes);
     @define_direct_property@(vm.names.keys, realm.intrinsics().array_prototype()->get_without_side_effects(vm.names.keys), default_attributes);
     @define_direct_property@(vm.names.values, realm.intrinsics().array_prototype()->get_without_side_effects(vm.names.values), default_attributes);
-    @define_direct_property@(vm.names.forEach, realm.intrinsics().array_prototype()->get_without_side_effects(vm.names.forEach), default_attributes);
-)~~~");
+    @define_direct_property@(vm.names.forEach, realm.intrinsics().array_prototype()->get_without_side_effects(vm.names.forEach), default_attributes);)~~~");
         }
     }
 
@@ -3625,8 +3634,7 @@ void @class_name@::initialize(JS::Realm& realm)
     @define_native_function@(realm, vm.names.keys, keys, 0, default_attributes);
     @define_native_function@(realm, vm.names.values, values, 0, default_attributes);
 
-    @define_direct_property@(vm.well_known_symbol_iterator(), get_without_side_effects(vm.names.entries), JS::Attribute::Configurable | JS::Attribute::Writable);
-)~~~");
+    @define_direct_property@(vm.well_known_symbol_iterator(), get_without_side_effects(vm.names.entries), JS::Attribute::Configurable | JS::Attribute::Writable);)~~~");
     }
 
     // https://webidl.spec.whatwg.org/#define-the-asynchronous-iteration-methods
@@ -3635,8 +3643,7 @@ void @class_name@::initialize(JS::Realm& realm)
         iterator_generator.append(R"~~~(
     @define_native_function@(realm, vm.names.values, values, 0, default_attributes);
 
-    @define_direct_property@(vm.well_known_symbol_async_iterator(), get_without_side_effects(vm.names.values), JS::Attribute::Configurable | JS::Attribute::Writable);
-)~~~");
+    @define_direct_property@(vm.well_known_symbol_async_iterator(), get_without_side_effects(vm.names.values), JS::Attribute::Configurable | JS::Attribute::Writable);)~~~");
     }
 
     // https://webidl.spec.whatwg.org/#js-setlike
@@ -3652,42 +3659,36 @@ void @class_name@::initialize(JS::Realm& realm)
     @define_native_function@(realm, vm.names.values, values, 0, default_attributes);
     @define_direct_property@(vm.well_known_symbol_iterator(), get_without_side_effects(vm.names.values), JS::Attribute::Configurable | JS::Attribute::Writable);
     @define_native_function@(realm, vm.names.forEach, for_each, 1, default_attributes);
-    @define_native_function@(realm, vm.names.has, has, 1, default_attributes);
-)~~~");
+    @define_native_function@(realm, vm.names.has, has, 1, default_attributes);)~~~");
 
         if (!interface.overload_sets.contains("add"sv) && !interface.is_set_readonly) {
             setlike_generator.append(R"~~~(
-    @define_native_function@(realm, vm.names.add, add, 1, default_attributes);
-)~~~");
+    @define_native_function@(realm, vm.names.add, add, 1, default_attributes);)~~~");
         }
         if (!interface.overload_sets.contains("delete"sv) && !interface.is_set_readonly) {
             setlike_generator.append(R"~~~(
-    @define_native_function@(realm, vm.names.delete_, delete_, 1, default_attributes);
-)~~~");
+    @define_native_function@(realm, vm.names.delete_, delete_, 1, default_attributes);)~~~");
         }
         if (!interface.overload_sets.contains("clear"sv) && !interface.is_set_readonly) {
             setlike_generator.append(R"~~~(
-    @define_native_function@(realm, vm.names.clear, clear, 0, default_attributes);
-)~~~");
+    @define_native_function@(realm, vm.names.clear, clear, 0, default_attributes);)~~~");
         }
     }
 
     if (interface.has_unscopable_member) {
         generator.append(R"~~~(
-    @define_direct_property@(vm.well_known_symbol_unscopables(), unscopable_object, JS::Attribute::Configurable);
-)~~~");
+    @define_direct_property@(vm.well_known_symbol_unscopables(), unscopable_object, JS::Attribute::Configurable);)~~~");
     }
 
     if (generate_unforgeables == GenerateUnforgeables::No) {
         generator.append(R"~~~(
-    @define_direct_property@(vm.well_known_symbol_to_string_tag(), JS::PrimitiveString::create(vm, "@namespaced_name@"_string), JS::Attribute::Configurable);
-)~~~");
+    @define_direct_property@(vm.well_known_symbol_to_string_tag(), JS::PrimitiveString::create(vm, "@namespaced_name@"_string), JS::Attribute::Configurable);)~~~");
     }
 
     if (!define_on_existing_object) {
         generator.append(R"~~~(
-    Base::initialize(realm);
-)~~~");
+
+    Base::initialize(realm);)~~~");
     }
 
     generator.append(R"~~~(
@@ -3769,8 +3770,10 @@ static void generate_prototype_or_global_mixin_definitions(IDL::Interface const&
                 attribute_name = attribute.name;
 
             attribute_generator.set("attribute.reflect_name", attribute_name);
+            attribute_generator.set("attribute.property_name", ByteString::formatted("{}_property", attribute_name.to_snakecase().replace("-"sv, "_"sv, AK::ReplaceMode::All)));
         } else {
             attribute_generator.set("attribute.reflect_name", attribute.name.to_snakecase());
+            attribute_generator.set("attribute.property_name", attribute.property_name);
         }
 
         // For [CEReactions]: https://html.spec.whatwg.org/multipage/custom-elements.html#cereactions
@@ -3813,7 +3816,7 @@ JS_DEFINE_NATIVE_FUNCTION(@class_name@::@attribute.getter_callback@)
 
                     // 2. Let contentAttributeValue be the result of running this's get the content attribute.
                     attribute_generator.append(R"~~~(
-    auto contentAttributeValue = impl->attribute("@attribute.reflect_name@"_fly_string);
+    auto contentAttributeValue = impl->attribute(PropertyNames::@attribute.property_name@.as_string());
 )~~~");
 
                     // 3. Let attributeDefinition be the attribute definition of element's content attribute whose namespace is null
@@ -3877,7 +3880,7 @@ JS_DEFINE_NATIVE_FUNCTION(@class_name@::@attribute.getter_callback@)
                     // 2. Let contentAttributeValue be the result of running this's get the content attribute.
 
                     attribute_generator.append(R"~~~(
-    auto content_attribute_value = impl->attribute("@attribute.reflect_name@"_fly_string);
+    auto content_attribute_value = impl->attribute(PropertyNames::@attribute.property_name@.as_string());
 )~~~");
 
                     // 3. Let attributeDefinition be the attribute definition of element's content attribute whose namespace is null
@@ -3891,7 +3894,7 @@ JS_DEFINE_NATIVE_FUNCTION(@class_name@::@attribute.getter_callback@)
                         // NOTE: We run step 4 here to have a field to assign to
                         // 4. Return the canonical keyword for the state of attributeDefinition that contentAttributeValue corresponds to.
                         attribute_generator.append(R"~~~(
-    auto retval = impl->attribute("@attribute.reflect_name@"_fly_string);
+    auto retval = impl->attribute(PropertyNames::@attribute.property_name@.as_string());
 )~~~");
 
                         // 1. Assert: the reflected IDL attribute is limited to only known values.
@@ -3956,7 +3959,7 @@ JS_DEFINE_NATIVE_FUNCTION(@class_name@::@attribute.getter_callback@)
                 // 1. Let contentAttributeValue be the result of running this's get the content attribute.
                 // 2. If contentAttributeValue is null, then return false
                 attribute_generator.append(R"~~~(
-    auto retval = impl->has_attribute("@attribute.reflect_name@"_fly_string);
+    auto retval = impl->has_attribute(PropertyNames::@attribute.property_name@.as_string());
 )~~~");
             }
             // If a reflected IDL attribute has the type long:
@@ -3969,7 +3972,7 @@ JS_DEFINE_NATIVE_FUNCTION(@class_name@::@attribute.getter_callback@)
                 //    2. If parsedValue is not an error and is within the long range, then return parsedValue.
                 attribute_generator.append(R"~~~(
     i32 retval = 0;
-    auto content_attribute_value = impl->get_attribute("@attribute.reflect_name@"_fly_string);
+    auto content_attribute_value = impl->get_attribute(PropertyNames::@attribute.property_name@.as_string());
     if (content_attribute_value.has_value()) {
         auto maybe_parsed_value = Web::HTML::parse_integer(*content_attribute_value);
         if (maybe_parsed_value.has_value())
@@ -3994,7 +3997,7 @@ JS_DEFINE_NATIVE_FUNCTION(@class_name@::@attribute.getter_callback@)
                 //              FIXME: 2. Return maximum.
                 attribute_generator.append(R"~~~(
     u32 retval = 0;
-    auto content_attribute_value = impl->get_attribute("@attribute.reflect_name@"_fly_string);
+    auto content_attribute_value = impl->get_attribute(PropertyNames::@attribute.property_name@.as_string());
     u32 minimum = 0;
     u32 maximum = 2147483647;
     if (content_attribute_value.has_value()) {
@@ -4015,7 +4018,7 @@ JS_DEFINE_NATIVE_FUNCTION(@class_name@::@attribute.getter_callback@)
                 // NOTE: this is "impl" above
                 // 2. Let contentAttributeValue be the result of running this's get the content attribute.
                 attribute_generator.append(R"~~~(
-    auto content_attribute_value = impl->attribute("@attribute.reflect_name@"_fly_string);
+    auto content_attribute_value = impl->attribute(PropertyNames::@attribute.property_name@.as_string());
 )~~~");
                 // 3. Let attributeDefinition be the attribute definition of element's content attribute whose namespace is null and local name is the reflected content attribute name.
                 // NOTE: this is "attribute" above
@@ -4048,7 +4051,7 @@ JS_DEFINE_NATIVE_FUNCTION(@class_name@::@attribute.getter_callback@)
             else if (attribute.type->is_nullable() && attribute.type->name() == "Element") {
                 // The getter steps are to return the result of running this's get the attr-associated element.
                 attribute_generator.append(R"~~~(
-    static auto content_attribute = "@attribute.reflect_name@"_fly_string;
+    static auto content_attribute = PropertyNames::@attribute.property_name@.as_string();
 
     auto retval = impl->get_the_attribute_associated_element(content_attribute, TRY(throw_dom_exception_if_needed(vm, [&] { return impl->@attribute.cpp_name@(); })));
 )~~~");
@@ -4061,13 +4064,13 @@ JS_DEFINE_NATIVE_FUNCTION(@class_name@::@attribute.getter_callback@)
 
                 // 1. Let elements be the result of running this's get the attr-associated elements.
                 attribute_generator.append(R"~~~(
-    static auto content_attribute = "@attribute.reflect_name@"_fly_string;
+    static auto content_attribute = PropertyNames::@attribute.property_name@.as_string();
 
     auto retval = impl->get_the_attribute_associated_elements(content_attribute, TRY(throw_dom_exception_if_needed(vm, [&] { return impl->@attribute.cpp_name@(); })));
 )~~~");
             } else {
                 attribute_generator.append(R"~~~(
-    auto retval = impl->get_attribute_value("@attribute.reflect_name@"_fly_string);
+    auto retval = impl->get_attribute_value(PropertyNames::@attribute.property_name@.as_string());
 )~~~");
             }
 
@@ -4190,9 +4193,9 @@ JS_DEFINE_NATIVE_FUNCTION(@class_name@::@attribute.setter_callback@)
                 if (attribute.type->name() == "boolean") {
                     attribute_generator.append(R"~~~(
     if (!cpp_value)
-        impl->remove_attribute("@attribute.reflect_name@"_fly_string);
+        impl->remove_attribute(PropertyNames::@attribute.property_name@.as_string());
     else
-        MUST(impl->set_attribute("@attribute.reflect_name@"_fly_string, String {}));
+        MUST(impl->set_attribute(PropertyNames::@attribute.property_name@.as_string(), String {}));
 )~~~");
                 } else if (attribute.type->name() == "unsigned long") {
                     // The setter steps are:
@@ -4208,11 +4211,11 @@ JS_DEFINE_NATIVE_FUNCTION(@class_name@::@attribute.setter_callback@)
     u32 new_value = minimum;
     if (cpp_value >= minimum && cpp_value <= 2147483647)
         new_value = cpp_value;
-    MUST(impl->set_attribute("@attribute.reflect_name@"_fly_string, String::number(new_value)));
+    MUST(impl->set_attribute(PropertyNames::@attribute.property_name@.as_string(), String::number(new_value)));
 )~~~");
                 } else if (attribute.type->is_integer() && !attribute.type->is_nullable()) {
                     attribute_generator.append(R"~~~(
-    MUST(impl->set_attribute("@attribute.reflect_name@"_fly_string, String::number(cpp_value)));
+    MUST(impl->set_attribute(PropertyNames::@attribute.property_name@.as_string(), String::number(cpp_value)));
 )~~~");
                 }
                 // If a reflected IDL attribute has the type T?, where T is either Element or an interface that inherits
@@ -4225,7 +4228,7 @@ JS_DEFINE_NATIVE_FUNCTION(@class_name@::@attribute.setter_callback@)
                     //     2. Run this's delete the content attribute.
                     //     3. Return.
                     attribute_generator.append(R"~~~(
-    static auto content_attribute = "@attribute.reflect_name@"_fly_string;
+    static auto content_attribute = PropertyNames::@attribute.property_name@.as_string();
 
     if (!cpp_value) {
         TRY(throw_dom_exception_if_needed(vm, [&] { return impl->set_@attribute.cpp_name@({}); }));
@@ -4251,7 +4254,7 @@ JS_DEFINE_NATIVE_FUNCTION(@class_name@::@attribute.setter_callback@)
                     //     2. Run this's delete the content attribute.
                     //     3. Return.
                     attribute_generator.append(R"~~~(
-    static auto content_attribute = "@attribute.reflect_name@"_fly_string;
+    static auto content_attribute = PropertyNames::@attribute.property_name@.as_string();
 
     if (!cpp_value.has_value()) {
         TRY(throw_dom_exception_if_needed(vm, [&] { return impl->set_@attribute.cpp_name@({}); }));
@@ -4282,13 +4285,13 @@ JS_DEFINE_NATIVE_FUNCTION(@class_name@::@attribute.setter_callback@)
                 } else if (attribute.type->is_nullable()) {
                     attribute_generator.append(R"~~~(
     if (!cpp_value.has_value())
-        impl->remove_attribute("@attribute.reflect_name@"_fly_string);
+        impl->remove_attribute(PropertyNames::@attribute.property_name@.as_string());
     else
-        MUST(impl->set_attribute("@attribute.reflect_name@"_fly_string, cpp_value.value()));
+        MUST(impl->set_attribute(PropertyNames::@attribute.property_name@.as_string(), cpp_value.value()));
 )~~~");
                 } else {
                     attribute_generator.append(R"~~~(
-MUST(impl->set_attribute("@attribute.reflect_name@"_fly_string, cpp_value));
+MUST(impl->set_attribute(PropertyNames::@attribute.property_name@.as_string(), cpp_value));
 )~~~");
                 }
 
@@ -4940,6 +4943,100 @@ private:
 )~~~");
 }
 
+template<typename Callback>
+static void for_each_dictionary_property(IDL::Interface const& interface, ByteString const& name, Callback const& callback)
+{
+    auto iterate_members_for_dictionary = [&](auto const& dictionary) {
+        for (auto const& member : dictionary.members) {
+            callback(member.property_name, member.name);
+            for_each_dictionary_property_in_parameter(interface, member, callback);
+        }
+
+        for_each_dictionary_property(interface, dictionary.parent_name, callback);
+    };
+
+    if (auto dictionary = interface.dictionaries.get(name); dictionary.has_value())
+        iterate_members_for_dictionary(*dictionary);
+
+    if (auto partial_dictionary = interface.partial_dictionaries.get(name); partial_dictionary.has_value()) {
+        for (auto const& dictionary : *partial_dictionary)
+            iterate_members_for_dictionary(dictionary);
+    }
+}
+
+template<typename Parameter, typename Callback>
+static void for_each_dictionary_property_in_parameter(IDL::Interface const& interface, Parameter const& parameter, Callback const& callback)
+{
+    switch (parameter.type->kind()) {
+    case Type::Kind::Plain:
+        for_each_dictionary_property(interface, parameter.type->name(), callback);
+        break;
+
+    case Type::Kind::Parameterized:
+        for (auto const& type : parameter.type->as_parameterized().parameters())
+            for_each_dictionary_property(interface, type->name(), callback);
+        break;
+
+    case Type::Kind::Union:
+        for (auto const& type : parameter.type->as_union().member_types())
+            for_each_dictionary_property(interface, type->name(), callback);
+        break;
+    }
+}
+
+template<typename Function, typename Callback>
+static void for_each_dictionary_property_in_function(IDL::Interface const& interface, Function const& function, Callback const& callback)
+{
+    for (auto const& parameter : function.parameters)
+        for_each_dictionary_property_in_parameter(interface, parameter, callback);
+}
+
+template<typename Callback>
+static void for_each_property(IDL::Interface const& interface, Callback const& callback)
+{
+    HashTable<ByteString> seen_properties;
+
+    auto callback_wrapper = [&](auto const& property, auto const& value) {
+        if (seen_properties.set(property, AK::HashSetExistingEntryBehavior::Keep) == HashSetResult::KeptExistingEntry)
+            return;
+
+        callback(property, value);
+    };
+
+    for (auto const& attribute : interface.attributes) {
+        callback_wrapper(attribute.property_name, attribute.name);
+
+        if (auto reflect = attribute.extended_attributes.get("Reflect"sv); reflect.has_value() && !reflect->is_empty()) {
+            auto property = ByteString::formatted("{}_property", reflect->to_snakecase().replace("-"sv, "_"sv, AK::ReplaceMode::All));
+            callback_wrapper(property, *reflect);
+        }
+    }
+
+    for (auto const& constructor : interface.constructors)
+        for_each_dictionary_property_in_function(interface, constructor, callback_wrapper);
+
+    for (auto const& function : interface.functions) {
+        callback_wrapper(function.property_name, function.name);
+        for_each_dictionary_property_in_function(interface, function, callback_wrapper);
+    }
+
+    for (auto const& constructor : interface.static_functions)
+        for_each_dictionary_property_in_function(interface, constructor, callback_wrapper);
+}
+
+void generate_properties(IDL::Interface const& interface, StringBuilder& builder)
+{
+    SourceGenerator generator { builder };
+
+    for_each_property(interface, [&](auto const& property, auto const& value) {
+        generator.set("property", property);
+        generator.set("value", value);
+
+        generator.append(R"~~~(
+@property@||@value@)~~~");
+    });
+}
+
 // https://webidl.spec.whatwg.org/#define-the-operations
 static void define_the_operations(SourceGenerator& generator, HashMap<ByteString, Vector<Function&>> const& operations)
 {
@@ -4987,6 +5084,7 @@ void generate_constructor_implementation(IDL::Interface const& interface, String
 #include <LibWeb/Bindings/@prototype_class@.h>
 #include <LibWeb/Bindings/ExceptionOrUtils.h>
 #include <LibWeb/Bindings/Intrinsics.h>
+#include <LibWeb/Bindings/PropertyNames.h>
 #include <LibWeb/HTML/WindowProxy.h>
 #include <LibWeb/WebIDL/AbstractOperations.h>
 #include <LibWeb/WebIDL/Buffers.h>
@@ -5214,6 +5312,7 @@ void generate_prototype_implementation(IDL::Interface const& interface, StringBu
 #include <LibWeb/Bindings/@prototype_class@.h>
 #include <LibWeb/Bindings/ExceptionOrUtils.h>
 #include <LibWeb/Bindings/Intrinsics.h>
+#include <LibWeb/Bindings/PropertyNames.h>
 #include <LibWeb/DOM/Element.h>
 #include <LibWeb/DOM/Event.h>
 #include <LibWeb/DOM/IDLEventListener.h>
@@ -5633,6 +5732,7 @@ void generate_global_mixin_implementation(IDL::Interface const& interface, Strin
 #include <LibWeb/Bindings/@prototype_name@.h>
 #include <LibWeb/Bindings/ExceptionOrUtils.h>
 #include <LibWeb/Bindings/Intrinsics.h>
+#include <LibWeb/Bindings/PropertyNames.h>
 #include <LibWeb/DOM/Element.h>
 #include <LibWeb/DOM/Event.h>
 #include <LibWeb/DOM/IDLEventListener.h>

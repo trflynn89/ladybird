@@ -131,6 +131,7 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
         return {};
     };
 
+    String properties;
     String namespace_header;
     String namespace_implementation;
     String constructor_header;
@@ -153,11 +154,13 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
         TRY(write_if_changed(&IDL::generate_namespace_header, namespace_header));
         TRY(write_if_changed(&IDL::generate_namespace_implementation, namespace_implementation));
     } else {
+        properties = TRY(String::formatted("{}.properties", path_prefix));
         constructor_header = TRY(String::formatted("{}Constructor.h", path_prefix));
         constructor_implementation = TRY(String::formatted("{}Constructor.cpp", path_prefix));
         prototype_header = TRY(String::formatted("{}Prototype.h", path_prefix));
         prototype_implementation = TRY(String::formatted("{}Prototype.cpp", path_prefix));
 
+        TRY(write_if_changed(&IDL::generate_properties, properties));
         TRY(write_if_changed(&IDL::generate_constructor_header, constructor_header));
         TRY(write_if_changed(&IDL::generate_constructor_implementation, constructor_implementation));
         TRY(write_if_changed(&IDL::generate_prototype_header, prototype_header));
@@ -192,7 +195,7 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
         auto depfile = TRY(Core::File::open_file_or_standard_stream(depfile_path, Core::File::OpenMode::Write));
 
         StringBuilder depfile_builder;
-        for (StringView s : { constructor_header, constructor_implementation, prototype_header, prototype_implementation, namespace_header, namespace_implementation, iterator_prototype_header, iterator_prototype_implementation, async_iterator_prototype_header, async_iterator_prototype_implementation, global_mixin_header, global_mixin_implementation }) {
+        for (StringView s : { properties, constructor_header, constructor_implementation, prototype_header, prototype_implementation, namespace_header, namespace_implementation, iterator_prototype_header, iterator_prototype_implementation, async_iterator_prototype_header, async_iterator_prototype_implementation, global_mixin_header, global_mixin_implementation }) {
             if (s.is_empty())
                 continue;
 
