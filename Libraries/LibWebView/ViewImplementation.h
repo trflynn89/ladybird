@@ -13,6 +13,7 @@
 #include <AK/LexicalPath.h>
 #include <AK/Queue.h>
 #include <AK/String.h>
+#include <LibCore/AnonymousBuffer.h>
 #include <LibCore/Forward.h>
 #include <LibCore/Promise.h>
 #include <LibGfx/Cursor.h>
@@ -168,6 +169,8 @@ public:
     // native GUI widgets as possible.
     void use_native_user_style_sheet();
 
+    void increment_cached_cookie_id();
+
     Function<void()> on_ready_to_paint;
     Function<String(Web::HTML::ActivateTab, Web::HTML::WebViewHints, Optional<u64>)> on_new_web_view;
     Function<void()> on_activate_tab;
@@ -307,6 +310,8 @@ protected:
     size_t m_number_of_elements_playing_audio { 0 };
 
     Web::HTML::MuteState m_mute_state { Web::HTML::MuteState::Unmuted };
+
+    Core::AnonymousBuffer m_cookie_id_buffer;
 
     // FIXME: Reconcile this ID with `page_id`. The latter is only unique per WebContent connection, whereas the view ID
     //        is required to be globally unique for Firefox DevTools.

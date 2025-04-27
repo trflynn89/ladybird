@@ -213,6 +213,9 @@ private:
 
     RefPtr<Core::Timer> m_paint_refresh_timer;
 
+    u64 m_cookie_id { 0 };
+    String m_cached_cookie;
+
     bool m_pending_set_browser_zoom_request = false;
 };
 

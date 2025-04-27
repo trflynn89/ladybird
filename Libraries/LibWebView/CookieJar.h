@@ -41,8 +41,10 @@ class CookieJar {
     public:
         using Cookies = HashMap<CookieStorageKey, Web::Cookie::Cookie>;
 
+        explicit TransientStorage(CookieJar&);
+
         void set_cookies(Cookies);
-        void set_cookie(CookieStorageKey, Web::Cookie::Cookie);
+        void set_cookie(CookieStorageKey, Web::Cookie::Cookie, bool cookie_value_changed);
         Optional<Web::Cookie::Cookie const&> get_cookie(CookieStorageKey const&);
 
         size_t size() const { return m_cookies.size(); }
@@ -69,6 +71,7 @@ class CookieJar {
         }
 
     private:
+        CookieJar& m_cookie_jar;
         Cookies m_cookies;
         Cookies m_dirty_cookies;
     };
@@ -98,6 +101,10 @@ public:
     Optional<Web::Cookie::Cookie> get_named_cookie(URL::URL const& url, StringView name);
     void expire_cookies_with_time_offset(AK::Duration);
 
+    static bool cookie_matches_url(Web::Cookie::Cookie const&, URL::URL const&, Optional<String> canonicalized_domain = {}, Optional<Web::Cookie::Source> source = {});
+
+    Function<void(Web::Cookie::Cookie const&)> on_cookie_updated;
+
 private:
     explicit CookieJar(Optional<PersistedStorage>);
 
@@ -113,7 +120,7 @@ private:
     };
 
     void store_cookie(Web::Cookie::ParsedCookie const& parsed_cookie, const URL::URL& url, String canonicalized_domain, Web::Cookie::Source source);
-    Vector<Web::Cookie::Cookie> get_matching_cookies(const URL::URL& url, StringView canonicalized_domain, Web::Cookie::Source source, MatchingCookiesSpecMode mode = MatchingCookiesSpecMode::RFC6265);
+    Vector<Web::Cookie::Cookie> get_matching_cookies(const URL::URL& url, String const& canonicalized_domain, Web::Cookie::Source source, MatchingCookiesSpecMode mode = MatchingCookiesSpecMode::RFC6265);
 
     Optional<PersistedStorage> m_persisted_storage;
     TransientStorage m_transient_storage;

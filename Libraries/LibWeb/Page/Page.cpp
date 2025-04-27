@@ -585,6 +585,13 @@ void Page::set_user_style(String source)
     }
 }
 
+Optional<u64> Page::cookie_id() const
+{
+    if (auto const* cookie_id = m_cookie_id_buffer.data<u64>())
+        return *cookie_id;
+    return {};
+}
+
 Vector<GC::Root<DOM::Document>> Page::documents_in_active_window() const
 {
     if (!top_level_traversable_is_initialized())

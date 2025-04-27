@@ -56,6 +56,7 @@ NonnullOwnPtr<CookieJar> CookieJar::create()
 
 CookieJar::CookieJar(Optional<PersistedStorage> persisted_storage)
     : m_persisted_storage(move(persisted_storage))
+    , m_transient_storage(*this)
 {
     if (!m_persisted_storage.has_value())
         return;
@@ -130,6 +131,7 @@ void CookieJar::set_cookie(const URL::URL& url, Web::Cookie::ParsedCookie const&
 void CookieJar::update_cookie(Web::Cookie::Cookie cookie)
 {
     CookieStorageKey key { cookie.name, cookie.domain, cookie.path };
+    auto cookie_value_changed = true;
 
     // 23. If the cookie store contains a cookie with the same name, domain, host-only-flag, and path as the
     //     newly-created cookie:
@@ -139,10 +141,11 @@ void CookieJar::update_cookie(Web::Cookie::Cookie cookie)
 
         // 4. Remove the old-cookie from the cookie store.
         // NOTE: Rather than deleting then re-inserting this cookie, we update it in-place.
+        cookie_value_changed = cookie.value != old_cookie->value;
     }
 
     // 24. Insert the newly-created cookie into the cookie store.
-    m_transient_storage.set_cookie(move(key), move(cookie));
+    m_transient_storage.set_cookie(move(key), move(cookie), cookie_value_changed);
 
     m_transient_storage.purge_expired_cookies();
 }
@@ -504,6 +507,7 @@ void CookieJar::store_cookie(Web::Cookie::ParsedCookie const& parsed_cookie, con
     }
 
     CookieStorageKey key { cookie.name, cookie.domain, cookie.path };
+    auto cookie_value_changed = true;
 
     // 23. If the cookie store contains a cookie with the same name, domain, host-only-flag, and path as the
     //     newly-created cookie:
@@ -522,16 +526,17 @@ void CookieJar::store_cookie(Web::Cookie::ParsedCookie const& parsed_cookie, con
 
         // 4. Remove the old-cookie from the cookie store.
         // NOTE: Rather than deleting then re-inserting this cookie, we update it in-place.
+        cookie_value_changed = cookie.value != old_cookie->value;
     }
 
     // 24. Insert the newly-created cookie into the cookie store.
-    m_transient_storage.set_cookie(move(key), move(cookie));
+    m_transient_storage.set_cookie(move(key), move(cookie), cookie_value_changed);
 
     m_transient_storage.purge_expired_cookies();
 }
 
 // https://www.ietf.org/archive/id/draft-ietf-httpbis-rfc6265bis-15.html#section-5.8.3
-Vector<Web::Cookie::Cookie> CookieJar::get_matching_cookies(const URL::URL& url, StringView canonicalized_domain, Web::Cookie::Source source, MatchingCookiesSpecMode mode)
+Vector<Web::Cookie::Cookie> CookieJar::get_matching_cookies(const URL::URL& url, String const& canonicalized_domain, Web::Cookie::Source source, MatchingCookiesSpecMode mode)
 {
     auto now = UnixDateTime::now();
 
@@ -539,38 +544,8 @@ Vector<Web::Cookie::Cookie> CookieJar::get_matching_cookies(const URL::URL& url,
     Vector<Web::Cookie::Cookie> cookie_list;
 
     m_transient_storage.for_each_cookie([&](Web::Cookie::Cookie& cookie) {
-        // * Either:
-        //     The cookie's host-only-flag is true and the canonicalized host of the retrieval's URI is identical to
-        //     the cookie's domain.
-        bool is_host_only_and_has_identical_domain = cookie.host_only && (canonicalized_domain == cookie.domain);
-        // Or:
-        //     The cookie's host-only-flag is false and the canonicalized host of the retrieval's URI domain-matches
-        //     the cookie's domain.
-        bool is_not_host_only_and_domain_matches = !cookie.host_only && Web::Cookie::domain_matches(canonicalized_domain, cookie.domain);
-
-        if (!is_host_only_and_has_identical_domain && !is_not_host_only_and_domain_matches)
+        if (!cookie_matches_url(cookie, url, canonicalized_domain, source))
             return;
-
-        // * The retrieval's URI's path path-matches the cookie's path.
-        if (!path_matches(url.serialize_path(), cookie.path))
-            return;
-
-        // * If the cookie's secure-only-flag is true, then the retrieval's URI must denote a "secure" connection (as
-        //   defined by the user agent).
-        if (cookie.secure && url.scheme() != "https"sv && url.scheme() != "wss"sv)
-            return;
-
-        // * If the cookie's http-only-flag is true, then exclude the cookie if the retrieval's type is "non-HTTP".
-        if (cookie.http_only && (source != Web::Cookie::Source::Http))
-            return;
-
-        // FIXME: * If the cookie's same-site-flag is not "None" and the retrieval's same-site status is "cross-site", then
-        //          exclude the cookie unless all of the following conditions are met:
-        //            * The retrieval's type is "HTTP".
-        //            * The same-site-flag is "Lax" or "Default".
-        //            * The HTTP request associated with the retrieval uses a "safe" method.
-        //            * The target browsing context of the HTTP request associated with the retrieval is the active browsing context
-        //              or a top-level traversable.
 
         // NOTE: The WebDriver spec expects only step 1 above to be executed to match cookies.
         if (mode == MatchingCookiesSpecMode::WebDriver) {
@@ -609,14 +584,66 @@ Vector<Web::Cookie::Cookie> CookieJar::get_matching_cookies(const URL::URL& url,
     return cookie_list;
 }
 
+// https://www.ietf.org/archive/id/draft-ietf-httpbis-rfc6265bis-15.html#section-5.8.3-2.1.1
+bool CookieJar::cookie_matches_url(Web::Cookie::Cookie const& cookie, URL::URL const& url, Optional<String> canonicalized_domain, Optional<Web::Cookie::Source> source)
+{
+    if (!canonicalized_domain.has_value())
+        canonicalized_domain = canonicalize_domain(url);
+    if (!canonicalized_domain.has_value())
+        return false;
+
+    // * Either:
+    //     The cookie's host-only-flag is true and the canonicalized host of the retrieval's URI is identical to
+    //     the cookie's domain.
+    bool is_host_only_and_has_identical_domain = cookie.host_only && (canonicalized_domain == cookie.domain);
+    // Or:
+    //     The cookie's host-only-flag is false and the canonicalized host of the retrieval's URI domain-matches
+    //     the cookie's domain.
+    bool is_not_host_only_and_domain_matches = !cookie.host_only && Web::Cookie::domain_matches(*canonicalized_domain, cookie.domain);
+
+    if (!is_host_only_and_has_identical_domain && !is_not_host_only_and_domain_matches)
+        return false;
+
+    // * The retrieval's URI's path path-matches the cookie's path.
+    if (!path_matches(url.serialize_path(), cookie.path))
+        return false;
+
+    // * If the cookie's secure-only-flag is true, then the retrieval's URI must denote a "secure" connection (as
+    //   defined by the user agent).
+    if (cookie.secure && url.scheme() != "https"sv && url.scheme() != "wss"sv)
+        return false;
+
+    // * If the cookie's http-only-flag is true, then exclude the cookie if the retrieval's type is "non-HTTP".
+    if (cookie.http_only && source.has_value() && *source != Web::Cookie::Source::Http)
+        return false;
+
+    // FIXME: * If the cookie's same-site-flag is not "None" and the retrieval's same-site status is "cross-site", then
+    //          exclude the cookie unless all of the following conditions are met:
+    //            * The retrieval's type is "HTTP".
+    //            * The same-site-flag is "Lax" or "Default".
+    //            * The HTTP request associated with the retrieval uses a "safe" method.
+    //            * The target browsing context of the HTTP request associated with the retrieval is the active browsing context
+    //              or a top-level traversable.
+
+    return true;
+}
+
+CookieJar::TransientStorage::TransientStorage(CookieJar& cookie_jar)
+    : m_cookie_jar(cookie_jar)
+{
+}
+
 void CookieJar::TransientStorage::set_cookies(Cookies cookies)
 {
     m_cookies = move(cookies);
     purge_expired_cookies();
 }
 
-void CookieJar::TransientStorage::set_cookie(CookieStorageKey key, Web::Cookie::Cookie cookie)
+void CookieJar::TransientStorage::set_cookie(CookieStorageKey key, Web::Cookie::Cookie cookie, bool cookie_value_changed)
 {
+    if (cookie_value_changed && m_cookie_jar.on_cookie_updated)
+        m_cookie_jar.on_cookie_updated(cookie);
+
     m_cookies.set(key, cookie);
     m_dirty_cookies.set(move(key), move(cookie));
 }
@@ -636,8 +663,15 @@ UnixDateTime CookieJar::TransientStorage::purge_expired_cookies(Optional<AK::Dur
             cookie.value.expiry_time -= *offset;
     }
 
-    auto is_expired = [&](auto const&, auto const& cookie) { return cookie.expiry_time < now; };
-    m_cookies.remove_all_matching(is_expired);
+    m_cookies.remove_all_matching([&](auto const&, auto const& cookie) {
+        if (cookie.expiry_time >= now)
+            return false;
+
+        if (m_cookie_jar.on_cookie_updated)
+            m_cookie_jar.on_cookie_updated(cookie);
+
+        return true;
+    });
 
     return now;
 }
@@ -646,7 +680,7 @@ void CookieJar::TransientStorage::expire_and_purge_all_cookies()
 {
     for (auto& [key, value] : m_cookies) {
         value.expiry_time = UnixDateTime::earliest();
-        set_cookie(key, value);
+        set_cookie(key, value, false);
     }
 
     purge_expired_cookies();

@@ -14,6 +14,7 @@
 #include <LibFileSystem/FileSystem.h>
 #include <LibImageDecoderClient/Client.h>
 #include <LibWeb/CSS/PropertyID.h>
+#include <LibWeb/Cookie/ParsedCookie.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/CookieJar.h>
 #include <LibWebView/Database.h>
@@ -221,6 +222,14 @@ void Application::initialize(Main::Arguments const& arguments)
     } else {
         m_cookie_jar = CookieJar::create();
     }
+
+    m_cookie_jar->on_cookie_updated = [&](Web::Cookie::Cookie const& cookie) {
+        ViewImplementation::for_each_view([&](ViewImplementation& view) {
+            if (CookieJar::cookie_matches_url(cookie, view.url()))
+                view.increment_cached_cookie_id();
+            return IterationDecision::Continue;
+        });
+    };
 }
 
 static ErrorOr<NonnullRefPtr<WebContentClient>> create_web_content_client(Optional<ViewImplementation&> view)

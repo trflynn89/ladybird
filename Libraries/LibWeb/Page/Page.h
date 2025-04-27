@@ -198,6 +198,9 @@ public:
     Optional<String> const& user_style() const { return m_user_style_sheet_source; }
     void set_user_style(String source);
 
+    Optional<u64> cookie_id() const;
+    void set_cookie_id_buffer(Core::AnonymousBuffer cookie_id_buffer) { m_cookie_id_buffer = move(cookie_id_buffer); }
+
     bool pdf_viewer_supported() const { return m_pdf_viewer_supported; }
 
     void clear_selection();
@@ -285,6 +288,8 @@ private:
     Web::HTML::MuteState m_mute_state { Web::HTML::MuteState::Unmuted };
 
     Optional<String> m_user_style_sheet_source;
+
+    Core::AnonymousBuffer m_cookie_id_buffer;
 
     // https://html.spec.whatwg.org/multipage/system-state.html#pdf-viewer-supported
     // Each user agent has a PDF viewer supported boolean, whose value is implementation-defined (and might vary according to user preferences).

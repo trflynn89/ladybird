@@ -1305,4 +1305,12 @@ void ConnectionFromClient::system_time_zone_changed()
     Unicode::clear_system_time_zone_cache();
 }
 
+void ConnectionFromClient::set_cookie_id_buffer(u64 page_id, IPC::File file)
+{
+    if (auto page = this->page(page_id); page.has_value()) {
+        auto cookie_id_buffer = MUST(Core::AnonymousBuffer::create_from_anon_fd(file.take_fd(), sizeof(u64)));
+        page->page().set_cookie_id_buffer(move(cookie_id_buffer));
+    }
+}
+
 }

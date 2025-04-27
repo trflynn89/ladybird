@@ -159,6 +159,8 @@ private:
 
     virtual void system_time_zone_changed() override;
 
+    virtual void set_cookie_id_buffer(u64 page_id, IPC::File file) override;
+
     NonnullOwnPtr<PageHost> m_page_host;
 
     HashMap<int, Web::FileRequest> m_requested_files {};

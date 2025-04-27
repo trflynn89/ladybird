@@ -385,6 +385,7 @@ void PageClient::page_did_change_active_document_in_top_level_browsing_context(W
     auto& realm = document.realm();
 
     m_web_ui.clear();
+    m_cookie_id = 0;
 
     if (auto console_client = document.console_client()) {
         auto& web_content_console_client = as<WebContentConsoleClient>(*console_client);
@@ -551,12 +552,35 @@ Optional<Web::Cookie::Cookie> PageClient::page_did_request_named_cookie(URL::URL
 
 String PageClient::page_did_request_cookie(URL::URL const& url, Web::Cookie::Source source)
 {
+    static u64 elapsed_ms = 0;
+    auto timer = Core::ElapsedTimer::start_new();
+
+    AK::ScopeGuard guard { [&]() {
+        auto time_ms = timer.elapsed_milliseconds();
+        elapsed_ms += time_ms;
+
+        dbgln("!!! get_cookie={}ms ({}ms)", elapsed_ms, time_ms);
+    } };
+
+    // dbgln("!!! {} {}", page().cookie_id(), m_cookie_id);
+
+    if (m_cookie_id == page().cookie_id())
+        return m_cached_cookie;
+
     auto response = client().send_sync_but_allow_failure<Messages::WebContentClient::DidRequestCookie>(url, source);
     if (!response) {
         dbgln("WebContent client disconnected during DidRequestCookie. Exiting peacefully.");
         exit(0);
     }
-    return response->take_cookie();
+
+    auto cookie = response->take_cookie();
+
+    if (auto cookie_id = page().cookie_id(); cookie_id.has_value()) {
+        m_cookie_id = *cookie_id;
+        m_cached_cookie = cookie;
+    }
+
+    return cookie;
 }
 
 void PageClient::page_did_set_cookie(URL::URL const& url, Web::Cookie::ParsedCookie const& cookie, Web::Cookie::Source source)
@@ -575,6 +599,7 @@ void PageClient::page_did_update_cookie(Web::Cookie::Cookie const& cookie)
 
 void PageClient::page_did_expire_cookies_with_time_offset(AK::Duration offset)
 {
+    m_cookie_id = 0;
     client().async_did_expire_cookies_with_time_offset(offset);
 }
 

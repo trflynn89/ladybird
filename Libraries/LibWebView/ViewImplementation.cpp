@@ -49,6 +49,9 @@ ViewImplementation::ViewImplementation()
 {
     s_all_views.set(m_view_id, this);
 
+    m_cookie_id_buffer = MUST(Core::AnonymousBuffer::create_with_size(sizeof(u64)));
+    *m_cookie_id_buffer.data<size_t>() = 1;
+
     m_repeated_crash_timer = Core::Timer::create_single_shot(1000, [this] {
         // Reset the "crashing a lot" counter after 1 second in case we just
         // happen to be visiting crashy websites a lot.
@@ -588,6 +591,8 @@ void ViewImplementation::initialize_client(CreateNewClient create_new_client)
     m_client_state.client_handle = MUST(Web::Crypto::generate_random_uuid());
     client().async_set_window_handle(m_client_state.page_index, m_client_state.client_handle);
 
+    client().async_set_cookie_id_buffer(m_client_state.page_index, MUST(IPC::File::clone_fd(m_cookie_id_buffer.fd())));
+
     client().async_set_device_pixels_per_css_pixel(m_client_state.page_index, m_device_pixel_ratio);
     client().async_set_system_visibility_state(m_client_state.page_index, m_system_visibility_state);
 
@@ -797,6 +802,12 @@ void ViewImplementation::use_native_user_style_sheet()
 {
     extern String native_stylesheet_source;
     set_user_style_sheet(native_stylesheet_source);
+}
+
+void ViewImplementation::increment_cached_cookie_id()
+{
+    auto* cookie_id = m_cookie_id_buffer.data<u64>();
+    *cookie_id = *cookie_id + 1;
 }
 
 }
