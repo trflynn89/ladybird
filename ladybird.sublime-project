@@ -31,14 +31,11 @@
             ],
         },
         {
-            "name": "wpt",
-            "path": "ladybird/Tests/LibWeb/WPT/wpt",
+            "path": "test262",
         },
         {
-            "path": "libjs-test262",
-            "folder_exclude_patterns": [
-                "Build",
-            ],
+            "name": "wpt",
+            "path": "ladybird/Tests/LibWeb/WPT/wpt",
         },
     ],
     "settings": {
