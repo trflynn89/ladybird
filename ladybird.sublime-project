@@ -31,7 +31,8 @@
             ],
         },
         {
-            "path": "test262",
+            "name": "test262",
+            "path": "libjs-test262",
         },
         {
             "name": "wpt",
