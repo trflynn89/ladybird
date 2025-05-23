@@ -48,8 +48,12 @@
             ],
         },
         "format": {
+            "black": {
+                // "path": "/opt/homebrew/bin",
+                "on_save": true,
+            },
             "clang-format": {
-                // "path": "/opt/homebrew/opt/llvm/bin",
+                // "path": "/opt/homebrew/bin",
                 "on_save": true,
             },
             // "gn": {
