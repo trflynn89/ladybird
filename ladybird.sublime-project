@@ -48,10 +48,6 @@
             ],
         },
         "format": {
-            "black": {
-                // "path": "/opt/homebrew/bin",
-                "on_save": true,
-            },
             "clang-format": {
                 // "path": "/opt/homebrew/bin",
                 "on_save": true,
@@ -60,6 +56,10 @@
             //     "path": "$HOME/workspace/ladybird/Toolchain/Local/gn/bin",
             //     "on_save": true,
             // },
+            "ruff": {
+                // "path": "/opt/homebrew/bin",
+                "on_save": true,
+            },
         },
         // "LSP": {
         //     "clangd": {
