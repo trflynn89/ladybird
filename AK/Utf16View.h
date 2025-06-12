@@ -179,6 +179,16 @@ struct Traits<Utf16View> : public DefaultTraits<Utf16View> {
     static unsigned hash(Utf16View const& s) { return s.hash(); }
 };
 
+namespace Detail {
+
+template<>
+inline constexpr bool IsHashCompatible<Utf16View, Utf16String> = true;
+
+template<>
+inline constexpr bool IsHashCompatible<Utf16String, Utf16View> = true;
+
+}
+
 }
 
 #if USING_AK_GLOBALLY
