@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, Tim Flynn <trflynn89@serenityos.org>
+ * Copyright (c) 2021-2025, Tim Flynn <trflynn89@ladybird.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -15,13 +15,6 @@
 #include <simdutf.h>
 
 namespace AK {
-
-static constexpr u16 high_surrogate_min = 0xd800;
-static constexpr u16 high_surrogate_max = 0xdbff;
-static constexpr u16 low_surrogate_min = 0xdc00;
-static constexpr u16 low_surrogate_max = 0xdfff;
-static constexpr u32 replacement_code_point = 0xfffd;
-static constexpr u32 first_supplementary_plane_code_point = 0x10000;
 
 static constexpr u16 host_code_unit(u16 code_unit, Endianness endianness)
 {
@@ -120,15 +113,15 @@ ErrorOr<void> code_point_to_utf16(Utf16Data& string, u32 code_point, Endianness 
 {
     VERIFY(is_unicode(code_point));
 
-    if (code_point < first_supplementary_plane_code_point) {
+    if (code_point < Utf16View::first_supplementary_plane_code_point) {
         TRY(string.try_append(host_code_unit(static_cast<u16>(code_point), endianness)));
     } else {
-        code_point -= first_supplementary_plane_code_point;
+        code_point -= Utf16View::first_supplementary_plane_code_point;
 
-        auto code_unit = static_cast<u16>(high_surrogate_min | (code_point >> 10));
+        auto code_unit = static_cast<u16>(Utf16View::high_surrogate_min | (code_point >> 10));
         TRY(string.try_append(host_code_unit(code_unit, endianness)));
 
-        code_unit = static_cast<u16>(low_surrogate_min | (code_point & 0x3ff));
+        code_unit = static_cast<u16>(Utf16View::low_surrogate_min | (code_point & 0x3ff));
         TRY(string.try_append(host_code_unit(code_unit, endianness)));
     }
 
@@ -426,18 +419,18 @@ u32 Utf16CodePointIterator::operator*() const
                 return Utf16View::decode_surrogate_pair(code_unit, next_code_unit);
         }
 
-        return replacement_code_point;
+        return Utf16View::replacement_code_point;
     }
 
     if (Utf16View::is_low_surrogate(code_unit))
-        return replacement_code_point;
+        return Utf16View::replacement_code_point;
 
     return static_cast<u32>(code_unit);
 }
 
 size_t Utf16CodePointIterator::length_in_code_units() const
 {
-    return *(*this) < first_supplementary_plane_code_point ? 1 : 2;
+    return *(*this) < Utf16View::first_supplementary_plane_code_point ? 1 : 2;
 }
 
 bool validate_utf16_le(ReadonlyBytes bytes)

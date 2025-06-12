@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, Tim Flynn <trflynn89@serenityos.org>
+ * Copyright (c) 2021-2025, Tim Flynn <trflynn89@ladybird.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -68,6 +68,13 @@ private:
 class Utf16View {
 public:
     using Iterator = Utf16CodePointIterator;
+
+    static constexpr u16 high_surrogate_min = 0xd800;
+    static constexpr u16 high_surrogate_max = 0xdbff;
+    static constexpr u16 low_surrogate_min = 0xdc00;
+    static constexpr u16 low_surrogate_max = 0xdfff;
+    static constexpr u32 replacement_code_point = 0xfffd;
+    static constexpr u32 first_supplementary_plane_code_point = 0x10000;
 
     static bool is_high_surrogate(u16);
     static bool is_low_surrogate(u16);
