@@ -42,6 +42,11 @@ Utf16String Utf16String::from_utf16_without_validation(Utf16View const& utf16_st
     return Utf16String { Detail::Utf16StringData::from_utf16(utf16_string) };
 }
 
+Utf16String Utf16String::from_string_builder_without_validation(StringBuilder& builder)
+{
+    return Utf16String { Detail::Utf16StringData::from_string_builder(builder) };
+}
+
 Utf16StringIterator& Utf16StringIterator::operator++()
 {
     auto remaining_code_units = this->remaining_code_units();

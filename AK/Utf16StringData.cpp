@@ -78,6 +78,19 @@ NonnullRefPtr<Utf16StringData> Utf16StringData::from_utf16(Utf16View const& utf1
     return string.release_nonnull();
 }
 
+NonnullRefPtr<Utf16StringData> Utf16StringData::from_string_builder(StringBuilder& builder)
+{
+    auto code_unit_length = builder.utf16_string_view().length_in_code_units();
+
+    // Due to internal optimizations, we have an explicit maximum string length of 2**63 - 1.
+    VERIFY(code_unit_length >> Detail::Utf16StringData::UTF16_FLAG == 0);
+
+    auto buffer = builder.leak_buffer_for_string_construction(Badge<Utf16StringData> {});
+    VERIFY(buffer.has_value()); // We should only arrive here if the buffer is outlined.
+
+    return adopt_ref(*new (buffer->buffer.data()) Utf16StringData { StorageType::UTF16, code_unit_length });
+}
+
 size_t Utf16StringData::calculate_code_point_length() const
 {
     ASSERT(!has_ascii_storage());
