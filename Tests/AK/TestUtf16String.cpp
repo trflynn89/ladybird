@@ -158,6 +158,61 @@ TEST_CASE(from_utf16)
     }
 }
 
+TEST_CASE(formatted)
+{
+    {
+        auto string = Utf16String::formatted("{}", 42);
+        EXPECT(!string.is_empty());
+        EXPECT(string.is_ascii());
+        EXPECT(!string.has_long_ascii_storage());
+        EXPECT(string.has_short_ascii_storage());
+        EXPECT_EQ(string.length_in_code_units(), 2uz);
+        EXPECT_EQ(string.length_in_code_points(), 2uz);
+        EXPECT_EQ(string, u"42"sv);
+    }
+    {
+        auto string = Utf16String::number(42);
+        EXPECT(!string.is_empty());
+        EXPECT(string.is_ascii());
+        EXPECT(!string.has_long_ascii_storage());
+        EXPECT(string.has_short_ascii_storage());
+        EXPECT_EQ(string.length_in_code_units(), 2uz);
+        EXPECT_EQ(string.length_in_code_points(), 2uz);
+        EXPECT_EQ(string, u"42"sv);
+    }
+    {
+        auto string = Utf16String::formatted("whf {} {} {}!", "😀"sv, Utf16View { u"🍕"sv }, 3.14);
+        EXPECT(!string.is_empty());
+        EXPECT(!string.is_ascii());
+        EXPECT(!string.has_long_ascii_storage());
+        EXPECT(!string.has_short_ascii_storage());
+        EXPECT_EQ(string.length_in_code_units(), 15uz);
+        EXPECT_EQ(string.length_in_code_points(), 13uz);
+        EXPECT_EQ(string, u"whf 😀 🍕 3.14!"sv);
+    }
+    {
+        Array segments {
+            u"abcdefghijklmnopqrstuvwxyz"sv,
+            u"ABCDEFGHIJKLMNOPQRSTUVWXYZ"sv,
+            u"\xd83d\xde00"sv,
+            u"abcdefghijklmnopqrstuvwxyz"sv,
+            u"ABCDEFGHIJKLMNOPQRSTUVWXYZ"sv,
+            u"🍕"sv,
+            u"abcdefghijklmnopqrstuvwxyz"sv,
+            u"ABCDEFGHIJKLMNOPQRSTUVWXYZ"sv,
+        };
+
+        auto string = Utf16String::join(u"--"sv, segments);
+        EXPECT(!string.is_empty());
+        EXPECT(!string.is_ascii());
+        EXPECT(!string.has_long_ascii_storage());
+        EXPECT(!string.has_short_ascii_storage());
+        EXPECT_EQ(string.length_in_code_units(), 174uz);
+        EXPECT_EQ(string.length_in_code_points(), 172uz);
+        EXPECT_EQ(string, u"abcdefghijklmnopqrstuvwxyz--ABCDEFGHIJKLMNOPQRSTUVWXYZ--😀--abcdefghijklmnopqrstuvwxyz--ABCDEFGHIJKLMNOPQRSTUVWXYZ--🍕--abcdefghijklmnopqrstuvwxyz--ABCDEFGHIJKLMNOPQRSTUVWXYZ"sv);
+    }
+}
+
 TEST_CASE(copy_operations)
 {
     auto test = [](Utf16String const& string1) {
