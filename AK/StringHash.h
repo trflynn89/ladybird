@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <AK/Concepts.h>
 #include <AK/Types.h>
 
 namespace AK {
@@ -14,7 +15,8 @@ namespace AK {
 //        We can't use SipHash since that depends on runtime parameters,
 //        but some string hashes like IPC endpoint magic numbers need to be deterministic.
 //        Maybe use a SipHash with a statically-known key?
-constexpr u32 string_hash(char const* characters, size_t length, u32 seed = 0)
+template<OneOf<char, char16_t> T>
+constexpr u32 string_hash(T const* characters, size_t length, u32 seed = 0)
 {
     u32 hash = seed;
     for (size_t i = 0; i < length; ++i) {
@@ -28,10 +30,11 @@ constexpr u32 string_hash(char const* characters, size_t length, u32 seed = 0)
     return hash;
 }
 
-constexpr u32 case_insensitive_string_hash(char const* characters, size_t length, u32 seed = 0)
+template<OneOf<char, char16_t> T>
+constexpr u32 case_insensitive_string_hash(T const* characters, size_t length, u32 seed = 0)
 {
     // AK/CharacterTypes.h cannot be included from here.
-    auto to_lowercase = [](char ch) -> u32 {
+    auto to_lowercase = [](T ch) -> u32 {
         if (ch >= 'A' && ch <= 'Z')
             return static_cast<u32>(ch) + 0x20;
         return static_cast<u32>(ch);

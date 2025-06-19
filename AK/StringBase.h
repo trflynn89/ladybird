@@ -213,7 +213,7 @@ inline u32 StringBase::hash() const
         return string_hash(reinterpret_cast<char const*>(bytes.data()), bytes.size());
     }
     if (!m_impl.data)
-        return string_hash(nullptr, 0);
+        return 0;
     return data_without_union_member_assertion()->hash();
 }
 
