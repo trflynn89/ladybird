@@ -16,6 +16,8 @@
 
 namespace AK::Detail {
 
+void did_destroy_utf16_fly_string_data(Badge<Detail::Utf16StringData>, Detail::Utf16StringData const&);
+
 template<typename T, typename U>
 [[nodiscard]] bool slow_utf16_equals(T const& string1, U const& string2)
 {
@@ -62,7 +64,11 @@ public:
     static NonnullRefPtr<Utf16StringData> from_utf16(Utf16View const&);
     static NonnullRefPtr<Utf16StringData> from_string_builder(StringBuilder&);
 
-    ~Utf16StringData() = default;
+    ~Utf16StringData()
+    {
+        if (is_fly_string())
+            did_destroy_utf16_fly_string_data({}, *this);
+    }
 
     void operator delete(void* ptr)
     {
@@ -71,6 +77,8 @@ public:
 
     [[nodiscard]] ALWAYS_INLINE bool operator==(Utf16StringData const& other) const
     {
+        if (is_fly_string() && other.is_fly_string())
+            return this == &other;
         if (has_ascii_storage() && other.has_ascii_storage())
             return ascii_view() == other.ascii_view();
         if (has_utf16_storage() && other.has_utf16_storage())
@@ -131,6 +139,9 @@ public:
         return Utf16View { { reinterpret_cast<u16 const*>(m_utf16_data), length_in_code_units() } };
     }
 
+    ALWAYS_INLINE void mark_as_fly_string(Badge<Utf16FlyString>) const { m_is_fly_string = true; }
+    [[nodiscard]] ALWAYS_INLINE bool is_fly_string() const { return m_is_fly_string; }
+
 private:
     ALWAYS_INLINE Utf16StringData(StorageType storage_type, size_t code_unit_length)
         : m_code_unit_length(code_unit_length)
@@ -158,6 +169,8 @@ private:
 
     mutable u32 m_hash { 0 };
     mutable bool m_has_hash { false };
+
+    mutable bool m_is_fly_string { false };
 
     union alignas(8) {
         char m_ascii_data[0];
