@@ -111,6 +111,17 @@ public:
         return from_string_builder_without_validation(builder);
     }
 
+    ALWAYS_INLINE Utf16String replace(Utf16View const& needle, Utf16View const& replacement, ReplaceMode replace_mode) const
+    {
+        auto view = utf16_view();
+        if (view.is_empty() || !view.contains(needle))
+            return *this;
+
+        return view.replace(needle, replacement, replace_mode);
+    }
+
+    ALWAYS_INLINE Utf16String escape_html_entities() const { return utf16_view().escape_html_entities(); }
+
 private:
     ALWAYS_INLINE explicit Utf16String(NonnullRefPtr<Detail::Utf16StringData const> value)
         : Utf16StringBase(move(value))
