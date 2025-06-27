@@ -10,6 +10,7 @@
 #include <AK/String.h>
 #include <AK/StringView.h>
 #include <AK/Types.h>
+#include <AK/Utf16String.h>
 #include <AK/Utf16View.h>
 
 TEST_CASE(decode_ascii)
@@ -338,6 +339,34 @@ TEST_CASE(is_ascii)
     EXPECT(!u"😀 foo"sv.is_ascii());
 }
 
+TEST_CASE(to_ascii_lowercase)
+{
+    EXPECT_EQ(u""sv.to_ascii_lowercase(), u""sv);
+    EXPECT_EQ(u"foobar"sv.to_ascii_lowercase(), u"foobar"sv);
+    EXPECT_EQ(u"FooBar"sv.to_ascii_lowercase(), u"foobar"sv);
+    EXPECT_EQ(u"FOOBAR"sv.to_ascii_lowercase(), u"foobar"sv);
+    EXPECT_EQ(u"FOO 😀 BAR"sv.to_ascii_lowercase(), u"foo 😀 bar"sv);
+}
+
+TEST_CASE(to_ascii_uppercase)
+{
+    EXPECT_EQ(u""sv.to_ascii_uppercase(), u""sv);
+    EXPECT_EQ(u"foobar"sv.to_ascii_uppercase(), u"FOOBAR"sv);
+    EXPECT_EQ(u"FooBar"sv.to_ascii_uppercase(), u"FOOBAR"sv);
+    EXPECT_EQ(u"FOOBAR"sv.to_ascii_uppercase(), u"FOOBAR"sv);
+    EXPECT_EQ(u"foo 😀 bar"sv.to_ascii_uppercase(), u"FOO 😀 BAR"sv);
+}
+
+TEST_CASE(to_ascii_titlecase)
+{
+    EXPECT_EQ(u""sv.to_ascii_titlecase(), u""sv);
+    EXPECT_EQ(u"foobar"sv.to_ascii_titlecase(), u"Foobar"sv);
+    EXPECT_EQ(u"FooBar"sv.to_ascii_titlecase(), u"Foobar"sv);
+    EXPECT_EQ(u"foo bar"sv.to_ascii_titlecase(), u"Foo Bar"sv);
+    EXPECT_EQ(u"FOO BAR"sv.to_ascii_titlecase(), u"Foo Bar"sv);
+    EXPECT_EQ(u"foo 😀 bar"sv.to_ascii_titlecase(), u"Foo 😀 Bar"sv);
+}
+
 TEST_CASE(equals_ignoring_case)
 {
     auto string1 = MUST(AK::utf8_to_utf16("foobar"sv));
@@ -351,6 +380,45 @@ TEST_CASE(equals_ignoring_case)
     string1 = MUST(AK::utf8_to_utf16(""sv));
     string2 = MUST(AK::utf8_to_utf16("FooBar"sv));
     EXPECT(!Utf16View { string1 }.equals_ignoring_case(Utf16View { string2 }));
+}
+
+TEST_CASE(replace)
+{
+    auto result = u""sv.replace({}, {}, ReplaceMode::FirstOnly);
+    EXPECT_EQ(result, u""sv);
+
+    result = u""sv.replace(u"foo"sv, u"bar"sv, ReplaceMode::FirstOnly);
+    EXPECT_EQ(result, u""sv);
+
+    result = u"foo"sv.replace(u"bar"sv, u"baz"sv, ReplaceMode::FirstOnly);
+    EXPECT_EQ(result, u"foo"sv);
+
+    result = u"foo"sv.replace(u"foo"sv, u"bar"sv, ReplaceMode::FirstOnly);
+    EXPECT_EQ(result, u"bar"sv);
+
+    result = u"foo"sv.replace(u"o"sv, u"e"sv, ReplaceMode::FirstOnly);
+    EXPECT_EQ(result, u"feo"sv);
+
+    result = u"foo"sv.replace(u"o"sv, u"e"sv, ReplaceMode::All);
+    EXPECT_EQ(result, u"fee"sv);
+
+    result = u"foo boo"sv.replace(u"o"sv, u"e"sv, ReplaceMode::FirstOnly);
+    EXPECT_EQ(result, u"feo boo"sv);
+
+    result = u"foo boo"sv.replace(u"o"sv, u"e"sv, ReplaceMode::All);
+    EXPECT_EQ(result, u"fee bee"sv);
+
+    result = u"foo 😀 boo 😀"sv.replace(u"o"sv, u"e"sv, ReplaceMode::All);
+    EXPECT_EQ(result, u"fee 😀 bee 😀"sv);
+
+    result = u"foo 😀 boo 😀"sv.replace(u"😀"sv, u"🙃"sv, ReplaceMode::FirstOnly);
+    EXPECT_EQ(result, u"foo 🙃 boo 😀"sv);
+
+    result = u"foo 😀 boo 😀"sv.replace(u"😀"sv, u"🙃"sv, ReplaceMode::All);
+    EXPECT_EQ(result, u"foo 🙃 boo 🙃"sv);
+
+    result = u"foo 😀 boo 😀"sv.replace(u"😀 "sv, u"🙃 "sv, ReplaceMode::All);
+    EXPECT_EQ(result, u"foo 🙃 boo 😀"sv);
 }
 
 TEST_CASE(substring_view)
@@ -371,6 +439,67 @@ TEST_CASE(substring_view)
         EXPECT_EQ(MUST(view.to_utf8(AllowLonelySurrogates::Yes)), "\xed\xa0\xbd"sv);
         EXPECT(view.to_utf8(AllowLonelySurrogates::No).is_error());
     }
+}
+
+TEST_CASE(trim)
+{
+    Utf16View whitespace { u" "sv };
+    {
+        Utf16View view { u"word"sv };
+        EXPECT_EQ(view.trim(whitespace, TrimMode::Both), u"word"sv);
+        EXPECT_EQ(view.trim(whitespace, TrimMode::Left), u"word"sv);
+        EXPECT_EQ(view.trim(whitespace, TrimMode::Right), u"word"sv);
+    }
+    {
+        Utf16View view { u"   word"sv };
+        EXPECT_EQ(view.trim(whitespace, TrimMode::Both), u"word"sv);
+        EXPECT_EQ(view.trim(whitespace, TrimMode::Left), u"word"sv);
+        EXPECT_EQ(view.trim(whitespace, TrimMode::Right), u"   word"sv);
+    }
+    {
+        Utf16View view { u"word   "sv };
+        EXPECT_EQ(view.trim(whitespace, TrimMode::Both), u"word"sv);
+        EXPECT_EQ(view.trim(whitespace, TrimMode::Left), u"word   "sv);
+        EXPECT_EQ(view.trim(whitespace, TrimMode::Right), u"word"sv);
+    }
+    {
+        Utf16View view { u"   word   "sv };
+        EXPECT_EQ(view.trim(whitespace, TrimMode::Both), u"word"sv);
+        EXPECT_EQ(view.trim(whitespace, TrimMode::Left), u"word   "sv);
+        EXPECT_EQ(view.trim(whitespace, TrimMode::Right), u"   word"sv);
+    }
+    {
+        Utf16View view { u"   \u180E   "sv };
+        EXPECT_EQ(view.trim(whitespace, TrimMode::Both), u"\u180E"sv);
+        EXPECT_EQ(view.trim(whitespace, TrimMode::Left), u"\u180E   "sv);
+        EXPECT_EQ(view.trim(whitespace, TrimMode::Right), u"   \u180E"sv);
+    }
+    {
+        Utf16View view { u"😀wfh😀"sv };
+        EXPECT_EQ(view.trim(u"😀"sv, TrimMode::Both), u"wfh"sv);
+        EXPECT_EQ(view.trim(u"😀"sv, TrimMode::Left), u"wfh😀"sv);
+        EXPECT_EQ(view.trim(u"😀"sv, TrimMode::Right), u"😀wfh"sv);
+    }
+}
+
+TEST_CASE(contains)
+{
+    EXPECT(!u""sv.contains(u'a'));
+    EXPECT(u"a"sv.contains(u'a'));
+    EXPECT(!u"b"sv.contains(u'a'));
+    EXPECT(u"ab"sv.contains(u'a'));
+    EXPECT(u"😀"sv.contains(u'\xd83d'));
+    EXPECT(u"😀"sv.contains(u'\xde00'));
+
+    EXPECT(u""sv.contains(u""sv));
+    EXPECT(!u""sv.contains(u"a"sv));
+    EXPECT(u"a"sv.contains(u"a"sv));
+    EXPECT(!u"b"sv.contains(u"a"sv));
+    EXPECT(u"ab"sv.contains(u"a"sv));
+    EXPECT(u"😀"sv.contains(u"\xd83d"sv));
+    EXPECT(u"😀"sv.contains(u"\xde00"sv));
+    EXPECT(u"😀"sv.contains(u"😀"sv));
+    EXPECT(u"ab😀"sv.contains(u"😀"sv));
 }
 
 TEST_CASE(starts_with)
