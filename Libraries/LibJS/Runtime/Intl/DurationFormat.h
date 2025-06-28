@@ -27,8 +27,8 @@ public:
         Narrow,
         Digital,
     };
-    static Style style_from_string(StringView style);
-    static StringView style_to_string(Style);
+    static Style style_from_string(Utf16View const&);
+    static Utf16View style_to_string(Style);
 
     enum class ValueStyle {
         Long,
@@ -38,8 +38,8 @@ public:
         TwoDigit,
         Fractional,
     };
-    static ValueStyle value_style_from_string(StringView);
-    static StringView value_style_to_string(ValueStyle);
+    static ValueStyle value_style_from_string(Utf16View const&);
+    static Utf16View value_style_to_string(ValueStyle);
 
     static_assert(to_underlying(ValueStyle::Long) == to_underlying(Unicode::Style::Long));
     static_assert(to_underlying(ValueStyle::Short) == to_underlying(Unicode::Style::Short));
@@ -49,8 +49,8 @@ public:
         Auto,
         Always,
     };
-    static Display display_from_string(StringView display);
-    static StringView display_to_string(Display);
+    static Display display_from_string(Utf16View const&);
+    static Utf16View display_to_string(Display);
 
     enum class Unit {
         Years,
@@ -88,9 +88,9 @@ public:
     void set_minute_second_separator(String minute_second_separator) { m_minute_second_separator = move(minute_second_separator); }
     String const& minute_second_separator() const { return m_minute_second_separator; }
 
-    void set_style(StringView style) { m_style = style_from_string(style); }
+    void set_style(Utf16View const& style) { m_style = style_from_string(style); }
     Style style() const { return m_style; }
-    StringView style_string() const { return style_to_string(m_style); }
+    Utf16View style_string() const { return style_to_string(m_style); }
 
     void set_years_options(DurationUnitOptions years_options) { m_years_options = years_options; }
     DurationUnitOptions years_options() const { return m_years_options; }
@@ -179,7 +179,7 @@ static constexpr auto duration_instances_components = to_array<DurationInstanceC
 struct DurationFormatPart {
     StringView type;
     String value;
-    StringView unit;
+    Utf16View unit;
 };
 
 ThrowCompletionOr<DurationFormat::DurationUnitOptions> get_duration_unit_options(VM&, DurationFormat::Unit unit, Object const& options, DurationFormat::Style base_style, ReadonlySpan<StringView> styles_list, DurationFormat::ValueStyle digital_base, Optional<DurationFormat::ValueStyle> previous_style, bool two_digit_hours);

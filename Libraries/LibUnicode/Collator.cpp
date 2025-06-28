@@ -11,22 +11,22 @@
 
 namespace Unicode {
 
-Usage usage_from_string(StringView usage)
+Usage usage_from_string(Utf16View const& usage)
 {
-    if (usage == "sort"sv)
+    if (usage == u"sort"sv)
         return Usage::Sort;
-    if (usage == "search"sv)
+    if (usage == u"search"sv)
         return Usage::Search;
     VERIFY_NOT_REACHED();
 }
 
-StringView usage_to_string(Usage usage)
+Utf16View usage_to_string(Usage usage)
 {
     switch (usage) {
     case Usage::Sort:
-        return "sort"sv;
+        return u"sort"sv;
     case Usage::Search:
-        return "search"sv;
+        return u"search"sv;
     }
     VERIFY_NOT_REACHED();
 }
@@ -49,30 +49,30 @@ static NonnullOwnPtr<icu::Locale> apply_usage_to_locale(icu::Locale const& local
     return result;
 }
 
-Sensitivity sensitivity_from_string(StringView sensitivity)
+Sensitivity sensitivity_from_string(Utf16View const& sensitivity)
 {
-    if (sensitivity == "base"sv)
+    if (sensitivity == u"base"sv)
         return Sensitivity::Base;
-    if (sensitivity == "accent"sv)
+    if (sensitivity == u"accent"sv)
         return Sensitivity::Accent;
-    if (sensitivity == "case"sv)
+    if (sensitivity == u"case"sv)
         return Sensitivity::Case;
-    if (sensitivity == "variant"sv)
+    if (sensitivity == u"variant"sv)
         return Sensitivity::Variant;
     VERIFY_NOT_REACHED();
 }
 
-StringView sensitivity_to_string(Sensitivity sensitivity)
+Utf16View sensitivity_to_string(Sensitivity sensitivity)
 {
     switch (sensitivity) {
     case Sensitivity::Base:
-        return "base"sv;
+        return u"base"sv;
     case Sensitivity::Accent:
-        return "accent"sv;
+        return u"accent"sv;
     case Sensitivity::Case:
-        return "case"sv;
+        return u"case"sv;
     case Sensitivity::Variant:
-        return "variant"sv;
+        return u"variant"sv;
     }
     VERIFY_NOT_REACHED();
 }
@@ -168,11 +168,14 @@ public:
     {
     }
 
-    virtual Collator::Order compare(StringView lhs, StringView rhs) const override
+    virtual Collator::Order compare(Utf16View const& lhs, Utf16View const& rhs) const override
     {
         UErrorCode status = U_ZERO_ERROR;
 
-        auto result = m_collator->compareUTF8(icu_string_piece(lhs), icu_string_piece(rhs), status);
+        auto lhs_it = icu_string_iterator(lhs);
+        auto rhs_it = icu_string_iterator(rhs);
+
+        auto result = m_collator->compare(lhs_it, rhs_it, status);
         VERIFY(icu_success(status));
 
         switch (result) {

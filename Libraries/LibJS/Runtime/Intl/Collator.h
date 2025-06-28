@@ -28,12 +28,12 @@ public:
     void set_locale(String locale) { m_locale = move(locale); }
 
     Unicode::Usage usage() const { return m_usage; }
-    void set_usage(StringView usage) { m_usage = Unicode::usage_from_string(usage); }
-    StringView usage_string() const { return Unicode::usage_to_string(m_usage); }
+    void set_usage(Utf16View const& usage) { m_usage = Unicode::usage_from_string(usage); }
+    Utf16View usage_string() const { return Unicode::usage_to_string(m_usage); }
 
     Unicode::Sensitivity sensitivity() const { return m_sensitivity; }
     void set_sensitivity(Unicode::Sensitivity sensitivity) { m_sensitivity = sensitivity; }
-    StringView sensitivity_string() const { return Unicode::sensitivity_to_string(m_sensitivity); }
+    Utf16View sensitivity_string() const { return Unicode::sensitivity_to_string(m_sensitivity); }
 
     Unicode::CaseFirst case_first() const { return m_case_first; }
     void set_case_first(StringView case_first) { m_case_first = Unicode::case_first_from_string(case_first); }

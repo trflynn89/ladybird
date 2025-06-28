@@ -58,7 +58,7 @@ ThrowCompletionOr<Value> CollatorCompareFunction::call()
 }
 
 // 10.3.3.2 CompareStrings ( collator, x, y ), https://tc39.es/ecma402/#sec-collator-comparestrings
-int compare_strings(Collator const& collator, StringView x, StringView y)
+int compare_strings(Collator const& collator, Utf16View const& x, Utf16View const& y)
 {
     auto result = collator.collator().compare(x, y);
 

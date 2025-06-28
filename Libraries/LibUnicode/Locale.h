@@ -10,6 +10,7 @@
 #include <AK/Optional.h>
 #include <AK/String.h>
 #include <AK/StringView.h>
+#include <AK/Utf16View.h>
 #include <AK/Variant.h>
 #include <AK/Vector.h>
 #include <LibUnicode/Forward.h>
@@ -133,8 +134,8 @@ String canonicalize_unicode_extension_values(StringView key, StringView value);
 StringView default_locale();
 bool is_locale_available(StringView locale);
 
-Style style_from_string(StringView style);
-StringView style_to_string(Style style);
+Style style_from_string(Utf16View const& style);
+Utf16View style_to_string(Style style);
 
 Optional<String> add_likely_subtags(StringView);
 Optional<String> remove_likely_subtags(StringView);

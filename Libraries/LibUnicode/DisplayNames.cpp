@@ -16,22 +16,22 @@
 
 namespace Unicode {
 
-LanguageDisplay language_display_from_string(StringView language_display)
+LanguageDisplay language_display_from_string(Utf16View const& language_display)
 {
-    if (language_display == "standard"sv)
+    if (language_display == u"standard"sv)
         return LanguageDisplay::Standard;
-    if (language_display == "dialect"sv)
+    if (language_display == u"dialect"sv)
         return LanguageDisplay::Dialect;
     VERIFY_NOT_REACHED();
 }
 
-StringView language_display_to_string(LanguageDisplay language_display)
+Utf16View language_display_to_string(LanguageDisplay language_display)
 {
     switch (language_display) {
     case LanguageDisplay::Standard:
-        return "standard"sv;
+        return u"standard"sv;
     case LanguageDisplay::Dialect:
-        return "dialect"sv;
+        return u"dialect"sv;
     default:
         VERIFY_NOT_REACHED();
     }

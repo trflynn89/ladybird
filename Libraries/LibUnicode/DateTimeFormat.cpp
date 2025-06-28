@@ -27,30 +27,30 @@
 
 namespace Unicode {
 
-DateTimeStyle date_time_style_from_string(StringView style)
+DateTimeStyle date_time_style_from_string(Utf16View const& style)
 {
-    if (style == "full"sv)
+    if (style == u"full"sv)
         return DateTimeStyle::Full;
-    if (style == "long"sv)
+    if (style == u"long"sv)
         return DateTimeStyle::Long;
-    if (style == "medium"sv)
+    if (style == u"medium"sv)
         return DateTimeStyle::Medium;
-    if (style == "short"sv)
+    if (style == u"short"sv)
         return DateTimeStyle::Short;
     VERIFY_NOT_REACHED();
 }
 
-StringView date_time_style_to_string(DateTimeStyle style)
+Utf16View date_time_style_to_string(DateTimeStyle style)
 {
     switch (style) {
     case DateTimeStyle::Full:
-        return "full"sv;
+        return u"full"sv;
     case DateTimeStyle::Long:
-        return "long"sv;
+        return u"long"sv;
     case DateTimeStyle::Medium:
-        return "medium"sv;
+        return u"medium"sv;
     case DateTimeStyle::Short:
-        return "short"sv;
+        return u"short"sv;
     }
     VERIFY_NOT_REACHED();
 }
@@ -143,50 +143,50 @@ static constexpr char icu_hour_cycle(Optional<HourCycle> const& hour_cycle, Opti
     VERIFY_NOT_REACHED();
 }
 
-CalendarPatternStyle calendar_pattern_style_from_string(StringView style)
+CalendarPatternStyle calendar_pattern_style_from_string(Utf16View const& style)
 {
-    if (style == "narrow"sv)
+    if (style == u"narrow"sv)
         return CalendarPatternStyle::Narrow;
-    if (style == "short"sv)
+    if (style == u"short"sv)
         return CalendarPatternStyle::Short;
-    if (style == "long"sv)
+    if (style == u"long"sv)
         return CalendarPatternStyle::Long;
-    if (style == "numeric"sv)
+    if (style == u"numeric"sv)
         return CalendarPatternStyle::Numeric;
-    if (style == "2-digit"sv)
+    if (style == u"2-digit"sv)
         return CalendarPatternStyle::TwoDigit;
-    if (style == "shortOffset"sv)
+    if (style == u"shortOffset"sv)
         return CalendarPatternStyle::ShortOffset;
-    if (style == "longOffset"sv)
+    if (style == u"longOffset"sv)
         return CalendarPatternStyle::LongOffset;
-    if (style == "shortGeneric"sv)
+    if (style == u"shortGeneric"sv)
         return CalendarPatternStyle::ShortGeneric;
-    if (style == "longGeneric"sv)
+    if (style == u"longGeneric"sv)
         return CalendarPatternStyle::LongGeneric;
     VERIFY_NOT_REACHED();
 }
 
-StringView calendar_pattern_style_to_string(CalendarPatternStyle style)
+Utf16View calendar_pattern_style_to_string(CalendarPatternStyle style)
 {
     switch (style) {
     case CalendarPatternStyle::Narrow:
-        return "narrow"sv;
+        return u"narrow"sv;
     case CalendarPatternStyle::Short:
-        return "short"sv;
+        return u"short"sv;
     case CalendarPatternStyle::Long:
-        return "long"sv;
+        return u"long"sv;
     case CalendarPatternStyle::Numeric:
-        return "numeric"sv;
+        return u"numeric"sv;
     case CalendarPatternStyle::TwoDigit:
-        return "2-digit"sv;
+        return u"2-digit"sv;
     case CalendarPatternStyle::ShortOffset:
-        return "shortOffset"sv;
+        return u"shortOffset"sv;
     case CalendarPatternStyle::LongOffset:
-        return "longOffset"sv;
+        return u"longOffset"sv;
     case CalendarPatternStyle::ShortGeneric:
-        return "shortGeneric"sv;
+        return u"shortGeneric"sv;
     case CalendarPatternStyle::LongGeneric:
-        return "longGeneric"sv;
+        return u"longGeneric"sv;
     }
     VERIFY_NOT_REACHED();
 }

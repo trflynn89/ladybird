@@ -176,7 +176,7 @@ ThrowCompletionOr<GC::Ref<DateTimeFormat>> create_date_time_format(VM& vm, Funct
             return vm.throw_completion<TypeError>(ErrorType::IntlInvalidDateTimeFormatOption, vm.names.timeZone, "a toLocaleString time zone"sv);
 
         // b. Set timeZone to ? ToString(timeZone).
-        time_zone = TRY(time_zone_value.to_string(vm));
+        time_zone = TRY(time_zone_value.to_string(vm)).to_utf8_but_should_be_ported_to_utf16();
     }
 
     // 19. If IsTimeZoneOffsetString(timeZone) is true, then
@@ -263,7 +263,7 @@ ThrowCompletionOr<GC::Ref<DateTimeFormat>> create_date_time_format(VM& vm, Funct
 
             // d. Set formatOptions.[[<prop>]] to value.
             if (!value.is_undefined()) {
-                option = Unicode::calendar_pattern_style_from_string(value.as_string().utf8_string_view());
+                option = Unicode::calendar_pattern_style_from_string(value.as_string().view());
 
                 // e. If value is not undefined, then
                 //     i. Set hasExplicitFormatComponents to true.
@@ -282,14 +282,14 @@ ThrowCompletionOr<GC::Ref<DateTimeFormat>> create_date_time_format(VM& vm, Funct
 
     // 28. Set dateTimeFormat.[[DateStyle]] to dateStyle.
     if (!date_style.is_undefined())
-        date_time_format->set_date_style(date_style.as_string().utf8_string_view());
+        date_time_format->set_date_style(date_style.as_string().view());
 
     // 29. Let timeStyle be ? GetOption(options, "timeStyle", string, « "full", "long", "medium", "short" », undefined).
     auto time_style = TRY(get_option(vm, *options, vm.names.timeStyle, OptionType::String, AK::Array { "full"sv, "long"sv, "medium"sv, "short"sv }, Empty {}));
 
     // 30. Set dateTimeFormat.[[TimeStyle]] to timeStyle.
     if (!time_style.is_undefined())
-        date_time_format->set_time_style(time_style.as_string().utf8_string_view());
+        date_time_format->set_time_style(time_style.as_string().view());
 
     // 31. Let formats be resolvedLocaleData.[[formats]].[[<resolvedCalendar>]].
 

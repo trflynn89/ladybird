@@ -36,12 +36,12 @@ public:
     void set_locale(String locale) { m_locale = move(locale); }
 
     Unicode::ListFormatType type() const { return m_type; }
-    void set_type(StringView type) { m_type = Unicode::list_format_type_from_string(type); }
-    StringView type_string() const { return Unicode::list_format_type_to_string(m_type); }
+    void set_type(Utf16View const& type) { m_type = Unicode::list_format_type_from_string(type); }
+    Utf16View type_string() const { return Unicode::list_format_type_to_string(m_type); }
 
     Unicode::Style style() const { return m_style; }
-    void set_style(StringView style) { m_style = Unicode::style_from_string(style); }
-    StringView style_string() const { return Unicode::style_to_string(m_style); }
+    void set_style(Utf16View const& style) { m_style = Unicode::style_from_string(style); }
+    Utf16View style_string() const { return Unicode::style_to_string(m_style); }
 
     Unicode::ListFormat const& formatter() const { return *m_formatter; }
     void set_formatter(NonnullOwnPtr<Unicode::ListFormat> formatter) { m_formatter = move(formatter); }
@@ -57,9 +57,9 @@ private:
     OwnPtr<Unicode::ListFormat> m_formatter;
 };
 
-Vector<Unicode::ListFormat::Partition> create_parts_from_list(ListFormat const&, ReadonlySpan<String> list);
-String format_list(ListFormat const&, ReadonlySpan<String> list);
-GC::Ref<Array> format_list_to_parts(VM&, ListFormat const&, ReadonlySpan<String> list);
-ThrowCompletionOr<Vector<String>> string_list_from_iterable(VM&, Value iterable);
+Vector<Unicode::ListFormat::Partition> create_parts_from_list(ListFormat const&, ReadonlySpan<Utf16String> list);
+Utf16String format_list(ListFormat const&, ReadonlySpan<Utf16String> list);
+GC::Ref<Array> format_list_to_parts(VM&, ListFormat const&, ReadonlySpan<Utf16String> list);
+ThrowCompletionOr<Vector<Utf16String>> string_list_from_iterable(VM&, Value iterable);
 
 }

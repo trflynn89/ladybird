@@ -45,21 +45,21 @@ public:
     void set_locale(String locale) { m_locale = move(locale); }
 
     Unicode::Style style() const { return m_style; }
-    void set_style(StringView style) { m_style = Unicode::style_from_string(style); }
-    StringView style_string() const { return Unicode::style_to_string(m_style); }
+    void set_style(Utf16View const& style) { m_style = Unicode::style_from_string(style); }
+    Utf16View style_string() const { return Unicode::style_to_string(m_style); }
 
     Type type() const { return m_type; }
-    void set_type(StringView type);
-    StringView type_string() const;
+    void set_type(Utf16View const& type);
+    Utf16View type_string() const;
 
     Fallback fallback() const { return m_fallback; }
-    void set_fallback(StringView fallback);
-    StringView fallback_string() const;
+    void set_fallback(Utf16View const& fallback);
+    Utf16View fallback_string() const;
 
     bool has_language_display() const { return m_language_display.has_value(); }
     Unicode::LanguageDisplay language_display() const { return *m_language_display; }
-    void set_language_display(StringView language_display) { m_language_display = Unicode::language_display_from_string(language_display); }
-    StringView language_display_string() const { return Unicode::language_display_to_string(*m_language_display); }
+    void set_language_display(Utf16View const& language_display) { m_language_display = Unicode::language_display_from_string(language_display); }
+    Utf16View language_display_string() const { return Unicode::language_display_to_string(*m_language_display); }
 
 private:
     explicit DisplayNames(Object& prototype);

@@ -130,6 +130,22 @@ bool is_well_formed_currency_code(StringView currency)
     return true;
 }
 
+// 6.3.1 IsWellFormedCurrencyCode ( currency ), https://tc39.es/ecma402/#sec-iswellformedcurrencycode
+bool is_well_formed_currency_code(Utf16View const& currency)
+{
+    // 1. If the length of currency is not 3, return false.
+    if (currency.length_in_code_units() != 3)
+        return false;
+
+    // 2. Let normalized be the ASCII-uppercase of currency.
+    // 3. If normalized contains any code unit outside of 0x0041 through 0x005A (corresponding to Unicode characters LATIN CAPITAL LETTER A through LATIN CAPITAL LETTER Z), return false.
+    if (!all_of(currency, is_ascii_alpha))
+        return false;
+
+    // 4. Return true.
+    return true;
+}
+
 // 6.5.1 AvailableNamedTimeZoneIdentifiers ( ), https://tc39.es/ecma402/#sup-availablenamedtimezoneidentifiers
 Vector<TimeZoneIdentifier> const& available_named_time_zone_identifiers()
 {
@@ -204,10 +220,10 @@ Optional<TimeZoneIdentifier const&> get_available_named_time_zone_identifier(Str
 }
 
 // 6.6.1 IsWellFormedUnitIdentifier ( unitIdentifier ), https://tc39.es/ecma402/#sec-iswellformedunitidentifier
-bool is_well_formed_unit_identifier(StringView unit_identifier)
+bool is_well_formed_unit_identifier(Utf16View const& unit_identifier)
 {
     // 6.6.2 IsSanctionedSingleUnitIdentifier ( unitIdentifier ), https://tc39.es/ecma402/#sec-issanctionedsingleunitidentifier
-    constexpr auto is_sanctioned_single_unit_identifier = [](StringView unit_identifier) {
+    constexpr auto is_sanctioned_single_unit_identifier = [](Utf16View const& unit_identifier) {
         // 1. If unitIdentifier is listed in Table 2 below, return true.
         // 2. Else, return false.
         static constexpr auto sanctioned_units = sanctioned_single_unit_identifiers();
@@ -221,22 +237,22 @@ bool is_well_formed_unit_identifier(StringView unit_identifier)
     }
 
     // 2. Let i be StringIndexOf(unitIdentifier, "-per-", 0).
-    auto indices = unit_identifier.find_all("-per-"sv);
+    auto index = unit_identifier.find_code_unit_offset(u"-per-"sv);
 
     // 3. If i is -1 or StringIndexOf(unitIdentifier, "-per-", i + 1) is not -1, then
-    if (indices.size() != 1) {
+    if (!index.has_value() || unit_identifier.find_code_unit_offset(u"-per-"sv, *index + 1).has_value()) {
         // a. Return false.
         return false;
     }
 
     // 4. Assert: The five-character substring "-per-" occurs exactly once in unitIdentifier, at index i.
-    // NOTE: We skip this because the indices vector being of size 1 already verifies this invariant.
+    // NOTE: We skip this because the second find_code_unit_offset failing above already verifies this invariant.
 
     // 5. Let numerator be the substring of unitIdentifier from 0 to i.
-    auto numerator = unit_identifier.substring_view(0, indices[0]);
+    auto numerator = unit_identifier.substring_view(0, *index);
 
     // 6. Let denominator be the substring of unitIdentifier from i + 5.
-    auto denominator = unit_identifier.substring_view(indices[0] + 5);
+    auto denominator = unit_identifier.substring_view(*index + 5);
 
     // 7. If ! IsSanctionedSingleUnitIdentifier(numerator) and ! IsSanctionedSingleUnitIdentifier(denominator) are both true, then
     if (is_sanctioned_single_unit_identifier(numerator) && is_sanctioned_single_unit_identifier(denominator)) {

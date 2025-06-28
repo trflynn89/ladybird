@@ -565,26 +565,26 @@ bool is_locale_available(StringView locale)
     return available_locales.contains(locale);
 }
 
-Style style_from_string(StringView style)
+Style style_from_string(Utf16View const& style)
 {
-    if (style == "narrow"sv)
+    if (style == u"narrow"sv)
         return Style::Narrow;
-    if (style == "short"sv)
+    if (style == u"short"sv)
         return Style::Short;
-    if (style == "long"sv)
+    if (style == u"long"sv)
         return Style::Long;
     VERIFY_NOT_REACHED();
 }
 
-StringView style_to_string(Style style)
+Utf16View style_to_string(Style style)
 {
     switch (style) {
     case Style::Narrow:
-        return "narrow"sv;
+        return u"narrow"sv;
     case Style::Short:
-        return "short"sv;
+        return u"short"sv;
     case Style::Long:
-        return "long"sv;
+        return u"long"sv;
     default:
         VERIFY_NOT_REACHED();
     }

@@ -12,6 +12,7 @@
 #include <AK/StringView.h>
 #include <AK/Time.h>
 #include <AK/Types.h>
+#include <AK/Utf16View.h>
 #include <AK/Vector.h>
 #include <LibUnicode/Forward.h>
 
@@ -23,8 +24,8 @@ enum class DateTimeStyle {
     Medium,
     Short,
 };
-DateTimeStyle date_time_style_from_string(StringView);
-StringView date_time_style_to_string(DateTimeStyle);
+DateTimeStyle date_time_style_from_string(Utf16View const&);
+Utf16View date_time_style_to_string(DateTimeStyle);
 
 enum class Weekday {
     Sunday,
@@ -57,8 +58,8 @@ enum class CalendarPatternStyle {
     ShortGeneric,
     LongGeneric,
 };
-CalendarPatternStyle calendar_pattern_style_from_string(StringView style);
-StringView calendar_pattern_style_to_string(CalendarPatternStyle style);
+CalendarPatternStyle calendar_pattern_style_from_string(Utf16View const& style);
+Utf16View calendar_pattern_style_to_string(CalendarPatternStyle style);
 
 struct CalendarPattern {
     enum class Field {

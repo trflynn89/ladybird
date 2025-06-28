@@ -82,7 +82,7 @@ ErrorOr<void> MarkupGenerator::value_to_html(Value value, StringBuilder& output_
 
     if (value.is_string())
         TRY(output_html.try_append('"'));
-    TRY(output_html.try_append(escape_html_entities(value.to_string_without_side_effects())));
+    TRY(output_html.try_append(value.to_string_without_side_effects().escape_html_entities()));
     if (value.is_string())
         TRY(output_html.try_append('"'));
 
@@ -124,7 +124,7 @@ ErrorOr<void> MarkupGenerator::object_to_html(Object const& object, StringBuilde
 
     size_t index = 0;
     for (auto& it : object.shape().property_table()) {
-        TRY(html_output.try_append(TRY(wrap_string_in_style(TRY(String::formatted("\"{}\"", escape_html_entities(it.key.to_string()))), StyleType::String))));
+        TRY(html_output.try_append(TRY(wrap_string_in_style(TRY(String::formatted("\"{}\"", it.key.to_string().escape_html_entities())), StyleType::String))));
         TRY(html_output.try_append(TRY(wrap_string_in_style(": "sv, StyleType::Punctuation))));
         TRY(value_to_html(object.get_direct(it.value.offset), html_output, seen_objects));
         if (index != object.shape().property_count() - 1)
@@ -173,7 +173,7 @@ ErrorOr<void> MarkupGenerator::error_to_html(Error const& error, StringBuilder& 
     auto uncaught_message = TRY(String::formatted("Uncaught {}[{}]: ", in_promise ? "(in promise) " : "", name_string));
 
     TRY(html_output.try_append(TRY(wrap_string_in_style(uncaught_message, StyleType::Invalid))));
-    TRY(html_output.try_appendff("{}<br>", message_string.is_empty() ? "\"\"" : escape_html_entities(message_string)));
+    TRY(html_output.try_appendff("{}<br>", message_string.is_empty() ? u"\"\""sv : message_string.escape_html_entities()));
 
     for (size_t i = 0; i < error.traceback().size() - min(error.traceback().size(), 3); i++) {
         auto& traceback_frame = error.traceback().at(i);

@@ -9,11 +9,11 @@
 
 #pragma once
 
-#include <AK/FlyString.h>
 #include <AK/Function.h>
 #include <AK/HashMap.h>
 #include <AK/RefCounted.h>
 #include <AK/StackInfo.h>
+#include <AK/Utf16FlyString.h>
 #include <AK/Variant.h>
 #include <LibCrypto/Forward.h>
 #include <LibGC/Function.h>
@@ -67,14 +67,9 @@ public:
     JS_ENUMERATE_WELL_KNOWN_SYMBOLS
 #undef __JS_ENUMERATE
 
-    HashMap<String, GC::Ptr<PrimitiveString>>& string_cache()
+    HashMap<Utf16String, GC::Ptr<PrimitiveString>>& string_cache()
     {
         return m_string_cache;
-    }
-
-    HashMap<Utf16String, GC::Ptr<PrimitiveString>>& utf16_string_cache()
-    {
-        return m_utf16_string_cache;
     }
 
     PrimitiveString& empty_string() { return *m_empty_string; }
@@ -194,8 +189,8 @@ public:
     u32 execution_generation() const { return m_execution_generation; }
     void finish_execution_generation() { ++m_execution_generation; }
 
-    ThrowCompletionOr<Reference> resolve_binding(FlyString const&, Environment* = nullptr);
-    ThrowCompletionOr<Reference> get_identifier_reference(Environment*, FlyString, bool strict, size_t hops = 0);
+    ThrowCompletionOr<Reference> resolve_binding(Utf16FlyString const&, Environment* = nullptr);
+    ThrowCompletionOr<Reference> get_identifier_reference(Environment*, Utf16FlyString, bool strict, size_t hops = 0);
 
     // 5.2.3.2 Throw an Exception, https://tc39.es/ecma262/#sec-throw-an-exception
     template<typename T, typename... Args>
@@ -312,8 +307,7 @@ private:
 
     void run_queued_promise_jobs_impl();
 
-    HashMap<String, GC::Ptr<PrimitiveString>> m_string_cache;
-    HashMap<Utf16String, GC::Ptr<PrimitiveString>> m_utf16_string_cache;
+    HashMap<Utf16String, GC::Ptr<PrimitiveString>> m_string_cache;
 
     GC::Heap m_heap;
 
