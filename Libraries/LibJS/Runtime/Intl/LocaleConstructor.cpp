@@ -37,10 +37,12 @@ static ThrowCompletionOr<Optional<String>> get_string_option(VM& vm, Object cons
     if (option.is_undefined())
         return OptionalNone {};
 
-    if (validator && !validator(option.as_string().utf8_string_view()))
+    auto option_string = option.as_string().string().to_utf8();
+
+    if (validator && !validator(option_string))
         return vm.throw_completion<RangeError>(ErrorType::OptionIsNotValidValue, option, property);
 
-    return option.as_string().utf8_string();
+    return option_string;
 }
 
 // 15.1.2 UpdateLanguageId ( tag, options ), https://tc39.es/ecma402/#sec-updatelanguageid
@@ -352,7 +354,7 @@ ThrowCompletionOr<GC::Ref<Object>> LocaleConstructor::construct(FunctionObject& 
     // 29. If kn is not undefined, set kn to ! ToString(kn).
     // 30. Set opt.[[kn]] to kn.
     if (!kn.is_undefined())
-        opt.kn = TRY(kn.to_string(vm));
+        opt.kn = TRY(kn.to_string(vm)).to_utf8();
 
     // 31. Let numberingSystem be ? GetOption(options, "numberingSystem", STRING, EMPTY, undefined).
     // 32. If numberingSystem is not undefined, then

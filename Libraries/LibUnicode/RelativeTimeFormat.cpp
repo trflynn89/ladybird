@@ -16,7 +16,7 @@
 
 namespace Unicode {
 
-Optional<TimeUnit> time_unit_from_string(StringView time_unit)
+Optional<TimeUnit> time_unit_from_string(Utf16View const& time_unit)
 {
     if (time_unit == "second"sv)
         return TimeUnit::Second;
@@ -37,7 +37,7 @@ Optional<TimeUnit> time_unit_from_string(StringView time_unit)
     return {};
 }
 
-StringView time_unit_to_string(TimeUnit time_unit)
+Utf16View time_unit_to_string(TimeUnit time_unit)
 {
     switch (time_unit) {
     case TimeUnit::Second:
@@ -83,7 +83,7 @@ static constexpr URelativeDateTimeUnit icu_time_unit(TimeUnit unit)
     VERIFY_NOT_REACHED();
 }
 
-NumericDisplay numeric_display_from_string(StringView numeric_display)
+NumericDisplay numeric_display_from_string(Utf16View const& numeric_display)
 {
     if (numeric_display == "always"sv)
         return NumericDisplay::Always;
@@ -92,7 +92,7 @@ NumericDisplay numeric_display_from_string(StringView numeric_display)
     VERIFY_NOT_REACHED();
 }
 
-StringView numeric_display_to_string(NumericDisplay numeric_display)
+Utf16View numeric_display_to_string(NumericDisplay numeric_display)
 {
     switch (numeric_display) {
     case NumericDisplay::Always:
@@ -142,7 +142,7 @@ public:
 
     virtual ~RelativeTimeFormatImpl() override = default;
 
-    virtual String format(double time, TimeUnit unit, NumericDisplay numeric_display) const override
+    virtual Utf16String format(double time, TimeUnit unit, NumericDisplay numeric_display) const override
     {
         UErrorCode status = U_ZERO_ERROR;
 
@@ -152,7 +152,7 @@ public:
         if (icu_failure(status))
             return {};
 
-        return icu_string_to_string(formatted_time);
+        return icu_string_to_utf16_string(formatted_time);
     }
 
     virtual Vector<Partition> format_to_parts(double time, TimeUnit unit, NumericDisplay numeric_display) const override
@@ -172,7 +172,7 @@ public:
         auto create_partition = [&](i32 field, i32 begin, i32 end, bool is_unit) {
             Partition partition;
             partition.type = icu_relative_time_format_field_to_string(field);
-            partition.value = icu_string_to_string(formatted_time.tempSubStringBetween(begin, end));
+            partition.value = icu_string_to_utf16_string(formatted_time.tempSubStringBetween(begin, end));
             if (is_unit)
                 partition.unit = unit_string;
             result.append(move(partition));

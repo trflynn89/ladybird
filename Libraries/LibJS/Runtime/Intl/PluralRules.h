@@ -25,8 +25,8 @@ public:
     virtual ReadonlySpan<ResolutionOptionDescriptor> resolution_option_descriptors(VM&) const override;
 
     Unicode::PluralForm type() const { return m_type; }
-    StringView type_string() const { return Unicode::plural_form_to_string(m_type); }
-    void set_type(StringView type) { m_type = Unicode::plural_form_from_string(type); }
+    Utf16View type_string() const { return Unicode::plural_form_to_string(m_type); }
+    void set_type(Utf16View const& type) { m_type = Unicode::plural_form_from_string(type); }
 
 private:
     explicit PluralRules(Object& prototype);

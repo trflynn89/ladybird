@@ -27,7 +27,7 @@
 
 namespace Unicode {
 
-DateTimeStyle date_time_style_from_string(StringView style)
+DateTimeStyle date_time_style_from_string(Utf16View const& style)
 {
     if (style == "full"sv)
         return DateTimeStyle::Full;
@@ -40,7 +40,7 @@ DateTimeStyle date_time_style_from_string(StringView style)
     VERIFY_NOT_REACHED();
 }
 
-StringView date_time_style_to_string(DateTimeStyle style)
+Utf16View date_time_style_to_string(DateTimeStyle style)
 {
     switch (style) {
     case DateTimeStyle::Full:
@@ -83,7 +83,7 @@ HourCycle hour_cycle_from_string(StringView hour_cycle)
     VERIFY_NOT_REACHED();
 }
 
-StringView hour_cycle_to_string(HourCycle hour_cycle)
+Utf16View hour_cycle_to_string(HourCycle hour_cycle)
 {
     switch (hour_cycle) {
     case HourCycle::H11:
@@ -143,7 +143,7 @@ static constexpr char icu_hour_cycle(Optional<HourCycle> const& hour_cycle, Opti
     VERIFY_NOT_REACHED();
 }
 
-CalendarPatternStyle calendar_pattern_style_from_string(StringView style)
+CalendarPatternStyle calendar_pattern_style_from_string(Utf16View const& style)
 {
     if (style == "narrow"sv)
         return CalendarPatternStyle::Narrow;
@@ -166,7 +166,7 @@ CalendarPatternStyle calendar_pattern_style_from_string(StringView style)
     VERIFY_NOT_REACHED();
 }
 
-StringView calendar_pattern_style_to_string(CalendarPatternStyle style)
+Utf16View calendar_pattern_style_to_string(CalendarPatternStyle style)
 {
     switch (style) {
     case CalendarPatternStyle::Narrow:
@@ -672,13 +672,13 @@ public:
 
     virtual CalendarPattern const& chosen_pattern() const override { return m_pattern; }
 
-    virtual String format(double time) const override
+    virtual Utf16String format(double time) const override
     {
         auto formatted_time = format_impl(time);
         if (!formatted_time.has_value())
             return {};
 
-        return icu_string_to_string(*formatted_time);
+        return icu_string_to_utf16_string(*formatted_time);
     }
 
     virtual Vector<Partition> format_to_parts(double time) const override
@@ -694,7 +694,7 @@ public:
         auto create_partition = [&](i32 field, i32 begin, i32 end) {
             Partition partition;
             partition.type = icu_date_time_format_field_to_string(field);
-            partition.value = icu_string_to_string(formatted_time->tempSubStringBetween(begin, end));
+            partition.value = icu_string_to_utf16_string(formatted_time->tempSubStringBetween(begin, end));
             partition.source = "shared"sv;
             result.append(move(partition));
         };
@@ -717,7 +717,7 @@ public:
         return result;
     }
 
-    virtual String format_range(double start, double end) const override
+    virtual Utf16String format_range(double start, double end) const override
     {
         UErrorCode status = U_ZERO_ERROR;
 
@@ -733,7 +733,7 @@ public:
             return {};
 
         normalize_spaces(formatted_time);
-        return icu_string_to_string(formatted_time);
+        return icu_string_to_utf16_string(formatted_time);
     }
 
     virtual Vector<Partition> format_range_to_parts(double start, double end) const override
@@ -763,7 +763,7 @@ public:
         auto create_partition = [&](i32 field, i32 begin, i32 end) {
             Partition partition;
             partition.type = icu_date_time_format_field_to_string(field);
-            partition.value = icu_string_to_string(formatted_time.tempSubStringBetween(begin, end));
+            partition.value = icu_string_to_utf16_string(formatted_time.tempSubStringBetween(begin, end));
 
             if (start_range.has_value() && start_range->contains(begin))
                 partition.source = "startRange"sv;

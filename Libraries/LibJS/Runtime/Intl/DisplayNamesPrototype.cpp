@@ -68,18 +68,17 @@ JS_DEFINE_NATIVE_FUNCTION(DisplayNamesPrototype::resolved_options)
 // 12.3.3 Intl.DisplayNames.prototype.of ( code ), https://tc39.es/ecma402/#sec-Intl.DisplayNames.prototype.of
 JS_DEFINE_NATIVE_FUNCTION(DisplayNamesPrototype::of)
 {
-    auto code = vm.argument(0);
+    auto code_value = vm.argument(0);
 
     // 1. Let displayNames be this value.
     // 2. Perform ? RequireInternalSlot(displayNames, [[InitializedDisplayNames]]).
     auto display_names = TRY(typed_this_object(vm));
 
     // 3. Let code be ? ToString(code).
-    code = PrimitiveString::create(vm, TRY(code.to_string(vm)));
+    auto code_string = TRY(code_value.to_string(vm));
 
     // 4. Let code be ? CanonicalCodeForDisplayNames(displayNames.[[Type]], code).
-    code = TRY(canonical_code_for_display_names(vm, display_names->type(), code.as_string().utf8_string_view()));
-    auto code_string = code.as_string().utf8_string_view();
+    auto code = TRY(canonical_code_for_display_names(vm, display_names->type(), code_string));
 
     // 5. Let fields be displayNames.[[Fields]].
     // 6. If fields has a field [[<code>]], return fields.[[<code>]].
@@ -87,22 +86,22 @@ JS_DEFINE_NATIVE_FUNCTION(DisplayNamesPrototype::of)
 
     switch (display_names->type()) {
     case DisplayNames::Type::Language:
-        result = Unicode::language_display_name(display_names->locale(), code_string, display_names->language_display());
+        result = Unicode::language_display_name(display_names->locale(), code, display_names->language_display());
         break;
     case DisplayNames::Type::Region:
-        result = Unicode::region_display_name(display_names->locale(), code_string);
+        result = Unicode::region_display_name(display_names->locale(), code);
         break;
     case DisplayNames::Type::Script:
-        result = Unicode::script_display_name(display_names->locale(), code_string);
+        result = Unicode::script_display_name(display_names->locale(), code);
         break;
     case DisplayNames::Type::Currency:
-        result = Unicode::currency_display_name(display_names->locale(), code_string, display_names->style());
+        result = Unicode::currency_display_name(display_names->locale(), code, display_names->style());
         break;
     case DisplayNames::Type::Calendar:
-        result = Unicode::calendar_display_name(display_names->locale(), code_string);
+        result = Unicode::calendar_display_name(display_names->locale(), code);
         break;
     case DisplayNames::Type::DateTimeField:
-        result = Unicode::date_time_field_display_name(display_names->locale(), code_string, display_names->style());
+        result = Unicode::date_time_field_display_name(display_names->locale(), code, display_names->style());
         break;
     default:
         VERIFY_NOT_REACHED();

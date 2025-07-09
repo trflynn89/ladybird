@@ -225,7 +225,7 @@ ThrowCompletionOr<Realm*> get_function_realm(VM& vm, FunctionObject const& funct
 }
 
 // 8.5.2.1 InitializeBoundName ( name, value, environment ), https://tc39.es/ecma262/#sec-initializeboundname
-ThrowCompletionOr<void> initialize_bound_name(VM& vm, FlyString const& name, Value value, Environment* environment)
+ThrowCompletionOr<void> initialize_bound_name(VM& vm, Utf16FlyString const& name, Value value, Environment* environment)
 {
     // 1. If environment is not undefined, then
     if (environment) {
@@ -252,7 +252,7 @@ ThrowCompletionOr<void> initialize_bound_name(VM& vm, FlyString const& name, Val
 bool is_compatible_property_descriptor(bool extensible, PropertyDescriptor const& descriptor, Optional<PropertyDescriptor> const& current)
 {
     // 1. Return ValidateAndApplyPropertyDescriptor(undefined, "", Extensible, Desc, Current).
-    return validate_and_apply_property_descriptor(nullptr, FlyString {}, extensible, descriptor, current);
+    return validate_and_apply_property_descriptor(nullptr, Utf16FlyString {}, extensible, descriptor, current);
 }
 
 // 10.1.6.3 ValidateAndApplyPropertyDescriptor ( O, P, extensible, Desc, current ), https://tc39.es/ecma262/#sec-validateandapplypropertydescriptor
@@ -534,14 +534,16 @@ ThrowCompletionOr<Value> perform_eval(VM& vm, Value x, CallerMode strict_caller,
     // 2. If Type(x) is not String, return x.
     if (!x.is_string())
         return x;
-    auto& code_string = x.as_string();
+
+    // FIXME: Port HostEnsureCanCompileStrings and Lexer to Utf16String.
+    auto code_string = x.as_string().string().to_utf8_but_should_be_ported_to_utf16();
 
     // 3. Let evalRealm be the current Realm Record.
     auto& eval_realm = *vm.running_execution_context().realm;
 
     // 4. NOTE: In the case of a direct eval, evalRealm is the realm of both the caller of eval and of the eval function itself.
     // 5. Perform ? HostEnsureCanCompileStrings(evalRealm, « », x, direct).
-    TRY(vm.host_ensure_can_compile_strings(eval_realm, {}, code_string.utf8_string_view(), direct));
+    TRY(vm.host_ensure_can_compile_strings(eval_realm, {}, code_string, direct));
 
     // 6. Let inFunction be false.
     bool in_function = false;
@@ -602,7 +604,7 @@ ThrowCompletionOr<Value> perform_eval(VM& vm, Value x, CallerMode strict_caller,
         .in_class_field_initializer = in_class_field_initializer,
     };
 
-    Parser parser { Lexer { code_string.utf8_string_view() }, Program::Type::Script, move(initial_state) };
+    Parser parser { Lexer { code_string }, Program::Type::Script, move(initial_state) };
     auto program = parser.parse_program(strict_caller == CallerMode::Strict);
 
     //     b. If script is a List of errors, throw a SyntaxError exception.
@@ -799,10 +801,12 @@ ThrowCompletionOr<void> eval_declaration_instantiation(VM& vm, Program const& pr
     Vector<FunctionDeclaration const&> functions_to_initialize;
 
     // 9. Let declaredFunctionNames be a new empty List.
-    HashTable<FlyString> declared_function_names;
+    HashTable<Utf16FlyString> declared_function_names;
 
     // 10. For each element d of varDeclarations, in reverse List order, do
     TRY(program.for_each_var_function_declaration_in_reverse_order([&](FunctionDeclaration const& function) -> ThrowCompletionOr<void> {
+        auto function_name = Utf16FlyString::from_utf8_but_should_be_ported_to_utf16(function.name());
+
         // a. If d is neither a VariableDeclaration nor a ForBinding nor a BindingIdentifier, then
         // i. Assert: d is either a FunctionDeclaration, a GeneratorDeclaration, an AsyncFunctionDeclaration, or an AsyncGeneratorDeclaration.
         // Note: This is done by for_each_var_function_declaration_in_reverse_order.
@@ -810,14 +814,13 @@ ThrowCompletionOr<void> eval_declaration_instantiation(VM& vm, Program const& pr
         // ii. NOTE: If there are multiple function declarations for the same name, the last declaration is used.
         // iii. Let fn be the sole element of the BoundNames of d.
         // iv. If fn is not an element of declaredFunctionNames, then
-        if (declared_function_names.set(function.name()) != AK::HashSetResult::InsertedNewEntry)
+        if (declared_function_names.set(function_name) != AK::HashSetResult::InsertedNewEntry)
             return {};
 
         // 1. If varEnv is a global Environment Record, then
         if (global_var_environment) {
             // a. Let fnDefinable be ? varEnv.CanDeclareGlobalFunction(fn).
-
-            auto function_definable = TRY(global_var_environment->can_declare_global_function(function.name()));
+            auto function_definable = TRY(global_var_environment->can_declare_global_function(function_name));
 
             // b. If fnDefinable is false, throw a TypeError exception.
             if (!function_definable)
@@ -840,12 +843,12 @@ ThrowCompletionOr<void> eval_declaration_instantiation(VM& vm, Program const& pr
     if (!strict) {
         // a. Let declaredFunctionOrVarNames be the list-concatenation of declaredFunctionNames and declaredVarNames.
         // The spec here uses 'declaredVarNames' but that has not been declared yet.
-        HashTable<FlyString> hoisted_functions;
+        HashTable<Utf16FlyString> hoisted_functions;
 
         // b. For each FunctionDeclaration f that is directly contained in the StatementList of a Block, CaseClause, or DefaultClause Contained within body, do
         TRY(program.for_each_function_hoistable_with_annexB_extension([&](FunctionDeclaration& function_declaration) -> ThrowCompletionOr<void> {
             // i. Let F be StringValue of the BindingIdentifier of f.
-            auto function_name = function_declaration.name();
+            auto function_name = Utf16FlyString::from_utf8_but_should_be_ported_to_utf16(function_declaration.name());
 
             // ii. If replacing the FunctionDeclaration f with a VariableStatement that has F as a BindingIdentifier would not produce any Early Errors for body, then
             // Note: This is checked during parsing and for_each_function_hoistable_with_annexB_extension so it always passes here.
@@ -931,7 +934,7 @@ ThrowCompletionOr<void> eval_declaration_instantiation(VM& vm, Program const& pr
     }
 
     // 12. Let declaredVarNames be a new empty List.
-    HashTable<FlyString> declared_var_names;
+    HashTable<Utf16FlyString> declared_var_names;
 
     // 13. For each element d of varDeclarations, do
     TRY(program.for_each_var_scoped_variable_declaration([&](VariableDeclaration const& declaration) {
@@ -939,8 +942,8 @@ ThrowCompletionOr<void> eval_declaration_instantiation(VM& vm, Program const& pr
         // Note: This is handled by for_each_var_scoped_variable_declaration.
 
         // i. For each String vn of the BoundNames of d, do
-        return declaration.for_each_bound_identifier([&](auto const& identifier) -> ThrowCompletionOr<void> {
-            auto const& name = identifier.string();
+        return declaration.for_each_bound_identifier([&](Identifier const& identifier) -> ThrowCompletionOr<void> {
+            auto name = Utf16FlyString::from_utf8_but_should_be_ported_to_utf16(identifier.string());
 
             // 1. If vn is not an element of declaredFunctionNames, then
             if (!declared_function_names.contains(name)) {
@@ -992,6 +995,8 @@ ThrowCompletionOr<void> eval_declaration_instantiation(VM& vm, Program const& pr
     //       instead of prepending. We append because prepending is much slower
     //       and we only use the created vector here.
     for (auto& declaration : functions_to_initialize.in_reverse()) {
+        auto declaration_name = Utf16FlyString::from_utf8_but_should_be_ported_to_utf16(declaration.name());
+
         // a. Let fn be the sole element of the BoundNames of f.
         // b. Let fo be InstantiateFunctionObject of f with arguments lexEnv and privateEnv.
         auto function = ECMAScriptFunctionObject::create_from_function_node(
@@ -1004,26 +1009,26 @@ ThrowCompletionOr<void> eval_declaration_instantiation(VM& vm, Program const& pr
         // c. If varEnv is a global Environment Record, then
         if (global_var_environment) {
             // i. Perform ? varEnv.CreateGlobalFunctionBinding(fn, fo, true).
-            TRY(global_var_environment->create_global_function_binding(declaration.name(), function, true));
+            TRY(global_var_environment->create_global_function_binding(declaration_name, function, true));
         }
         // d. Else,
         else {
             // i. Let bindingExists be ! varEnv.HasBinding(fn).
-            auto binding_exists = MUST(variable_environment->has_binding(declaration.name()));
+            auto binding_exists = MUST(variable_environment->has_binding(declaration_name));
 
             // ii. If bindingExists is false, then
             if (!binding_exists) {
                 // 1. NOTE: The following invocation cannot return an abrupt completion because of the validation preceding step 14.
                 // 2. Perform ! varEnv.CreateMutableBinding(fn, true).
-                MUST(variable_environment->create_mutable_binding(vm, declaration.name(), true));
+                MUST(variable_environment->create_mutable_binding(vm, declaration_name, true));
 
                 // 3. Perform ! varEnv.InitializeBinding(fn, fo, normal).
-                MUST(variable_environment->initialize_binding(vm, declaration.name(), function, Environment::InitializeBindingHint::Normal));
+                MUST(variable_environment->initialize_binding(vm, declaration_name, function, Environment::InitializeBindingHint::Normal));
             }
             // iii. Else,
             else {
                 // 1. Perform ! varEnv.SetMutableBinding(fn, fo, false).
-                MUST(variable_environment->set_mutable_binding(vm, declaration.name(), function, false));
+                MUST(variable_environment->set_mutable_binding(vm, declaration_name, function, false));
             }
         }
     }
@@ -1140,15 +1145,15 @@ Object* create_mapped_arguments_object(VM& vm, FunctionObject& function, Nonnull
     //               and getter/setter behavior itself without extra GC allocations.
 
     // 17. Let mappedNames be a new empty List.
-    HashTable<FlyString> seen_names;
-    Vector<FlyString> mapped_names;
+    HashTable<Utf16FlyString> seen_names;
+    Vector<Utf16FlyString> mapped_names;
 
     // 18. Set index to numberOfParameters - 1.
     // 19. Repeat, while index ≥ 0,
     VERIFY(formals->size() <= NumericLimits<i32>::max());
     for (i32 index = static_cast<i32>(formals->size()) - 1; index >= 0; --index) {
         // a. Let name be parameterNames[index].
-        auto const& name = formals->parameters()[index].binding.get<NonnullRefPtr<Identifier const>>()->string();
+        auto name = Utf16FlyString::from_utf8_but_should_be_ported_to_utf16(formals->parameters()[index].binding.get<NonnullRefPtr<Identifier const>>()->string());
 
         // b. If name is not an element of mappedNames, then
         if (seen_names.contains(name))
@@ -1197,29 +1202,30 @@ CanonicalIndex canonical_numeric_index_string(PropertyKey const& property_key, C
     if (mode != CanonicalIndexMode::DetectNumericRoundtrip)
         return CanonicalIndex(CanonicalIndex::Type::Undefined, 0);
 
-    auto& argument = property_key.as_string();
+    auto const& argument = property_key.as_string();
 
     // Handle trivial cases without a full round trip test
     // We do not need to check for argument == "0" at this point because we
     // already covered it with the is_number() == true path.
     if (argument.is_empty())
         return CanonicalIndex(CanonicalIndex::Type::Undefined, 0);
+
     u32 current_index = 0;
-    auto const* characters = argument.bytes_as_string_view().characters_without_null_termination();
-    auto const length = argument.bytes_as_string_view().length();
-    if (characters[current_index] == '-') {
+
+    if (argument.code_unit_at(current_index) == '-') {
         current_index++;
-        if (current_index == length)
+        if (current_index == argument.length_in_code_units())
             return CanonicalIndex(CanonicalIndex::Type::Undefined, 0);
     }
-    if (characters[current_index] == '0') {
+
+    if (argument.code_unit_at(current_index) == '0') {
         current_index++;
-        if (current_index == length)
+        if (current_index == argument.length_in_code_units())
             return CanonicalIndex(CanonicalIndex::Type::Numeric, 0);
-        if (characters[current_index] != '.')
+        if (argument.code_unit_at(current_index) != '.')
             return CanonicalIndex(CanonicalIndex::Type::Undefined, 0);
         current_index++;
-        if (current_index == length)
+        if (current_index == argument.length_in_code_units())
             return CanonicalIndex(CanonicalIndex::Type::Undefined, 0);
     }
 
@@ -1228,11 +1234,11 @@ CanonicalIndex canonical_numeric_index_string(PropertyKey const& property_key, C
         return CanonicalIndex(CanonicalIndex::Type::Numeric, 0);
 
     // Short circuit any string that doesn't start with digits
-    if (char first_non_zero = characters[current_index]; first_non_zero < '0' || first_non_zero > '9')
+    if (auto first_non_zero = argument.code_unit_at(current_index); first_non_zero < '0' || first_non_zero > '9')
         return CanonicalIndex(CanonicalIndex::Type::Undefined, 0);
 
     // 2. Let n be ! ToNumber(argument).
-    auto maybe_double = argument.bytes_as_string_view().to_number<double>(AK::TrimWhitespace::No);
+    auto maybe_double = argument.to_number<double>(AK::TrimWhitespace::No);
     if (!maybe_double.has_value())
         return CanonicalIndex(CanonicalIndex::Type::Undefined, 0);
 
@@ -1258,8 +1264,8 @@ ThrowCompletionOr<String> get_substitution(VM& vm, Utf16View const& matched, Utf
     StringBuilder result(StringBuilder::Mode::UTF16);
 
     // 4. Let templateRemainder be replacementTemplate.
-    auto replace_template_string = TRY(replacement_template.to_utf16_string(vm));
-    auto template_remainder = replace_template_string.view();
+    auto replace_template_string = TRY(replacement_template.to_string(vm));
+    auto template_remainder = replace_template_string.utf16_view();
 
     // 5. Repeat, while templateRemainder is not the empty String,
     while (!template_remainder.is_empty()) {
@@ -1321,8 +1327,7 @@ ThrowCompletionOr<String> get_substitution(VM& vm, Utf16View const& matched, Utf
             auto digits = template_remainder.substring_view(1, digit_count);
 
             // iii. Let index be ℝ(StringToNumber(digits)).
-            auto utf8_digits = MUST(digits.to_utf8());
-            auto index = static_cast<size_t>(string_to_number(utf8_digits));
+            auto index = static_cast<size_t>(string_to_number(digits));
 
             // iv. Assert: 0 ≤ index ≤ 99.
             VERIFY(index <= 99);
@@ -1341,8 +1346,7 @@ ThrowCompletionOr<String> get_substitution(VM& vm, Utf16View const& matched, Utf
                 digits = digits.substring_view(0, 1);
 
                 // 4. Set index to ℝ(StringToNumber(digits)).
-                utf8_digits = MUST(digits.to_utf8());
-                index = static_cast<size_t>(string_to_number(utf8_digits));
+                index = static_cast<size_t>(string_to_number(digits));
             }
 
             // vii. Let ref be the substring of templateRemainder from 0 to 1 + digitCount.
@@ -1361,8 +1365,8 @@ ThrowCompletionOr<String> get_substitution(VM& vm, Utf16View const& matched, Utf
                 // 3. Else,
                 else {
                     // a. Let refReplacement be capture.
-                    capture_string = TRY(capture.to_utf16_string(vm));
-                    ref_replacement = capture_string->view();
+                    capture_string = TRY(capture.to_string(vm));
+                    ref_replacement = capture_string->utf16_view();
                 }
             }
             // ix. Else,
@@ -1391,14 +1395,13 @@ ThrowCompletionOr<String> get_substitution(VM& vm, Utf16View const& matched, Utf
                 ref = template_remainder.substring_view(0, *greater_than_position + 1);
 
                 // 2. Let groupName be the substring of templateRemainder from 2 to gtPos.
-                auto group_name_view = template_remainder.substring_view(2, *greater_than_position - 2);
-                auto group_name = MUST(group_name_view.to_utf8());
+                auto group_name = template_remainder.substring_view(2, *greater_than_position - 2);
 
                 // 3. Assert: namedCaptures is an Object.
                 VERIFY(named_captures.is_object());
 
                 // 4. Let capture be ? Get(namedCaptures, groupName).
-                auto capture = TRY(named_captures.as_object().get(group_name));
+                auto capture = TRY(named_captures.as_object().get(Utf16FlyString::from_utf16(group_name)));
 
                 // 5. If capture is undefined, then
                 if (capture.is_undefined()) {
@@ -1408,8 +1411,8 @@ ThrowCompletionOr<String> get_substitution(VM& vm, Utf16View const& matched, Utf
                 // 6. Else,
                 else {
                     // a. Let refReplacement be ? ToString(capture).
-                    capture_string = TRY(capture.to_utf16_string(vm));
-                    ref_replacement = capture_string->view();
+                    capture_string = TRY(capture.to_string(vm));
+                    ref_replacement = capture_string->utf16_view();
                 }
             }
         }
@@ -1761,7 +1764,7 @@ ThrowCompletionOr<Value> perform_import_call(VM& vm, Value specifier, Value opti
 
     // 8. Let specifierString be Completion(ToString(specifier)).
     // 9. IfAbruptRejectPromise(specifierString, promiseCapability).
-    FlyString specifier_string = TRY_OR_REJECT(vm, promise_capability, specifier.to_string(vm));
+    FlyString specifier_string = TRY_OR_REJECT(vm, promise_capability, specifier.to_string(vm)).to_utf8_but_should_be_ported_to_utf16();
 
     // 10. Let attributes be a new empty List.
     Vector<ImportAttribute> attributes;
@@ -1819,7 +1822,7 @@ ThrowCompletionOr<Value> perform_import_call(VM& vm, Value specifier, Value opti
                     }
 
                     // b. Append the ImportAttribute Record { [[Key]]: key, [[Value]]: value } to attributes.
-                    attributes.empend(key.as_string().utf8_string(), value.as_string().utf8_string());
+                    attributes.empend(key.as_string().string().to_utf8_but_should_be_ported_to_utf16(), value.as_string().string().to_utf8_but_should_be_ported_to_utf16());
                 }
             }
         }
@@ -1913,7 +1916,7 @@ ThrowCompletionOr<Value> get_option(VM& vm, Object const& options, PropertyKey c
         // NOTE: Every location in the spec that invokes GetOption with type=boolean also has values=undefined.
         VERIFY(value.is_string());
 
-        if (auto value_string = value.as_string().utf8_string(); !values.contains_slow(value_string))
+        if (auto value_string = value.as_string().string(); !values.first_matching([&](auto value) { return value_string == value; }).has_value())
             return vm.throw_completion<RangeError>(ErrorType::OptionIsNotValidValue, value_string, property.as_string());
     }
 
@@ -1934,7 +1937,7 @@ ThrowCompletionOr<RoundingMode> get_rounding_mode_option(VM& vm, Object const& o
     auto string_value = TRY(get_option(vm, options, vm.names.roundingMode, OptionType::String, allowed_strings, string_fallback));
 
     // 4. Return the value from the "Rounding Mode" column of the row with stringValue in its "String Identifier" column.
-    return static_cast<RoundingMode>(allowed_strings.first_index_of(string_value.as_string().utf8_string_view()).value());
+    return static_cast<RoundingMode>(allowed_strings.first_index_of(string_value.as_string().string().to_utf8_but_should_be_ported_to_utf16()).value());
 }
 
 // 14.5.2.4 GetRoundingIncrementOption ( options ), https://tc39.es/proposal-temporal/#sec-temporal-getroundingincrementoption

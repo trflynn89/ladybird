@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <AK/Utf16FlyString.h>
 #include <LibJS/Runtime/Environment.h>
 #include <LibJS/Runtime/EnvironmentCoordinate.h>
 #include <LibJS/Runtime/PropertyKey.h>
@@ -13,7 +14,7 @@
 
 namespace JS {
 
-Reference make_private_reference(VM&, Value base_value, FlyString const& private_identifier);
+Reference make_private_reference(VM&, Value base_value, Utf16FlyString const& private_identifier);
 
 class JS_API Reference {
 public:
@@ -39,7 +40,7 @@ public:
     {
     }
 
-    Reference(Environment& base, FlyString referenced_name, bool strict = false, Optional<EnvironmentCoordinate> environment_coordinate = {})
+    Reference(Environment& base, Utf16FlyString referenced_name, bool strict = false, Optional<EnvironmentCoordinate> environment_coordinate = {})
         : m_base_type(BaseType::Environment)
         , m_base_environment(&base)
         , m_name(move(referenced_name))

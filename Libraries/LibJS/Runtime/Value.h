@@ -16,8 +16,8 @@
 #include <AK/Function.h>
 #include <AK/Result.h>
 #include <AK/SourceLocation.h>
-#include <AK/String.h>
 #include <AK/Types.h>
+#include <AK/Utf16String.h>
 #include <LibGC/NanBoxedValue.h>
 #include <LibGC/Ptr.h>
 #include <LibGC/Root.h>
@@ -348,11 +348,10 @@ public:
 
     u64 encoded() const { return m_value.encoded; }
 
-    ThrowCompletionOr<String> to_string(VM&) const;
-    ThrowCompletionOr<ByteString> to_byte_string(VM&) const;
-    ThrowCompletionOr<Utf16String> to_utf16_string(VM&) const;
-    ThrowCompletionOr<String> to_well_formed_string(VM&) const;
+    ThrowCompletionOr<Utf16String> to_string(VM&) const;
+    ThrowCompletionOr<Utf16String> to_well_formed_string(VM&) const;
     ThrowCompletionOr<GC::Ref<PrimitiveString>> to_primitive_string(VM&);
+    ThrowCompletionOr<ByteString> to_byte_string(VM&) const;
     ThrowCompletionOr<Value> to_primitive(VM&, PreferredType preferred_type = PreferredType::Default) const;
     ThrowCompletionOr<GC::Ref<Object>> to_object(VM&) const;
     ThrowCompletionOr<Value> to_numeric(VM&) const;
@@ -377,7 +376,7 @@ public:
     ThrowCompletionOr<Value> get(VM&, PropertyKey const&) const;
     ThrowCompletionOr<GC::Ptr<FunctionObject>> get_method(VM&, PropertyKey const&) const;
 
-    [[nodiscard]] String to_string_without_side_effects() const;
+    [[nodiscard]] Utf16String to_string_without_side_effects() const;
 
     [[nodiscard]] GC::Ref<PrimitiveString> typeof_(VM&) const;
 
@@ -535,9 +534,10 @@ enum class NumberToStringMode {
     WithExponent,
     WithoutExponent,
 };
-[[nodiscard]] JS_API String number_to_string(double, NumberToStringMode = NumberToStringMode::WithExponent);
+[[nodiscard]] JS_API Utf16String number_to_string(double, NumberToStringMode = NumberToStringMode::WithExponent);
 [[nodiscard]] JS_API ByteString number_to_byte_string(double, NumberToStringMode = NumberToStringMode::WithExponent);
 JS_API double string_to_number(StringView);
+JS_API double string_to_number(Utf16View const&);
 
 inline bool Value::operator==(Value const& value) const { return same_value(*this, value); }
 
@@ -693,12 +693,12 @@ inline Root<JS::Value> make_root(JS::Value value, SourceLocation location = Sour
 namespace AK {
 
 template<>
-struct Formatter<JS::Value> : Formatter<StringView> {
+struct Formatter<JS::Value> : Formatter<Utf16View> {
     ErrorOr<void> format(FormatBuilder& builder, JS::Value value)
     {
         if (value.is_special_empty_value())
-            return Formatter<StringView>::format(builder, "<empty>"sv);
-        return Formatter<StringView>::format(builder, value.to_string_without_side_effects());
+            return Formatter<Utf16View>::format(builder, u"<empty>"sv);
+        return Formatter<Utf16View>::format(builder, value.to_string_without_side_effects());
     }
 };
 

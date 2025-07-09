@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <AK/Utf16String.h>
 #include <AK/Utf8View.h>
 #include <LibJS/Runtime/StringObject.h>
 
@@ -17,10 +18,12 @@ struct CodePoint {
     size_t code_unit_count { 0 };
 };
 
+static constexpr inline auto whitespace_characters = u"\x0009\x000a\x000b\x000c\x000d\x0020\x00a0\x1680\x2000\x2001\x2002\x2003\x2004\x2005\x2006\x2007\x2008\x2009\x200a\x202f\x205f\x3000\x2028\x2029\xfeff"sv;
+static constexpr inline auto whitespace_characters_utf8 = Utf8View { "\x09\x0A\x0B\x0C\x0D\x20\xC2\xA0\xE1\x9A\x80\xE2\x80\x80\xE2\x80\x81\xE2\x80\x82\xE2\x80\x83\xE2\x80\x84\xE2\x80\x85\xE2\x80\x86\xE2\x80\x87\xE2\x80\x88\xE2\x80\x89\xE2\x80\x8A\xE2\x80\xAF\xE2\x81\x9F\xE3\x80\x80\xE2\x80\xA8\xE2\x80\xA9\xEF\xBB\xBF"sv };
+
 JS_API Optional<size_t> string_index_of(Utf16View const& string, Utf16View const& search_value, size_t from_index);
 JS_API CodePoint code_point_at(Utf16View const& string, size_t position);
-JS_API String to_well_formed_string(Utf16String const&);
-static constexpr Utf8View whitespace_characters = Utf8View("\x09\x0A\x0B\x0C\x0D\x20\xC2\xA0\xE1\x9A\x80\xE2\x80\x80\xE2\x80\x81\xE2\x80\x82\xE2\x80\x83\xE2\x80\x84\xE2\x80\x85\xE2\x80\x86\xE2\x80\x87\xE2\x80\x88\xE2\x80\x89\xE2\x80\x8A\xE2\x80\xAF\xE2\x81\x9F\xE3\x80\x80\xE2\x80\xA8\xE2\x80\xA9\xEF\xBB\xBF"sv);
+JS_API Utf16String to_well_formed_string(Utf16View const&);
 JS_API ThrowCompletionOr<String> trim_string(VM&, Value string, TrimMode where);
 
 class JS_API StringPrototype final : public StringObject {

@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <AK/NonnullOwnPtr.h>
 #include <LibUnicode/ICU.h>
 #include <LibUnicode/ListFormat.h>
 
@@ -12,7 +11,7 @@
 
 namespace Unicode {
 
-ListFormatType list_format_type_from_string(StringView list_format_type)
+ListFormatType list_format_type_from_string(Utf16View const& list_format_type)
 {
     if (list_format_type == "conjunction"sv)
         return ListFormatType::Conjunction;
@@ -23,7 +22,7 @@ ListFormatType list_format_type_from_string(StringView list_format_type)
     VERIFY_NOT_REACHED();
 }
 
-StringView list_format_type_to_string(ListFormatType list_format_type)
+Utf16View list_format_type_to_string(ListFormatType list_format_type)
 {
     switch (list_format_type) {
     case ListFormatType::Conjunction:
@@ -82,7 +81,7 @@ public:
 
     virtual ~ListFormatImpl() override = default;
 
-    virtual String format(ReadonlySpan<String> list) const override
+    virtual Utf16String format(ReadonlySpan<Utf16String> list) const override
     {
         UErrorCode status = U_ZERO_ERROR;
 
@@ -94,10 +93,10 @@ public:
         if (icu_failure(status))
             return {};
 
-        return icu_string_to_string(formatted_string);
+        return icu_string_to_utf16_string(formatted_string);
     }
 
-    virtual Vector<Partition> format_to_parts(ReadonlySpan<String> list) const override
+    virtual Vector<Partition> format_to_parts(ReadonlySpan<Utf16String> list) const override
     {
         UErrorCode status = U_ZERO_ERROR;
 
@@ -118,14 +117,14 @@ public:
             auto type = icu_list_format_field_to_string(position.getField());
             auto part = formatted_string.tempSubStringBetween(position.getStart(), position.getLimit());
 
-            result.empend(type, icu_string_to_string(part));
+            result.empend(type, icu_string_to_utf16_string(part));
         }
 
         return result;
     }
 
 private:
-    Optional<icu::FormattedList> format_list_impl(ReadonlySpan<String> list) const
+    Optional<icu::FormattedList> format_list_impl(ReadonlySpan<Utf16String> list) const
     {
         UErrorCode status = U_ZERO_ERROR;
 

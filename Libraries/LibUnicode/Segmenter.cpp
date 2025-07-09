@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <AK/Utf16View.h>
 #include <AK/Utf32View.h>
 #include <LibUnicode/CharacterTypes.h>
 #include <LibUnicode/ICU.h>
@@ -17,7 +16,7 @@
 
 namespace Unicode {
 
-SegmenterGranularity segmenter_granularity_from_string(StringView segmenter_granularity)
+SegmenterGranularity segmenter_granularity_from_string(Utf16View const& segmenter_granularity)
 {
     if (segmenter_granularity == "grapheme"sv)
         return SegmenterGranularity::Grapheme;
@@ -28,7 +27,7 @@ SegmenterGranularity segmenter_granularity_from_string(StringView segmenter_gran
     VERIFY_NOT_REACHED();
 }
 
-StringView segmenter_granularity_to_string(SegmenterGranularity segmenter_granularity)
+Utf16View segmenter_granularity_to_string(SegmenterGranularity segmenter_granularity)
 {
     switch (segmenter_granularity) {
     case SegmenterGranularity::Grapheme:

@@ -8,7 +8,7 @@
 
 namespace Unicode {
 
-PluralForm plural_form_from_string(StringView plural_form)
+PluralForm plural_form_from_string(Utf16View const& plural_form)
 {
     if (plural_form == "cardinal"sv)
         return PluralForm::Cardinal;
@@ -17,7 +17,7 @@ PluralForm plural_form_from_string(StringView plural_form)
     VERIFY_NOT_REACHED();
 }
 
-StringView plural_form_to_string(PluralForm plural_form)
+Utf16View plural_form_to_string(PluralForm plural_form)
 {
     switch (plural_form) {
     case PluralForm::Cardinal:
@@ -28,7 +28,7 @@ StringView plural_form_to_string(PluralForm plural_form)
     VERIFY_NOT_REACHED();
 }
 
-PluralCategory plural_category_from_string(StringView category)
+PluralCategory plural_category_from_string(Utf16View const& category)
 {
     if (category == "other"sv)
         return PluralCategory::Other;
@@ -49,7 +49,7 @@ PluralCategory plural_category_from_string(StringView category)
     VERIFY_NOT_REACHED();
 }
 
-StringView plural_category_to_string(PluralCategory category)
+Utf16View plural_category_to_string(PluralCategory category)
 {
     switch (category) {
     case PluralCategory::Other:

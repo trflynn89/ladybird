@@ -9,6 +9,7 @@
 #include <AK/Optional.h>
 #include <AK/String.h>
 #include <AK/StringView.h>
+#include <AK/Utf16View.h>
 #include <LibUnicode/Locale.h>
 #include <LibUnicode/TimeZone.h>
 
@@ -18,9 +19,8 @@ enum class LanguageDisplay {
     Standard,
     Dialect,
 };
-
-LanguageDisplay language_display_from_string(StringView language_display);
-StringView language_display_to_string(LanguageDisplay language_display);
+LanguageDisplay language_display_from_string(Utf16View const& language_display);
+Utf16View language_display_to_string(LanguageDisplay language_display);
 
 Optional<String> language_display_name(StringView locale, StringView language, LanguageDisplay);
 Optional<String> region_display_name(StringView locale, StringView region);

@@ -167,7 +167,7 @@ Vector<String> available_hour_cycles(StringView locale)
         return available_hour_cycles();
 
     Vector<String> hour_cycles;
-    hour_cycles.append(MUST(String::from_utf8(hour_cycle_to_string(*preferred_hour_cycle))));
+    hour_cycles.append(hour_cycle_to_string(*preferred_hour_cycle).to_utf8_but_should_be_ported_to_utf16());
 
     for (auto const& hour_cycle : available_hour_cycles()) {
         if (hour_cycle != hour_cycles[0])

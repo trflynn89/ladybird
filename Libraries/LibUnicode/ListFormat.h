@@ -6,7 +6,9 @@
 
 #pragma once
 
-#include <AK/String.h>
+#include <AK/NonnullOwnPtr.h>
+#include <AK/Utf16String.h>
+#include <AK/Utf16View.h>
 #include <AK/Vector.h>
 #include <LibUnicode/Locale.h>
 
@@ -17,8 +19,8 @@ enum class ListFormatType {
     Disjunction,
     Unit,
 };
-ListFormatType list_format_type_from_string(StringView);
-StringView list_format_type_to_string(ListFormatType);
+ListFormatType list_format_type_from_string(Utf16View const&);
+Utf16View list_format_type_to_string(ListFormatType);
 
 class ListFormat {
 public:
@@ -27,11 +29,11 @@ public:
 
     struct Partition {
         StringView type;
-        String value;
+        Utf16String value;
     };
 
-    virtual String format(ReadonlySpan<String> list) const = 0;
-    virtual Vector<Partition> format_to_parts(ReadonlySpan<String> list) const = 0;
+    virtual Utf16String format(ReadonlySpan<Utf16String> list) const = 0;
+    virtual Vector<Partition> format_to_parts(ReadonlySpan<Utf16String> list) const = 0;
 
 protected:
     ListFormat() = default;

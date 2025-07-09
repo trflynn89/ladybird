@@ -48,7 +48,7 @@ ThrowCompletionOr<Value> Console::assert_()
         return js_undefined();
 
     // 2. Let message be a string without any formatting specifiers indicating generically an assertion failure (such as "Assertion failed").
-    auto message = PrimitiveString::create(vm, "Assertion failed"_string);
+    auto message = PrimitiveString::create(vm, "Assertion failed"_utf16);
 
     // NOTE: Assemble `data` from the function arguments.
     GC::RootVector<Value> data { vm.heap() };
@@ -74,7 +74,7 @@ ThrowCompletionOr<Value> Console::assert_()
         // 3. Otherwise:
         else {
             // 1. Let concat be the concatenation of message, U+003A (:), U+0020 SPACE, and first.
-            auto concat = TRY_OR_THROW_OOM(vm, String::formatted("{}: {}", message->utf8_string(), MUST(first.to_string(vm))));
+            auto concat = Utf16String::formatted("{}: {}", message->string(), MUST(first.to_string(vm)));
             // 2. Set data[0] to concat.
             data[0] = PrimitiveString::create(vm, move(concat));
         }
@@ -172,7 +172,7 @@ static ThrowCompletionOr<GC::Ref<Object>> create_table_row(Realm& realm, Value r
 
     // 2. Set `row["(index)"]` to `rowIndex`
     {
-        auto key = PropertyKey { "(index)"_fly_string, PropertyKey::StringMayBeNumber::No };
+        auto key = PropertyKey { "(index)"_utf16_fly_string, PropertyKey::StringMayBeNumber::No };
         TRY(row->set(key, row_index, Object::ShouldThrowExceptions::No));
 
         add_column(key);
@@ -353,7 +353,7 @@ ThrowCompletionOr<Value> Console::trace()
         auto const& function_name = execution_context_stack[i]->function_name;
         trace.stack.append((!function_name || function_name->is_empty())
                 ? "<anonymous>"_string
-                : function_name->utf8_string());
+                : function_name->string().to_utf8_but_should_be_ported_to_utf16());
     }
 
     // 2. Optionally, let formattedData be the result of Formatter(data), and incorporate formattedData as a label for trace.
@@ -401,7 +401,7 @@ ThrowCompletionOr<Value> Console::dir()
 static ThrowCompletionOr<String> label_or_fallback(VM& vm, StringView fallback)
 {
     return vm.argument_count() > 0 && !vm.argument(0).is_undefined()
-        ? vm.argument(0).to_string(vm)
+        ? TRY(vm.argument(0).to_string(vm)).to_utf8_but_should_be_ported_to_utf16()
         : TRY_OR_THROW_OOM(vm, String::from_utf8(fallback));
 }
 
@@ -779,24 +779,24 @@ ThrowCompletionOr<GC::RootVector<Value>> ConsoleClient::formatter(GC::RootVector
         return args;
 
     // 2. Let target be the first element of args.
-    auto target = (!args.is_empty()) ? TRY(args.first().to_string(vm)) : String {};
+    auto target = (!args.is_empty()) ? TRY(args.first().to_string(vm)) : Utf16String {};
 
     // 3. Let current be the second element of args.
     auto current = (args.size() > 1) ? args[1] : js_undefined();
 
     // 4. Find the first possible format specifier specifier, from the left to the right in target.
-    auto find_specifier = [](StringView target) -> Optional<StringView> {
+    auto find_specifier = [](Utf16View const& target) -> Optional<Utf16View> {
         size_t start_index = 0;
-        while (start_index < target.length()) {
-            auto maybe_index = target.find('%', start_index);
+        while (start_index < target.length_in_code_units()) {
+            auto maybe_index = target.find_code_unit_offset(u'%', start_index);
             if (!maybe_index.has_value())
                 return {};
 
             auto index = maybe_index.value();
-            if (index + 1 >= target.length())
+            if (index + 1 >= target.length_in_code_units())
                 return {};
 
-            switch (target[index + 1]) {
+            switch (target.code_unit_at(index + 1)) {
             case 'c':
             case 'd':
             case 'f':
@@ -805,6 +805,8 @@ ThrowCompletionOr<GC::RootVector<Value>> ConsoleClient::formatter(GC::RootVector
             case 'O':
             case 's':
                 return target.substring_view(index, 2);
+            default:
+                break;
             }
 
             start_index = index + 1;
@@ -823,11 +825,11 @@ ThrowCompletionOr<GC::RootVector<Value>> ConsoleClient::formatter(GC::RootVector
         Optional<Value> converted;
 
         // 1. If specifier is %s, let converted be the result of Call(%String%, undefined, « current »).
-        if (specifier == "%s"sv) {
+        if (specifier == u"%s"sv) {
             converted = TRY(call(vm, *realm.intrinsics().string_constructor(), js_undefined(), current));
         }
         // 2. If specifier is %d or %i:
-        else if (specifier.is_one_of("%d"sv, "%i"sv)) {
+        else if (specifier.is_one_of(u"%d"sv, u"%i"sv)) {
             // 1. If current is a Symbol, let converted be NaN
             if (current.is_symbol()) {
                 converted = js_nan();
@@ -838,7 +840,7 @@ ThrowCompletionOr<GC::RootVector<Value>> ConsoleClient::formatter(GC::RootVector
             }
         }
         // 3. If specifier is %f:
-        else if (specifier == "%f"sv) {
+        else if (specifier == u"%f"sv) {
             // 1. If current is a Symbol, let converted be NaN
             if (current.is_symbol()) {
                 converted = js_nan();
@@ -849,25 +851,25 @@ ThrowCompletionOr<GC::RootVector<Value>> ConsoleClient::formatter(GC::RootVector
             }
         }
         // 4. If specifier is %o, optionally let converted be current with optimally useful formatting applied.
-        else if (specifier == "%o"sv) {
+        else if (specifier == u"%o"sv) {
             // TODO: "Optimally-useful formatting"
             converted = current;
         }
         // 5. If specifier is %O, optionally let converted be current with generic JavaScript object formatting applied.
-        else if (specifier == "%O"sv) {
+        else if (specifier == u"%O"sv) {
             // TODO: "generic JavaScript object formatting"
             converted = current;
         }
         // 6. TODO: process %c
-        else if (specifier == "%c"sv) {
+        else if (specifier == u"%c"sv) {
             // NOTE: This has no spec yet. `%c` specifiers treat the argument as CSS styling for the log message.
-            add_css_style_to_current_message(TRY(current.to_string(vm)));
+            add_css_style_to_current_message(TRY(current.to_string(vm)).to_utf8_but_should_be_ported_to_utf16());
             converted = PrimitiveString::create(vm, String {});
         }
 
         // 7. If any of the previous steps set converted, replace specifier in target with converted.
         if (converted.has_value())
-            target = TRY_OR_THROW_OOM(vm, target.replace(specifier, TRY(converted->to_string(vm)), ReplaceMode::FirstOnly));
+            target = target.replace(specifier, TRY(converted->to_string(vm)), ReplaceMode::FirstOnly);
     }
 
     // 7. Let result be a list containing target together with the elements of args starting from the third onward.

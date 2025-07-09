@@ -19,7 +19,7 @@
 
 namespace Unicode {
 
-NumberFormatStyle number_format_style_from_string(StringView number_format_style)
+NumberFormatStyle number_format_style_from_string(Utf16View const& number_format_style)
 {
     if (number_format_style == "decimal"sv)
         return NumberFormatStyle::Decimal;
@@ -32,7 +32,7 @@ NumberFormatStyle number_format_style_from_string(StringView number_format_style
     VERIFY_NOT_REACHED();
 }
 
-StringView number_format_style_to_string(NumberFormatStyle number_format_style)
+Utf16View number_format_style_to_string(NumberFormatStyle number_format_style)
 {
     switch (number_format_style) {
     case NumberFormatStyle::Decimal:
@@ -47,7 +47,7 @@ StringView number_format_style_to_string(NumberFormatStyle number_format_style)
     VERIFY_NOT_REACHED();
 }
 
-SignDisplay sign_display_from_string(StringView sign_display)
+SignDisplay sign_display_from_string(Utf16View const& sign_display)
 {
     if (sign_display == "auto"sv)
         return SignDisplay::Auto;
@@ -62,7 +62,7 @@ SignDisplay sign_display_from_string(StringView sign_display)
     VERIFY_NOT_REACHED();
 }
 
-StringView sign_display_to_string(SignDisplay sign_display)
+Utf16View sign_display_to_string(SignDisplay sign_display)
 {
     switch (sign_display) {
     case SignDisplay::Auto:
@@ -96,7 +96,7 @@ static constexpr UNumberSignDisplay icu_sign_display(SignDisplay sign_display, O
     VERIFY_NOT_REACHED();
 }
 
-Notation notation_from_string(StringView notation)
+Notation notation_from_string(Utf16View const& notation)
 {
     if (notation == "standard"sv)
         return Notation::Standard;
@@ -109,7 +109,7 @@ Notation notation_from_string(StringView notation)
     VERIFY_NOT_REACHED();
 }
 
-StringView notation_to_string(Notation notation)
+Utf16View notation_to_string(Notation notation)
 {
     switch (notation) {
     case Notation::Standard:
@@ -144,7 +144,7 @@ static icu::number::Notation icu_notation(Notation notation, Optional<CompactDis
     VERIFY_NOT_REACHED();
 }
 
-CompactDisplay compact_display_from_string(StringView compact_display)
+CompactDisplay compact_display_from_string(Utf16View const& compact_display)
 {
     if (compact_display == "short"sv)
         return CompactDisplay::Short;
@@ -153,7 +153,7 @@ CompactDisplay compact_display_from_string(StringView compact_display)
     VERIFY_NOT_REACHED();
 }
 
-StringView compact_display_to_string(CompactDisplay compact_display)
+Utf16View compact_display_to_string(CompactDisplay compact_display)
 {
     switch (compact_display) {
     case CompactDisplay::Short:
@@ -164,7 +164,7 @@ StringView compact_display_to_string(CompactDisplay compact_display)
     VERIFY_NOT_REACHED();
 }
 
-Grouping grouping_from_string(StringView grouping)
+Grouping grouping_from_string(Utf16View const& grouping)
 {
     if (grouping == "always"sv)
         return Grouping::Always;
@@ -177,7 +177,7 @@ Grouping grouping_from_string(StringView grouping)
     VERIFY_NOT_REACHED();
 }
 
-StringView grouping_to_string(Grouping grouping)
+Utf16View grouping_to_string(Grouping grouping)
 {
     switch (grouping) {
     case Grouping::Always:
@@ -207,7 +207,7 @@ static constexpr UNumberGroupingStrategy icu_grouping_strategy(Grouping grouping
     VERIFY_NOT_REACHED();
 }
 
-CurrencyDisplay currency_display_from_string(StringView currency_display)
+CurrencyDisplay currency_display_from_string(Utf16View const& currency_display)
 {
     if (currency_display == "code"sv)
         return CurrencyDisplay::Code;
@@ -220,7 +220,7 @@ CurrencyDisplay currency_display_from_string(StringView currency_display)
     VERIFY_NOT_REACHED();
 }
 
-StringView currency_display_to_string(CurrencyDisplay currency_display)
+Utf16View currency_display_to_string(CurrencyDisplay currency_display)
 {
     switch (currency_display) {
     case CurrencyDisplay::Code:
@@ -250,7 +250,7 @@ static constexpr UNumberUnitWidth icu_currency_display(CurrencyDisplay currency_
     VERIFY_NOT_REACHED();
 }
 
-CurrencySign currency_sign_from_string(StringView currency_sign)
+CurrencySign currency_sign_from_string(Utf16View const& currency_sign)
 {
     if (currency_sign == "standard"sv)
         return CurrencySign::Standard;
@@ -259,7 +259,7 @@ CurrencySign currency_sign_from_string(StringView currency_sign)
     VERIFY_NOT_REACHED();
 }
 
-StringView currency_sign_to_string(CurrencySign currency_sign)
+Utf16View currency_sign_to_string(CurrencySign currency_sign)
 {
     switch (currency_sign) {
     case CurrencySign::Standard:
@@ -270,7 +270,7 @@ StringView currency_sign_to_string(CurrencySign currency_sign)
     VERIFY_NOT_REACHED();
 }
 
-RoundingType rounding_type_from_string(StringView rounding_type)
+RoundingType rounding_type_from_string(Utf16View const& rounding_type)
 {
     if (rounding_type == "significantDigits"sv)
         return RoundingType::SignificantDigits;
@@ -283,7 +283,7 @@ RoundingType rounding_type_from_string(StringView rounding_type)
     VERIFY_NOT_REACHED();
 }
 
-StringView rounding_type_to_string(RoundingType rounding_type)
+Utf16View rounding_type_to_string(RoundingType rounding_type)
 {
     switch (rounding_type) {
     case RoundingType::SignificantDigits:
@@ -298,7 +298,7 @@ StringView rounding_type_to_string(RoundingType rounding_type)
     VERIFY_NOT_REACHED();
 }
 
-RoundingMode rounding_mode_from_string(StringView rounding_mode)
+RoundingMode rounding_mode_from_string(Utf16View const& rounding_mode)
 {
     if (rounding_mode == "ceil"sv)
         return RoundingMode::Ceil;
@@ -321,7 +321,7 @@ RoundingMode rounding_mode_from_string(StringView rounding_mode)
     VERIFY_NOT_REACHED();
 }
 
-StringView rounding_mode_to_string(RoundingMode rounding_mode)
+Utf16View rounding_mode_to_string(RoundingMode rounding_mode)
 {
     switch (rounding_mode) {
     case RoundingMode::Ceil:
@@ -371,7 +371,7 @@ static constexpr UNumberFormatRoundingMode icu_rounding_mode(RoundingMode roundi
     VERIFY_NOT_REACHED();
 }
 
-TrailingZeroDisplay trailing_zero_display_from_string(StringView trailing_zero_display)
+TrailingZeroDisplay trailing_zero_display_from_string(Utf16View const& trailing_zero_display)
 {
     if (trailing_zero_display == "auto"sv)
         return TrailingZeroDisplay::Auto;
@@ -380,7 +380,7 @@ TrailingZeroDisplay trailing_zero_display_from_string(StringView trailing_zero_d
     VERIFY_NOT_REACHED();
 }
 
-StringView trailing_zero_display_to_string(TrailingZeroDisplay trailing_zero_display)
+Utf16View trailing_zero_display_to_string(TrailingZeroDisplay trailing_zero_display)
 {
     switch (trailing_zero_display) {
     case TrailingZeroDisplay::Auto:
@@ -601,7 +601,7 @@ public:
 
     virtual ~NumberFormatImpl() override = default;
 
-    virtual String format(Value const& value) const override
+    virtual Utf16String format(Value const& value) const override
     {
         UErrorCode status = U_ZERO_ERROR;
 
@@ -613,7 +613,7 @@ public:
         if (icu_failure(status))
             return {};
 
-        return icu_string_to_string(result);
+        return icu_string_to_utf16_string(result);
     }
 
     virtual Vector<Partition> format_to_parts(Value const& value) const override
@@ -625,7 +625,7 @@ public:
         return format_to_parts_impl(formatted, value, value);
     }
 
-    virtual String format_range(Value const& start, Value const& end) const override
+    virtual Utf16String format_range(Value const& start, Value const& end) const override
     {
         UErrorCode status = U_ZERO_ERROR;
 
@@ -637,7 +637,7 @@ public:
         if (icu_failure(status))
             return {};
 
-        return icu_string_to_string(result);
+        return icu_string_to_utf16_string(result);
     }
 
     virtual Vector<Partition> format_range_to_parts(Value const& start, Value const& end) const override
@@ -671,7 +671,7 @@ public:
         if (icu_failure(status))
             return PluralCategory::Other;
 
-        return plural_category_from_string(icu_string_to_string(result));
+        return plural_category_from_string(icu_string_to_utf16_view(result));
     }
 
     virtual PluralCategory select_plural_range(double start, double end) const override
@@ -694,7 +694,7 @@ public:
         if (icu_failure(status))
             return PluralCategory::Other;
 
-        return plural_category_from_string(icu_string_to_string(result));
+        return plural_category_from_string(icu_string_to_utf16_view(result));
     }
 
     virtual Vector<PluralCategory> available_plural_categories() const override
@@ -710,7 +710,7 @@ public:
 
         while (true) {
             i32 length = 0;
-            auto const* category = keywords->next(&length, status);
+            auto const* category = keywords->unext(&length, status);
 
             if (icu_failure(status) || category == nullptr)
                 break;
@@ -830,7 +830,7 @@ private:
             auto value = formatted_number.tempSubStringBetween(range.start, range.end);
 
             Partition partition;
-            partition.value = icu_string_to_string(value);
+            partition.value = icu_string_to_utf16_string(value);
             apply_to_partition(partition, range.field, range.start);
 
             result.unchecked_append(move(partition));

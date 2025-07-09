@@ -53,32 +53,32 @@ public:
     void set_max_significant_digits(int max_significant_digits) { m_max_significant_digits = max_significant_digits; }
 
     Unicode::Notation notation() const { return m_notation; }
-    StringView notation_string() const { return Unicode::notation_to_string(m_notation); }
-    void set_notation(StringView notation) { m_notation = Unicode::notation_from_string(notation); }
+    Utf16View notation_string() const { return Unicode::notation_to_string(m_notation); }
+    void set_notation(Utf16View const& notation) { m_notation = Unicode::notation_from_string(notation); }
 
     bool has_compact_display() const { return m_compact_display.has_value(); }
     Unicode::CompactDisplay compact_display() const { return *m_compact_display; }
-    StringView compact_display_string() const { return Unicode::compact_display_to_string(*m_compact_display); }
-    void set_compact_display(StringView compact_display) { m_compact_display = Unicode::compact_display_from_string(compact_display); }
+    Utf16View compact_display_string() const { return Unicode::compact_display_to_string(*m_compact_display); }
+    void set_compact_display(Utf16View const& compact_display) { m_compact_display = Unicode::compact_display_from_string(compact_display); }
 
     Unicode::RoundingType rounding_type() const { return m_rounding_type; }
-    StringView rounding_type_string() const { return Unicode::rounding_type_to_string(m_rounding_type); }
+    Utf16View rounding_type_string() const { return Unicode::rounding_type_to_string(m_rounding_type); }
     void set_rounding_type(Unicode::RoundingType rounding_type) { m_rounding_type = rounding_type; }
 
     ComputedRoundingPriority computed_rounding_priority() const { return m_computed_rounding_priority; }
-    StringView computed_rounding_priority_string() const;
+    Utf16View computed_rounding_priority_string() const;
     void set_computed_rounding_priority(ComputedRoundingPriority computed_rounding_priority) { m_computed_rounding_priority = computed_rounding_priority; }
 
     Unicode::RoundingMode rounding_mode() const { return m_rounding_mode; }
-    StringView rounding_mode_string() const { return Unicode::rounding_mode_to_string(m_rounding_mode); }
-    void set_rounding_mode(StringView rounding_mode) { m_rounding_mode = Unicode::rounding_mode_from_string(rounding_mode); }
+    Utf16View rounding_mode_string() const { return Unicode::rounding_mode_to_string(m_rounding_mode); }
+    void set_rounding_mode(Utf16View const& rounding_mode) { m_rounding_mode = Unicode::rounding_mode_from_string(rounding_mode); }
 
     int rounding_increment() const { return m_rounding_increment; }
     void set_rounding_increment(int rounding_increment) { m_rounding_increment = rounding_increment; }
 
     Unicode::TrailingZeroDisplay trailing_zero_display() const { return m_trailing_zero_display; }
-    StringView trailing_zero_display_string() const { return Unicode::trailing_zero_display_to_string(m_trailing_zero_display); }
-    void set_trailing_zero_display(StringView trailing_zero_display) { m_trailing_zero_display = Unicode::trailing_zero_display_from_string(trailing_zero_display); }
+    Utf16View trailing_zero_display_string() const { return Unicode::trailing_zero_display_to_string(m_trailing_zero_display); }
+    void set_trailing_zero_display(Utf16View const& trailing_zero_display) { m_trailing_zero_display = Unicode::trailing_zero_display_from_string(trailing_zero_display); }
 
     virtual Unicode::DisplayOptions display_options() const;
     Unicode::RoundingOptions rounding_options() const;
@@ -122,8 +122,8 @@ public:
     void set_numbering_system(String numbering_system) { m_numbering_system = move(numbering_system); }
 
     Unicode::NumberFormatStyle style() const { return m_style; }
-    StringView style_string() const { return Unicode::number_format_style_to_string(m_style); }
-    void set_style(StringView style) { m_style = Unicode::number_format_style_from_string(style); }
+    Utf16View style_string() const { return Unicode::number_format_style_to_string(m_style); }
+    void set_style(Utf16View const& style) { m_style = Unicode::number_format_style_from_string(style); }
 
     bool has_currency() const { return m_currency.has_value(); }
     String const& currency() const { return m_currency.value(); }
@@ -131,13 +131,13 @@ public:
 
     bool has_currency_display() const { return m_currency_display.has_value(); }
     Unicode::CurrencyDisplay currency_display() const { return *m_currency_display; }
-    StringView currency_display_string() const { return Unicode::currency_display_to_string(*m_currency_display); }
-    void set_currency_display(StringView currency_display) { m_currency_display = Unicode::currency_display_from_string(currency_display); }
+    Utf16View currency_display_string() const { return Unicode::currency_display_to_string(*m_currency_display); }
+    void set_currency_display(Utf16View const& currency_display) { m_currency_display = Unicode::currency_display_from_string(currency_display); }
 
     bool has_currency_sign() const { return m_currency_sign.has_value(); }
     Unicode::CurrencySign currency_sign() const { return *m_currency_sign; }
-    StringView currency_sign_string() const { return Unicode::currency_sign_to_string(*m_currency_sign); }
-    void set_currency_sign(StringView currency_sign) { m_currency_sign = Unicode::currency_sign_from_string(currency_sign); }
+    Utf16View currency_sign_string() const { return Unicode::currency_sign_to_string(*m_currency_sign); }
+    void set_currency_sign(Utf16View const& currency_sign) { m_currency_sign = Unicode::currency_sign_from_string(currency_sign); }
 
     bool has_unit() const { return m_unit.has_value(); }
     String const& unit() const { return m_unit.value(); }
@@ -145,16 +145,16 @@ public:
 
     bool has_unit_display() const { return m_unit_display.has_value(); }
     Unicode::Style unit_display() const { return *m_unit_display; }
-    StringView unit_display_string() const { return Unicode::style_to_string(*m_unit_display); }
-    void set_unit_display(StringView unit_display) { m_unit_display = Unicode::style_from_string(unit_display); }
+    Utf16View unit_display_string() const { return Unicode::style_to_string(*m_unit_display); }
+    void set_unit_display(Utf16View const& unit_display) { m_unit_display = Unicode::style_from_string(unit_display); }
 
     Unicode::Grouping use_grouping() const { return m_use_grouping; }
     Value use_grouping_to_value(VM&) const;
     void set_use_grouping(StringOrBoolean const& use_grouping);
 
     Unicode::SignDisplay sign_display() const { return m_sign_display; }
-    StringView sign_display_string() const { return Unicode::sign_display_to_string(m_sign_display); }
-    void set_sign_display(StringView sign_display) { m_sign_display = Unicode::sign_display_from_string(sign_display); }
+    Utf16View sign_display_string() const { return Unicode::sign_display_to_string(m_sign_display); }
+    void set_sign_display(Utf16View const& sign_display) { m_sign_display = Unicode::sign_display_from_string(sign_display); }
 
     NativeFunction* bound_format() const { return m_bound_format; }
     void set_bound_format(NativeFunction* bound_format) { m_bound_format = bound_format; }
@@ -181,11 +181,11 @@ private:
 
 JS_API int currency_digits(StringView currency);
 JS_API Vector<Unicode::NumberFormat::Partition> partition_number_pattern(NumberFormat const&, MathematicalValue const& number);
-JS_API String format_numeric(NumberFormat const&, MathematicalValue const& number);
+JS_API Utf16String format_numeric(NumberFormat const&, MathematicalValue const& number);
 JS_API GC::Ref<Array> format_numeric_to_parts(VM&, NumberFormat const&, MathematicalValue const& number);
 JS_API ThrowCompletionOr<MathematicalValue> to_intl_mathematical_value(VM&, Value value);
 JS_API ThrowCompletionOr<Vector<Unicode::NumberFormat::Partition>> partition_number_range_pattern(VM&, NumberFormat const&, MathematicalValue const& start, MathematicalValue const& end);
-JS_API ThrowCompletionOr<String> format_numeric_range(VM&, NumberFormat const&, MathematicalValue const& start, MathematicalValue const& end);
+JS_API ThrowCompletionOr<Utf16String> format_numeric_range(VM&, NumberFormat const&, MathematicalValue const& start, MathematicalValue const& end);
 JS_API ThrowCompletionOr<GC::Ref<Array>> format_numeric_range_to_parts(VM&, NumberFormat const&, MathematicalValue const& start, MathematicalValue const& end);
 
 }

@@ -45,7 +45,7 @@ ReadonlySpan<ResolutionOptionDescriptor> DurationFormat::resolution_option_descr
     return descriptors;
 }
 
-DurationFormat::Style DurationFormat::style_from_string(StringView style)
+DurationFormat::Style DurationFormat::style_from_string(Utf16View const& style)
 {
     if (style == "long"sv)
         return Style::Long;
@@ -58,7 +58,7 @@ DurationFormat::Style DurationFormat::style_from_string(StringView style)
     VERIFY_NOT_REACHED();
 }
 
-StringView DurationFormat::style_to_string(Style style)
+Utf16View DurationFormat::style_to_string(Style style)
 {
     switch (style) {
     case Style::Long:
@@ -74,7 +74,7 @@ StringView DurationFormat::style_to_string(Style style)
     }
 }
 
-DurationFormat::Display DurationFormat::display_from_string(StringView display)
+DurationFormat::Display DurationFormat::display_from_string(Utf16View const& display)
 {
     if (display == "auto"sv)
         return Display::Auto;
@@ -83,7 +83,19 @@ DurationFormat::Display DurationFormat::display_from_string(StringView display)
     VERIFY_NOT_REACHED();
 }
 
-DurationFormat::ValueStyle DurationFormat::value_style_from_string(StringView value_style)
+Utf16View DurationFormat::display_to_string(Display display)
+{
+    switch (display) {
+    case Display::Auto:
+        return "auto"sv;
+    case Display::Always:
+        return "always"sv;
+    default:
+        VERIFY_NOT_REACHED();
+    }
+}
+
+DurationFormat::ValueStyle DurationFormat::value_style_from_string(Utf16View const& value_style)
 {
     if (value_style == "long"sv)
         return ValueStyle::Long;
@@ -100,7 +112,7 @@ DurationFormat::ValueStyle DurationFormat::value_style_from_string(StringView va
     VERIFY_NOT_REACHED();
 }
 
-StringView DurationFormat::value_style_to_string(ValueStyle value_style)
+Utf16View DurationFormat::value_style_to_string(ValueStyle value_style)
 {
     switch (value_style) {
     case ValueStyle::Long:
@@ -117,18 +129,6 @@ StringView DurationFormat::value_style_to_string(ValueStyle value_style)
         return "fractional"sv;
     }
     VERIFY_NOT_REACHED();
-}
-
-StringView DurationFormat::display_to_string(Display display)
-{
-    switch (display) {
-    case Display::Auto:
-        return "auto"sv;
-    case Display::Always:
-        return "always"sv;
-    default:
-        VERIFY_NOT_REACHED();
-    }
 }
 
 static PropertyKey const& unit_to_property_key(VM& vm, DurationFormat::Unit unit)
@@ -203,7 +203,7 @@ static GC::Ref<ListFormat> construct_list_format(VM& vm, DurationFormat const& d
 
 // 13.5.6.1 ValidateDurationUnitStyle ( unit, style, display, prevStyle ), https://tc39.es/ecma402/#sec-validatedurationunitstyle
 // AD-HOC: Our implementation takes extra parameters for better exception messages.
-static ThrowCompletionOr<void> validate_duration_unit_style(VM& vm, PropertyKey const& unit, DurationFormat::ValueStyle style, DurationFormat::Display display, Optional<DurationFormat::ValueStyle> previous_style, StringView display_field)
+static ThrowCompletionOr<void> validate_duration_unit_style(VM& vm, PropertyKey const& unit, DurationFormat::ValueStyle style, DurationFormat::Display display, Optional<DurationFormat::ValueStyle> previous_style, Utf16View const& display_field)
 {
     // 1. If display is "always" and style is "fractional", throw a RangeError exception.
     if (display == DurationFormat::Display::Always && style == DurationFormat::ValueStyle::Fractional)
@@ -264,7 +264,7 @@ ThrowCompletionOr<DurationFormat::DurationUnitOptions> get_duration_unit_options
             display_default = "auto"sv;
         }
     } else {
-        style = DurationFormat::value_style_from_string(style_value.as_string().utf8_string_view());
+        style = DurationFormat::value_style_from_string(style_value.as_string().string());
     }
 
     // 4. If style is "numeric" and IsFractionalSecondUnitName(unit) is true, then
@@ -277,11 +277,11 @@ ThrowCompletionOr<DurationFormat::DurationUnitOptions> get_duration_unit_options
     }
 
     // 5. Let displayField be the string-concatenation of unit and "Display".
-    auto display_field = MUST(String::formatted("{}Display", unit_property_key));
+    auto display_field = Utf16String::formatted("{}Display", unit_property_key);
 
     // 6. Let display be ? GetOption(options, displayField, STRING, « "auto", "always" », displayDefault).
     auto display_value = TRY(get_option(vm, options, display_field, OptionType::String, { "auto"sv, "always"sv }, display_default));
-    auto display = DurationFormat::display_from_string(display_value.as_string().utf8_string());
+    auto display = DurationFormat::display_from_string(display_value.as_string().string());
 
     // 7. Perform ? ValidateDurationUnitStyle(unit, style, display, prevStyle).
     TRY(validate_duration_unit_style(vm, unit_property_key, style, display, previous_style, display_field));
@@ -407,7 +407,7 @@ Vector<DurationFormatPart> format_numeric_hours(VM& vm, DurationFormat const& du
 
     for (auto& part : hours_parts) {
         // a. Append the Record { [[Type]]: part.[[Type]], [[Value]]: part.[[Value]], [[Unit]]: "hour" } to result.
-        result.unchecked_append({ .type = part.type, .value = move(part.value), .unit = "hour"sv });
+        result.unchecked_append({ .type = part.type, .value = move(part.value), .unit = u"hour"sv });
     }
 
     // 13. Return result.
@@ -472,7 +472,7 @@ Vector<DurationFormatPart> format_numeric_minutes(VM& vm, DurationFormat const& 
 
     for (auto& part : minutes_parts) {
         // a. Append the Record { [[Type]]: part.[[Type]], [[Value]]: part.[[Value]], [[Unit]]: "minute" } to result.
-        result.unchecked_append({ .type = part.type, .value = move(part.value), .unit = "minute"sv });
+        result.unchecked_append({ .type = part.type, .value = move(part.value), .unit = u"minute"sv });
     }
 
     // 14. Return result.
@@ -560,7 +560,7 @@ Vector<DurationFormatPart> format_numeric_seconds(VM& vm, DurationFormat const& 
 
     for (auto& part : seconds_parts) {
         // a. Append the Record { [[Type]]: part.[[Type]], [[Value]]: part.[[Value]], [[Unit]]: "second" } to result.
-        result.unchecked_append({ .type = part.type, .value = move(part.value), .unit = "second"sv });
+        result.unchecked_append({ .type = part.type, .value = move(part.value), .unit = u"second"sv });
     }
 
     // 18. Return result.
@@ -731,7 +731,7 @@ Vector<DurationFormatPart> list_format_parts(VM& vm, DurationFormat const& durat
     auto list_format = construct_list_format(vm, duration_format, list_format_options);
 
     // 7. Let strings be a new empty List.
-    Vector<String> strings;
+    Vector<Utf16String> strings;
     strings.ensure_capacity(partitioned_parts_list.size());
 
     // 8. For each element parts of partitionedPartsList, do
@@ -746,7 +746,7 @@ Vector<DurationFormatPart> list_format_parts(VM& vm, DurationFormat const& durat
         }
 
         // c. Append string to strings.
-        strings.unchecked_append(MUST(string.to_string()));
+        strings.unchecked_append(string.to_utf16_string());
     }
 
     // 9. Let formattedPartsList be CreatePartsFromList(lf, strings).
@@ -922,7 +922,7 @@ Vector<DurationFormatPart> partition_duration_format_pattern(VM& vm, DurationFor
 
                 for (auto& part : parts) {
                     // a. Append the Record { [[Type]]: part.[[Type]], [[Value]]: part.[[Value]], [[Unit]]: numberFormatUnit } to list.
-                    list.unchecked_append({ .type = part.type, .value = move(part.value), .unit = number_format_unit.as_string() });
+                    list.unchecked_append({ .type = part.type, .value = move(part.value), .unit = number_format_unit.as_string().view() });
                 }
 
                 // 11. Append list to result.

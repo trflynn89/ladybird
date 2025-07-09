@@ -565,7 +565,7 @@ bool is_locale_available(StringView locale)
     return available_locales.contains(locale);
 }
 
-Style style_from_string(StringView style)
+Style style_from_string(Utf16View const& style)
 {
     if (style == "narrow"sv)
         return Style::Narrow;
@@ -576,7 +576,7 @@ Style style_from_string(StringView style)
     VERIFY_NOT_REACHED();
 }
 
-StringView style_to_string(Style style)
+Utf16View style_to_string(Style style)
 {
     switch (style) {
     case Style::Narrow:

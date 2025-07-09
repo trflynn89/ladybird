@@ -8,6 +8,7 @@
 
 #include <AK/NonnullOwnPtr.h>
 #include <AK/StringView.h>
+#include <AK/Utf16View.h>
 
 namespace Unicode {
 
@@ -15,8 +16,8 @@ enum class Usage {
     Sort,
     Search,
 };
-Usage usage_from_string(StringView);
-StringView usage_to_string(Usage);
+Usage usage_from_string(Utf16View const&);
+Utf16View usage_to_string(Usage);
 
 enum class Sensitivity {
     Base,
@@ -24,8 +25,8 @@ enum class Sensitivity {
     Case,
     Variant,
 };
-Sensitivity sensitivity_from_string(StringView);
-StringView sensitivity_to_string(Sensitivity);
+Sensitivity sensitivity_from_string(Utf16View const&);
+Utf16View sensitivity_to_string(Sensitivity);
 
 enum class CaseFirst {
     Upper,
@@ -33,7 +34,7 @@ enum class CaseFirst {
     False,
 };
 CaseFirst case_first_from_string(StringView);
-StringView case_first_to_string(CaseFirst);
+Utf16View case_first_to_string(CaseFirst);
 
 class Collator {
 public:
@@ -53,7 +54,7 @@ public:
         Equal,
         After,
     };
-    virtual Order compare(StringView, StringView) const = 0;
+    virtual Order compare(Utf16View const&, Utf16View const&) const = 0;
 
     virtual Sensitivity sensitivity() const = 0;
     virtual bool ignore_punctuation() const = 0;

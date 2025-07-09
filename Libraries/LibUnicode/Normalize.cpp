@@ -13,7 +13,7 @@
 
 namespace Unicode {
 
-NormalizationForm normalization_form_from_string(StringView form)
+NormalizationForm normalization_form_from_string(Utf16View const& form)
 {
     if (form == "NFD"sv)
         return NormalizationForm::NFD;
@@ -26,7 +26,7 @@ NormalizationForm normalization_form_from_string(StringView form)
     VERIFY_NOT_REACHED();
 }
 
-StringView normalization_form_to_string(NormalizationForm form)
+Utf16View normalization_form_to_string(NormalizationForm form)
 {
     switch (form) {
     case NormalizationForm::NFD:

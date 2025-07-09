@@ -11,7 +11,7 @@
 
 namespace Unicode {
 
-Usage usage_from_string(StringView usage)
+Usage usage_from_string(Utf16View const& usage)
 {
     if (usage == "sort"sv)
         return Usage::Sort;
@@ -20,7 +20,7 @@ Usage usage_from_string(StringView usage)
     VERIFY_NOT_REACHED();
 }
 
-StringView usage_to_string(Usage usage)
+Utf16View usage_to_string(Usage usage)
 {
     switch (usage) {
     case Usage::Sort:
@@ -49,7 +49,7 @@ static NonnullOwnPtr<icu::Locale> apply_usage_to_locale(icu::Locale const& local
     return result;
 }
 
-Sensitivity sensitivity_from_string(StringView sensitivity)
+Sensitivity sensitivity_from_string(Utf16View const& sensitivity)
 {
     if (sensitivity == "base"sv)
         return Sensitivity::Base;
@@ -62,7 +62,7 @@ Sensitivity sensitivity_from_string(StringView sensitivity)
     VERIFY_NOT_REACHED();
 }
 
-StringView sensitivity_to_string(Sensitivity sensitivity)
+Utf16View sensitivity_to_string(Sensitivity sensitivity)
 {
     switch (sensitivity) {
     case Sensitivity::Base:
@@ -125,7 +125,7 @@ CaseFirst case_first_from_string(StringView case_first)
     VERIFY_NOT_REACHED();
 }
 
-StringView case_first_to_string(CaseFirst case_first)
+Utf16View case_first_to_string(CaseFirst case_first)
 {
     switch (case_first) {
     case CaseFirst::Upper:
@@ -168,11 +168,14 @@ public:
     {
     }
 
-    virtual Collator::Order compare(StringView lhs, StringView rhs) const override
+    virtual Collator::Order compare(Utf16View const& lhs, Utf16View const& rhs) const override
     {
         UErrorCode status = U_ZERO_ERROR;
 
-        auto result = m_collator->compareUTF8(icu_string_piece(lhs), icu_string_piece(rhs), status);
+        auto lhs_it = icu_string_iterator(lhs);
+        auto rhs_it = icu_string_iterator(rhs);
+
+        auto result = m_collator->compare(lhs_it, rhs_it, status);
         VERIFY(icu_success(status));
 
         switch (result) {

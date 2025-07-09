@@ -130,6 +130,22 @@ bool is_well_formed_currency_code(StringView currency)
     return true;
 }
 
+// 6.3.1 IsWellFormedCurrencyCode ( currency ), https://tc39.es/ecma402/#sec-iswellformedcurrencycode
+bool is_well_formed_currency_code(Utf16View const& currency)
+{
+    // 1. If the length of currency is not 3, return false.
+    if (currency.length_in_code_units() != 3)
+        return false;
+
+    // 2. Let normalized be the ASCII-uppercase of currency.
+    // 3. If normalized contains any code unit outside of 0x0041 through 0x005A (corresponding to Unicode characters LATIN CAPITAL LETTER A through LATIN CAPITAL LETTER Z), return false.
+    if (!all_of(currency, is_ascii_alpha))
+        return false;
+
+    // 4. Return true.
+    return true;
+}
+
 // 6.5.1 AvailableNamedTimeZoneIdentifiers ( ), https://tc39.es/ecma402/#sup-availablenamedtimezoneidentifiers
 Vector<TimeZoneIdentifier> const& available_named_time_zone_identifiers()
 {
@@ -204,10 +220,10 @@ Optional<TimeZoneIdentifier const&> get_available_named_time_zone_identifier(Str
 }
 
 // 6.6.1 IsWellFormedUnitIdentifier ( unitIdentifier ), https://tc39.es/ecma402/#sec-iswellformedunitidentifier
-bool is_well_formed_unit_identifier(StringView unit_identifier)
+bool is_well_formed_unit_identifier(Utf16View const& unit_identifier)
 {
     // 6.6.2 IsSanctionedSingleUnitIdentifier ( unitIdentifier ), https://tc39.es/ecma402/#sec-issanctionedsingleunitidentifier
-    constexpr auto is_sanctioned_single_unit_identifier = [](StringView unit_identifier) {
+    constexpr auto is_sanctioned_single_unit_identifier = [](Utf16View const& unit_identifier) {
         // 1. If unitIdentifier is listed in Table 2 below, return true.
         // 2. Else, return false.
         static constexpr auto sanctioned_units = sanctioned_single_unit_identifiers();
@@ -221,22 +237,22 @@ bool is_well_formed_unit_identifier(StringView unit_identifier)
     }
 
     // 2. Let i be StringIndexOf(unitIdentifier, "-per-", 0).
-    auto indices = unit_identifier.find_all("-per-"sv);
+    auto index = unit_identifier.find_code_unit_offset(u"-per-"sv);
 
     // 3. If i is -1 or StringIndexOf(unitIdentifier, "-per-", i + 1) is not -1, then
-    if (indices.size() != 1) {
+    if (!index.has_value() || unit_identifier.find_code_unit_offset(u"-per-"sv, *index + 1).has_value()) {
         // a. Return false.
         return false;
     }
 
     // 4. Assert: The five-character substring "-per-" occurs exactly once in unitIdentifier, at index i.
-    // NOTE: We skip this because the indices vector being of size 1 already verifies this invariant.
+    // NOTE: We skip this because the second find_code_unit_offset failing above already verifies this invariant.
 
     // 5. Let numerator be the substring of unitIdentifier from 0 to i.
-    auto numerator = unit_identifier.substring_view(0, indices[0]);
+    auto numerator = unit_identifier.substring_view(0, *index);
 
     // 6. Let denominator be the substring of unitIdentifier from i + 5.
-    auto denominator = unit_identifier.substring_view(indices[0] + 5);
+    auto denominator = unit_identifier.substring_view(*index + 5);
 
     // 7. If ! IsSanctionedSingleUnitIdentifier(numerator) and ! IsSanctionedSingleUnitIdentifier(denominator) are both true, then
     if (is_sanctioned_single_unit_identifier(numerator) && is_sanctioned_single_unit_identifier(denominator)) {
@@ -306,7 +322,7 @@ ThrowCompletionOr<Vector<String>> canonicalize_locale_list(VM& vm, Value locales
             // iv. Else,
             else {
                 // 1. Let tag be ? ToString(kValue).
-                tag = TRY(key_value.to_string(vm));
+                tag = TRY(key_value.to_string(vm)).to_utf8_but_should_be_ported_to_utf16();
             }
 
             // v. If ! IsStructurallyValidLanguageTag(tag) is false, throw a RangeError exception.
@@ -450,7 +466,7 @@ ResolvedLocale resolve_locale(ReadonlySpan<String> requested_locales, LocaleOpti
     Optional<MatchedLocale> matcher_result;
 
     // 2. If matcher is "lookup", then
-    if (matcher.is_string() && matcher.as_string().utf8_string_view() == "lookup"sv) {
+    if (matcher.is_string() && matcher.as_string().string() == u"lookup"sv) {
         // a. Let r be LookupMatchingLocaleByPrefix(availableLocales, requestedLocales).
         matcher_result = lookup_matching_locale_by_prefix(requested_locales);
     }
@@ -638,7 +654,7 @@ ThrowCompletionOr<ResolvedOptions> resolve_options(VM& vm, IntlObject& object, V
         // d. If value is not undefined, then
         if (!value.is_undefined()) {
             // i. Set value to ! ToString(value).
-            auto value_string = MUST(value.to_string(vm));
+            auto value_string = MUST(value.to_string(vm)).to_utf8_but_should_be_ported_to_utf16();
 
             // ii. If value cannot be matched by the type Unicode locale nonterminal, throw a RangeError exception.
             if (!Unicode::is_type_identifier(value_string))
@@ -687,7 +703,7 @@ ThrowCompletionOr<GC::Ref<Array>> filter_locales(VM& vm, ReadonlySpan<String> re
         Optional<MatchedLocale> match;
 
         // a. If matcher is "lookup", then
-        if (matcher.as_string().utf8_string_view() == "lookup"sv) {
+        if (matcher.as_string().string() == u"lookup"sv) {
             // i. Let match be LookupMatchingLocaleByPrefix(availableLocales, « locale »).
             match = lookup_matching_locale_by_prefix({ { locale } });
         }
@@ -724,7 +740,7 @@ ThrowCompletionOr<GC::Ref<Object>> coerce_options_to_object(VM& vm, Value option
 // NOTE: 9.2.12 GetOption has been removed and is being pulled in from ECMA-262 in the Temporal proposal.
 
 // 9.2.13 GetBooleanOrStringNumberFormatOption ( options, property, stringValues, fallback ), https://tc39.es/ecma402/#sec-getbooleanorstringnumberformatoption
-ThrowCompletionOr<StringOrBoolean> get_boolean_or_string_number_format_option(VM& vm, Object const& options, PropertyKey const& property, ReadonlySpan<StringView> string_values, StringOrBoolean fallback)
+ThrowCompletionOr<StringOrBoolean> get_boolean_or_string_number_format_option(VM& vm, Object const& options, PropertyKey const& property, ReadonlySpan<Utf16View> string_values, StringOrBoolean fallback)
 {
     // 1. Let value be ? Get(options, property).
     auto value = TRY(options.get(property));
@@ -745,7 +761,7 @@ ThrowCompletionOr<StringOrBoolean> get_boolean_or_string_number_format_option(VM
     auto value_string = TRY(value.to_string(vm));
 
     // 6. If stringValues does not contain value, throw a RangeError exception.
-    auto it = find(string_values.begin(), string_values.end(), value_string.bytes_as_string_view());
+    auto it = find(string_values.begin(), string_values.end(), value_string);
     if (it == string_values.end())
         return vm.throw_completion<RangeError>(ErrorType::OptionIsNotValidValue, value_string, property.as_string());
 

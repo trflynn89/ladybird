@@ -56,7 +56,7 @@ ReadonlySpan<ResolutionOptionDescriptor> NumberFormat::resolution_option_descrip
     return descriptors;
 }
 
-StringView NumberFormatBase::computed_rounding_priority_string() const
+Utf16View NumberFormatBase::computed_rounding_priority_string() const
 {
     switch (m_computed_rounding_priority) {
     case ComputedRoundingPriority::Auto:
@@ -87,7 +87,7 @@ Value NumberFormat::use_grouping_to_value(VM& vm) const
 void NumberFormat::set_use_grouping(StringOrBoolean const& use_grouping)
 {
     use_grouping.visit(
-        [this](StringView grouping) {
+        [this](Utf16View const& grouping) {
             m_use_grouping = Unicode::grouping_from_string(grouping);
         },
         [this](bool grouping) {
@@ -152,7 +152,7 @@ Vector<Unicode::NumberFormat::Partition> partition_number_pattern(NumberFormat c
 }
 
 // 16.5.6 FormatNumeric ( numberFormat, x ), https://tc39.es/ecma402/#sec-formatnumber
-String format_numeric(NumberFormat const& number_format, MathematicalValue const& number)
+Utf16String format_numeric(NumberFormat const& number_format, MathematicalValue const& number)
 {
     // 1. Let parts be ? PartitionNumberPattern(numberFormat, x).
     // 2. Let result be the empty String.
@@ -218,7 +218,7 @@ ThrowCompletionOr<MathematicalValue> to_intl_mathematical_value(VM& vm, Value va
 
     // 3. If Type(primValue) is String,
     // a.     Let str be primValue.
-    auto string = primitive_value.as_string().utf8_string();
+    auto string = primitive_value.as_string().string();
 
     // Step 4 handled separately by the FIXME above.
 
@@ -230,19 +230,19 @@ ThrowCompletionOr<MathematicalValue> to_intl_mathematical_value(VM& vm, Value va
         return MathematicalValue::Symbol::NotANumber;
 
     // 7. If mv is 0 and the first non white space code point in str is -, return negative-zero.
-    if (mathematical_value == 0.0 && string.bytes_as_string_view().trim_whitespace(TrimMode::Left).starts_with('-'))
+    if (mathematical_value == 0.0 && string.utf16_view().trim_whitespace(TrimMode::Left).starts_with(u"-"sv))
         return MathematicalValue::Symbol::NegativeZero;
 
     // 8. If mv is 10^10000 and str contains Infinity, return positive-infinity.
-    if (mathematical_value == pow(10, 10000) && string.contains("Infinity"sv))
+    if (mathematical_value == pow(10, 10000) && string.contains(u"Infinity"sv))
         return MathematicalValue::Symbol::PositiveInfinity;
 
     // 9. If mv is -10^10000 and str contains Infinity, return negative-infinity.
-    if (mathematical_value == pow(-10, 10000) && string.contains("Infinity"sv))
+    if (mathematical_value == pow(-10, 10000) && string.contains(u"Infinity"sv))
         return MathematicalValue::Symbol::NegativeInfinity;
 
     // 10. Return mv.
-    return string;
+    return string.to_utf8_but_should_be_ported_to_utf16();
 }
 
 // 16.5.19 PartitionNumberRangePattern ( numberFormat, x, y ), https://tc39.es/ecma402/#sec-partitionnumberrangepattern
@@ -258,7 +258,7 @@ ThrowCompletionOr<Vector<Unicode::NumberFormat::Partition>> partition_number_ran
 }
 
 // 16.5.22 FormatNumericRange ( numberFormat, x, y ), https://tc39.es/ecma402/#sec-formatnumericrange
-ThrowCompletionOr<String> format_numeric_range(VM& vm, NumberFormat const& number_format, MathematicalValue const& start, MathematicalValue const& end)
+ThrowCompletionOr<Utf16String> format_numeric_range(VM& vm, NumberFormat const& number_format, MathematicalValue const& start, MathematicalValue const& end)
 {
     // 1. Let parts be ? PartitionNumberRangePattern(numberFormat, x, y).
     {

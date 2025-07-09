@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include <AK/StringView.h>
+#include <AK/Utf16View.h>
 
 namespace Unicode {
 
@@ -14,8 +14,8 @@ enum class PluralForm {
     Cardinal,
     Ordinal,
 };
-PluralForm plural_form_from_string(StringView);
-StringView plural_form_to_string(PluralForm);
+PluralForm plural_form_from_string(Utf16View const&);
+Utf16View plural_form_to_string(PluralForm);
 
 enum class PluralCategory {
     // NOTE: These are sorted in preferred order for Intl.PluralRules.prototype.resolvedOptions.
@@ -30,7 +30,7 @@ enum class PluralCategory {
     ExactlyZero,
     ExactlyOne,
 };
-PluralCategory plural_category_from_string(StringView);
-StringView plural_category_to_string(PluralCategory);
+PluralCategory plural_category_from_string(Utf16View const&);
+Utf16View plural_category_to_string(PluralCategory);
 
 }

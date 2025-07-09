@@ -8,10 +8,11 @@
 
 #include <AK/IterationDecision.h>
 #include <AK/Optional.h>
-#include <AK/String.h>
 #include <AK/StringView.h>
 #include <AK/Time.h>
 #include <AK/Types.h>
+#include <AK/Utf16String.h>
+#include <AK/Utf16View.h>
 #include <AK/Vector.h>
 #include <LibUnicode/Forward.h>
 
@@ -23,8 +24,8 @@ enum class DateTimeStyle {
     Medium,
     Short,
 };
-DateTimeStyle date_time_style_from_string(StringView);
-StringView date_time_style_to_string(DateTimeStyle);
+DateTimeStyle date_time_style_from_string(Utf16View const&);
+Utf16View date_time_style_to_string(DateTimeStyle);
 
 enum class Weekday {
     Sunday,
@@ -43,7 +44,7 @@ enum class HourCycle {
     H24,
 };
 HourCycle hour_cycle_from_string(StringView hour_cycle);
-StringView hour_cycle_to_string(HourCycle hour_cycle);
+Utf16View hour_cycle_to_string(HourCycle hour_cycle);
 Optional<HourCycle> default_hour_cycle(StringView locale);
 
 enum class CalendarPatternStyle {
@@ -57,8 +58,8 @@ enum class CalendarPatternStyle {
     ShortGeneric,
     LongGeneric,
 };
-CalendarPatternStyle calendar_pattern_style_from_string(StringView style);
-StringView calendar_pattern_style_to_string(CalendarPatternStyle style);
+CalendarPatternStyle calendar_pattern_style_from_string(Utf16View const& style);
+Utf16View calendar_pattern_style_to_string(CalendarPatternStyle style);
 
 struct CalendarPattern {
     enum class Field {
@@ -151,16 +152,16 @@ public:
 
     struct Partition {
         StringView type;
-        String value;
+        Utf16String value;
         StringView source;
     };
 
     virtual CalendarPattern const& chosen_pattern() const = 0;
 
-    virtual String format(double) const = 0;
+    virtual Utf16String format(double) const = 0;
     virtual Vector<Partition> format_to_parts(double) const = 0;
 
-    virtual String format_range(double, double) const = 0;
+    virtual Utf16String format_range(double, double) const = 0;
     virtual Vector<Partition> format_range_to_parts(double, double) const = 0;
 
 protected:

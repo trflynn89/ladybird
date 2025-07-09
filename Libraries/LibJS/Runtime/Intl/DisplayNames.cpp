@@ -32,27 +32,26 @@ ReadonlySpan<ResolutionOptionDescriptor> DisplayNames::resolution_option_descrip
     return {};
 }
 
-void DisplayNames::set_type(StringView type)
+DisplayNames::Type DisplayNames::type_from_string(Utf16View const& type)
 {
     if (type == "language"sv)
-        m_type = Type::Language;
-    else if (type == "region"sv)
-        m_type = Type::Region;
-    else if (type == "script"sv)
-        m_type = Type::Script;
-    else if (type == "currency"sv)
-        m_type = Type::Currency;
-    else if (type == "calendar"sv)
-        m_type = Type::Calendar;
-    else if (type == "dateTimeField"sv)
-        m_type = Type::DateTimeField;
-    else
-        VERIFY_NOT_REACHED();
+        return Type::Language;
+    if (type == "region"sv)
+        return Type::Region;
+    if (type == "script"sv)
+        return Type::Script;
+    if (type == "currency"sv)
+        return Type::Currency;
+    if (type == "calendar"sv)
+        return Type::Calendar;
+    if (type == "dateTimeField"sv)
+        return Type::DateTimeField;
+    VERIFY_NOT_REACHED();
 }
 
-StringView DisplayNames::type_string() const
+Utf16View DisplayNames::type_to_string(Type type)
 {
-    switch (m_type) {
+    switch (type) {
     case Type::Language:
         return "language"sv;
     case Type::Region:
@@ -70,19 +69,18 @@ StringView DisplayNames::type_string() const
     }
 }
 
-void DisplayNames::set_fallback(StringView fallback)
+DisplayNames::Fallback DisplayNames::fallback_from_string(Utf16View const& fallback)
 {
     if (fallback == "none"sv)
-        m_fallback = Fallback::None;
-    else if (fallback == "code"sv)
-        m_fallback = Fallback::Code;
-    else
-        VERIFY_NOT_REACHED();
+        return Fallback::None;
+    if (fallback == "code"sv)
+        return Fallback::Code;
+    VERIFY_NOT_REACHED();
 }
 
-StringView DisplayNames::fallback_string() const
+Utf16View DisplayNames::fallback_to_string(Fallback fallback)
 {
-    switch (m_fallback) {
+    switch (fallback) {
     case Fallback::None:
         return "none"sv;
     case Fallback::Code:
@@ -93,8 +91,12 @@ StringView DisplayNames::fallback_string() const
 }
 
 // 12.5.1 CanonicalCodeForDisplayNames ( type, code ), https://tc39.es/ecma402/#sec-canonicalcodefordisplaynames
-ThrowCompletionOr<Value> canonical_code_for_display_names(VM& vm, DisplayNames::Type type, StringView code)
+ThrowCompletionOr<String> canonical_code_for_display_names(VM& vm, DisplayNames::Type type, Utf16View const& utf16_code)
 {
+    if (!utf16_code.is_ascii())
+        return vm.throw_completion<RangeError>(ErrorType::OptionIsNotValidValue, utf16_code, DisplayNames::type_to_string(type));
+    auto code = MUST(utf16_code.to_utf8());
+
     // 1. If type is "language", then
     if (type == DisplayNames::Type::Language) {
         // a. If code does not match the unicode_language_id production, throw a RangeError exception.
@@ -106,8 +108,7 @@ ThrowCompletionOr<Value> canonical_code_for_display_names(VM& vm, DisplayNames::
             return vm.throw_completion<RangeError>(ErrorType::IntlInvalidLanguageTag, code);
 
         // c. Return ! CanonicalizeUnicodeLocaleId(code).
-        auto canonicalized_tag = canonicalize_unicode_locale_id(code);
-        return PrimitiveString::create(vm, move(canonicalized_tag));
+        return canonicalize_unicode_locale_id(code);
     }
 
     // 2. If type is "region", then
@@ -117,7 +118,7 @@ ThrowCompletionOr<Value> canonical_code_for_display_names(VM& vm, DisplayNames::
             return vm.throw_completion<RangeError>(ErrorType::OptionIsNotValidValue, code, "region"sv);
 
         // b. Return the ASCII-uppercase of code.
-        return PrimitiveString::create(vm, code.to_ascii_uppercase_string());
+        return code.to_ascii_uppercase();
     }
 
     // 3. If type is "script", then
@@ -127,13 +128,13 @@ ThrowCompletionOr<Value> canonical_code_for_display_names(VM& vm, DisplayNames::
             return vm.throw_completion<RangeError>(ErrorType::OptionIsNotValidValue, code, "script"sv);
 
         // Assert: The length of code is 4, and every code unit of code represents an ASCII letter (0x0041 through 0x005A and 0x0061 through 0x007A, both inclusive).
-        VERIFY(code.length() == 4);
-        VERIFY(all_of(code, is_ascii_alpha));
+        VERIFY(code.byte_count() == 4);
+        VERIFY(all_of(code.bytes_as_string_view(), is_ascii_alpha));
 
         // c. Let first be the ASCII-uppercase of the substring of code from 0 to 1.
         // d. Let rest be the ASCII-lowercase of the substring of code from 1.
         // e. Return the string-concatenation of first and rest.
-        return PrimitiveString::create(vm, code.to_ascii_titlecase_string());
+        return code.bytes_as_string_view().to_ascii_titlecase_string();
     }
 
     // 4. If type is "calendar", then
@@ -147,7 +148,7 @@ ThrowCompletionOr<Value> canonical_code_for_display_names(VM& vm, DisplayNames::
             return vm.throw_completion<RangeError>(ErrorType::OptionIsNotValidValue, code, "calendar"sv);
 
         // c. Return the ASCII-lowercase of code.
-        return PrimitiveString::create(vm, code.to_ascii_lowercase_string());
+        return code.to_ascii_lowercase();
     }
 
     // 5. If type is "dateTimeField", then
@@ -157,7 +158,7 @@ ThrowCompletionOr<Value> canonical_code_for_display_names(VM& vm, DisplayNames::
             return vm.throw_completion<RangeError>(ErrorType::OptionIsNotValidValue, code, "dateTimeField"sv);
 
         // b. Return code.
-        return PrimitiveString::create(vm, code);
+        return String::from_utf8_without_validation(code.bytes());
     }
 
     // 6. Assert: type is "currency".
@@ -168,7 +169,7 @@ ThrowCompletionOr<Value> canonical_code_for_display_names(VM& vm, DisplayNames::
         return vm.throw_completion<RangeError>(ErrorType::OptionIsNotValidValue, code, "currency"sv);
 
     // 8. Return the ASCII-uppercase of code.
-    return PrimitiveString::create(vm, code.to_ascii_uppercase_string());
+    return code.to_ascii_uppercase();
 }
 
 // 12.5.2 IsValidDateTimeFieldCode ( field ), https://tc39.es/ecma402/#sec-isvaliddatetimefieldcode

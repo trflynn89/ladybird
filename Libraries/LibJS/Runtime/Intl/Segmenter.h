@@ -27,8 +27,8 @@ public:
     void set_locale(String locale) { m_locale = move(locale); }
 
     Unicode::SegmenterGranularity segmenter_granularity() const { return m_segmenter_granularity; }
-    void set_segmenter_granularity(StringView segmenter_granularity) { m_segmenter_granularity = Unicode::segmenter_granularity_from_string(segmenter_granularity); }
-    StringView segmenter_granularity_string() const { return Unicode::segmenter_granularity_to_string(m_segmenter_granularity); }
+    void set_segmenter_granularity(Utf16View const& segmenter_granularity) { m_segmenter_granularity = Unicode::segmenter_granularity_from_string(segmenter_granularity); }
+    Utf16View segmenter_granularity_string() const { return Unicode::segmenter_granularity_to_string(m_segmenter_granularity); }
 
     Unicode::Segmenter const& segmenter() const { return *m_segmenter; }
     void set_segmenter(NonnullOwnPtr<Unicode::Segmenter> segmenter) { m_segmenter = move(segmenter); }

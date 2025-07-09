@@ -7,14 +7,14 @@
 #pragma once
 
 #include <AK/Array.h>
-#include <AK/StringView.h>
+#include <AK/Utf16View.h>
 
 namespace JS::Intl {
 
 // Table 2: Single units sanctioned for use in ECMAScript, https://tc39.es/ecma402/#table-sanctioned-single-unit-identifiers
 constexpr auto sanctioned_single_unit_identifiers()
 {
-    return AK::Array {
+    return to_array<AK::Utf16View>({
         "acre"sv,
         "bit"sv,
         "byte"sv,
@@ -60,7 +60,7 @@ constexpr auto sanctioned_single_unit_identifiers()
         "week"sv,
         "yard"sv,
         "year"sv,
-    };
+    });
 }
 
 }

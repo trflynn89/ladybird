@@ -8,8 +8,9 @@
 
 #include <AK/NonnullOwnPtr.h>
 #include <AK/Optional.h>
-#include <AK/String.h>
 #include <AK/StringView.h>
+#include <AK/Utf16String.h>
+#include <AK/Utf16View.h>
 #include <AK/Vector.h>
 #include <LibUnicode/Forward.h>
 
@@ -26,15 +27,15 @@ enum class TimeUnit {
     Quarter,
     Year,
 };
-Optional<TimeUnit> time_unit_from_string(StringView);
-StringView time_unit_to_string(TimeUnit);
+Optional<TimeUnit> time_unit_from_string(Utf16View const&);
+Utf16View time_unit_to_string(TimeUnit);
 
 enum class NumericDisplay {
     Always,
     Auto,
 };
-NumericDisplay numeric_display_from_string(StringView);
-StringView numeric_display_to_string(NumericDisplay);
+NumericDisplay numeric_display_from_string(Utf16View const&);
+Utf16View numeric_display_to_string(NumericDisplay);
 
 class RelativeTimeFormat {
 public:
@@ -43,11 +44,11 @@ public:
 
     struct Partition {
         StringView type;
-        String value;
-        StringView unit;
+        Utf16String value;
+        Utf16View unit;
     };
 
-    virtual String format(double, TimeUnit, NumericDisplay) const = 0;
+    virtual Utf16String format(double, TimeUnit, NumericDisplay) const = 0;
     virtual Vector<Partition> format_to_parts(double, TimeUnit, NumericDisplay) const = 0;
 
 protected:

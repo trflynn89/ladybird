@@ -6,13 +6,14 @@
 
 #pragma once
 
-#include <AK/String.h>
+#include <AK/StringView.h>
+#include <AK/Utf16String.h>
 
 namespace Unicode {
 
 struct DigitalFormat {
-    String hours_minutes_separator { ":"_string };
-    String minutes_seconds_separator { ":"_string };
+    Utf16String hours_minutes_separator { ":"_utf16 };
+    Utf16String minutes_seconds_separator { ":"_utf16 };
     bool uses_two_digit_hours { false };
 };
 

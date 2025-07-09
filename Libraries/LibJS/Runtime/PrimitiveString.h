@@ -10,11 +10,11 @@
 #include <AK/Optional.h>
 #include <AK/String.h>
 #include <AK/StringView.h>
+#include <AK/Utf16String.h>
 #include <LibGC/CellAllocator.h>
 #include <LibJS/Forward.h>
 #include <LibJS/Heap/Cell.h>
 #include <LibJS/Runtime/Completion.h>
-#include <LibJS/Runtime/Utf16String.h>
 #include <LibJS/Runtime/Value.h>
 
 namespace JS {
@@ -24,28 +24,35 @@ class JS_API PrimitiveString : public Cell {
     GC_DECLARE_ALLOCATOR(PrimitiveString);
 
 public:
-    [[nodiscard]] static GC::Ref<PrimitiveString> create(VM&, Utf16String);
-    [[nodiscard]] static GC::Ref<PrimitiveString> create(VM&, String);
-    [[nodiscard]] static GC::Ref<PrimitiveString> create(VM&, FlyString const&);
-    [[nodiscard]] static GC::Ref<PrimitiveString> create(VM&, PrimitiveString&, PrimitiveString&);
     [[nodiscard]] static GC::Ref<PrimitiveString> create(VM&, StringView);
+    [[nodiscard]] static GC::Ref<PrimitiveString> create(VM&, Utf16String);
+    [[nodiscard]] static GC::Ref<PrimitiveString> create(VM&, Utf16View const&);
+    [[nodiscard]] static GC::Ref<PrimitiveString> create(VM&, Utf16FlyString const&);
+    [[nodiscard]] static GC::Ref<PrimitiveString> create(VM&, PrimitiveString&, PrimitiveString&);
 
     virtual ~PrimitiveString();
 
     PrimitiveString(PrimitiveString const&) = delete;
     PrimitiveString& operator=(PrimitiveString const&) = delete;
 
-    bool is_empty() const;
+    [[nodiscard]] bool is_empty() const
+    {
+        // NOTE: We never make an empty rope string.
+        if (m_is_rope)
+            return false;
+        return m_string.is_empty();
+    }
 
-    [[nodiscard]] String utf8_string() const;
-    [[nodiscard]] StringView utf8_string_view() const;
-    bool has_utf8_string() const { return m_utf8_string.has_value(); }
+    Utf16String const& string() const { return m_string; }
+    Utf16View view() const { return m_string; }
 
-    [[nodiscard]] Utf16String utf16_string() const;
-    [[nodiscard]] Utf16View utf16_string_view() const;
-    bool has_utf16_string() const { return m_utf16_string.has_value(); }
+    StringView ascii_view() const
+    {
+        VERIFY(m_string.has_ascii_storage());
+        return m_string.ascii_view();
+    }
 
-    size_t length_in_utf16_code_units() const;
+    [[nodiscard]] size_t length_in_code_units() const { return m_string.length_in_code_units(); }
 
     ThrowCompletionOr<Optional<Value>> get(VM&, PropertyKey const&) const;
 
@@ -60,21 +67,14 @@ protected:
 
     mutable bool m_is_rope { false };
 
-    mutable Optional<String> m_utf8_string;
-    mutable Optional<Utf16String> m_utf16_string;
-
-    enum class EncodingPreference {
-        UTF8,
-        UTF16,
-    };
+    mutable Utf16String m_string;
 
 private:
     friend class RopeString;
 
-    explicit PrimitiveString(String);
     explicit PrimitiveString(Utf16String);
 
-    void resolve_rope_if_needed(EncodingPreference) const;
+    void resolve_rope_if_needed() const;
 };
 
 class RopeString final : public PrimitiveString {
@@ -91,7 +91,7 @@ private:
 
     virtual void visit_edges(Visitor&) override;
 
-    void resolve(EncodingPreference) const;
+    void resolve() const;
 
     mutable GC::Ptr<PrimitiveString> m_lhs;
     mutable GC::Ptr<PrimitiveString> m_rhs;

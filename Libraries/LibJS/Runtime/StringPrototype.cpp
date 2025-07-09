@@ -1363,13 +1363,17 @@ JS_DEFINE_NATIVE_FUNCTION(StringPrototype::to_well_formed)
     // 2. Let S be ? ToString(O).
     auto string = TRY(primitive_string_from(vm));
 
-    // NOTE: Rest of steps in to_well_formed below
+    // NOTE: Rest of steps in to_well_formed_string below.
     return PrimitiveString::create(vm, to_well_formed_string(string->utf16_string()));
 }
 
 // https://tc39.es/ecma262/#sec-string.prototype.towellformed
-String to_well_formed_string(Utf16String const& string)
+Utf16String to_well_formed_string(Utf16View const& string)
 {
+    // OPTIMIZATION: If there are not any unpaired surrogates, the string is already well formed.
+    if (string.validate(Utf16View::AllowInvalidCodeUnits::No))
+        return string;
+
     // 3. Let strLen be the length of S.
     auto length = string.length_in_code_units();
 
@@ -1377,7 +1381,7 @@ String to_well_formed_string(Utf16String const& string)
     size_t k = 0;
 
     // 5. Let result be the empty String.
-    StringBuilder result;
+    StringBuilder result(StringBuilder::Mode::UTF16, string.length_in_code_units() * 2);
 
     // 6. Repeat, while k < strLen,
     while (k < length) {
@@ -1400,7 +1404,7 @@ String to_well_formed_string(Utf16String const& string)
     }
 
     // 7. Return result.
-    return MUST(result.to_string());
+    return result.to_utf16_string_without_validation();
 }
 
 // 22.1.3.32.1 TrimString ( string, where ), https://tc39.es/ecma262/#sec-trimstring

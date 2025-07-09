@@ -10,6 +10,7 @@
 #include <AK/NonnullOwnPtr.h>
 #include <AK/Optional.h>
 #include <AK/StringView.h>
+#include <AK/Utf16View.h>
 
 namespace Unicode {
 
@@ -18,8 +19,8 @@ enum class SegmenterGranularity {
     Sentence,
     Word,
 };
-SegmenterGranularity segmenter_granularity_from_string(StringView);
-StringView segmenter_granularity_to_string(SegmenterGranularity);
+SegmenterGranularity segmenter_granularity_from_string(Utf16View const&);
+Utf16View segmenter_granularity_to_string(SegmenterGranularity);
 
 class Segmenter {
 public:

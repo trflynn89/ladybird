@@ -112,7 +112,7 @@ JS_DEFINE_NATIVE_FUNCTION(Intl::supported_values_of)
     // 1. Let key be ? ToString(key).
     auto key = TRY(vm.argument(0).to_string(vm));
 
-    Optional<Variant<ReadonlySpan<StringView>, ReadonlySpan<String>>> list;
+    Optional<Variant<ReadonlySpan<Utf16View>, ReadonlySpan<String>>> list;
 
     // 2. If key is "calendar", then
     if (key == "calendar"sv) {
@@ -143,7 +143,7 @@ JS_DEFINE_NATIVE_FUNCTION(Intl::supported_values_of)
     // 7. Else if key is "unit", then
     else if (key == "unit"sv) {
         // a. Let list be ! AvailableCanonicalUnits( ).
-        static auto const units = sanctioned_single_unit_identifiers();
+        static constexpr auto const units = sanctioned_single_unit_identifiers();
         list = units.span();
     }
     // 8. Else,

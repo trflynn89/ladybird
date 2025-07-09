@@ -67,13 +67,13 @@ ThrowCompletionOr<GC::Ref<Object>> PluralRulesConstructor::construct(FunctionObj
     auto type = TRY(get_option(vm, *options, vm.names.type, OptionType::String, AK::Array { "cardinal"sv, "ordinal"sv }, "cardinal"sv));
 
     // 8. Set pluralRules.[[Type]] to t.
-    plural_rules->set_type(type.as_string().utf8_string_view());
+    plural_rules->set_type(type.as_string().string());
 
     // 9. Let notation be ? GetOption(options, "notation", string, « "standard", "scientific", "engineering", "compact" », "standard").
     auto notation = TRY(get_option(vm, *options, vm.names.notation, OptionType::String, { "standard"sv, "scientific"sv, "engineering"sv, "compact"sv }, "standard"sv));
 
     // 10. Set pluralRules.[[Notation]] to notation.
-    plural_rules->set_notation(notation.as_string().utf8_string_view());
+    plural_rules->set_notation(notation.as_string().string());
 
     // 9. Perform ? SetNumberFormatDigitOptions(pluralRules, options, 0, 3, "standard").
     TRY(set_number_format_digit_options(vm, plural_rules, *options, 0, 3, Unicode::Notation::Standard));

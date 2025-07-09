@@ -48,13 +48,13 @@ public:
 
     bool has_date_style() const { return m_date_style.has_value(); }
     Optional<Unicode::DateTimeStyle> const& date_style() const { return m_date_style; }
-    StringView date_style_string() const { return Unicode::date_time_style_to_string(*m_date_style); }
-    void set_date_style(StringView style) { m_date_style = Unicode::date_time_style_from_string(style); }
+    Utf16View date_style_string() const { return Unicode::date_time_style_to_string(*m_date_style); }
+    void set_date_style(Utf16View const& style) { m_date_style = Unicode::date_time_style_from_string(style); }
 
     bool has_time_style() const { return m_time_style.has_value(); }
     Optional<Unicode::DateTimeStyle> const& time_style() const { return m_time_style; }
-    StringView time_style_string() const { return Unicode::date_time_style_to_string(*m_time_style); }
-    void set_time_style(StringView style) { m_time_style = Unicode::date_time_style_from_string(style); }
+    Utf16View time_style_string() const { return Unicode::date_time_style_to_string(*m_time_style); }
+    void set_time_style(Utf16View const& style) { m_time_style = Unicode::date_time_style_from_string(style); }
 
     Unicode::CalendarPattern& date_time_format() { return m_date_time_format; }
     void set_date_time_format(Unicode::CalendarPattern date_time_format) { m_date_time_format = move(date_time_format); }
@@ -137,10 +137,10 @@ struct ValueFormat {
 
 JS_API Vector<Unicode::DateTimeFormat::Partition> format_date_time_pattern(ValueFormat const&);
 JS_API ThrowCompletionOr<Vector<Unicode::DateTimeFormat::Partition>> partition_date_time_pattern(VM&, DateTimeFormat&, FormattableDateTime const&);
-JS_API ThrowCompletionOr<String> format_date_time(VM&, DateTimeFormat&, FormattableDateTime const&);
+JS_API ThrowCompletionOr<Utf16String> format_date_time(VM&, DateTimeFormat&, FormattableDateTime const&);
 JS_API ThrowCompletionOr<GC::Ref<Array>> format_date_time_to_parts(VM&, DateTimeFormat&, FormattableDateTime const&);
 JS_API ThrowCompletionOr<Vector<Unicode::DateTimeFormat::Partition>> partition_date_time_range_pattern(VM&, DateTimeFormat&, FormattableDateTime const& start, FormattableDateTime const& end);
-JS_API ThrowCompletionOr<String> format_date_time_range(VM&, DateTimeFormat&, FormattableDateTime const& start, FormattableDateTime const& end);
+JS_API ThrowCompletionOr<Utf16String> format_date_time_range(VM&, DateTimeFormat&, FormattableDateTime const& start, FormattableDateTime const& end);
 JS_API ThrowCompletionOr<GC::Ref<Array>> format_date_time_range_to_parts(VM&, DateTimeFormat&, FormattableDateTime const& start, FormattableDateTime const& end);
 
 JS_API Optional<Unicode::CalendarPattern> get_date_time_format(Unicode::CalendarPattern const& options, OptionRequired, OptionDefaults, OptionInherit);
