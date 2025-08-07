@@ -181,7 +181,7 @@ JS_DEFINE_NATIVE_FUNCTION(AsyncFromSyncIteratorPrototype::return_)
 
     // 12. If Type(result) is not Object, then
     if (!result.is_object()) {
-        auto error = TypeError::create(realm, TRY_OR_THROW_OOM(vm, String::formatted(ErrorType::NotAnObject.message(), "SyncIteratorReturnResult")));
+        auto error = TypeError::create(realm, Utf16String::formatted(ErrorType::NotAnObject.format(), "SyncIteratorReturnResult"));
         // a. Perform ! Call(promiseCapability.[[Reject]], undefined, « a newly created TypeError object »).
         MUST(call(vm, *promise_capability->reject(), js_undefined(), error));
 
@@ -230,7 +230,7 @@ JS_DEFINE_NATIVE_FUNCTION(AsyncFromSyncIteratorPrototype::throw_)
         // f. NOTE: If closing syncIterator does not throw then the result of that operation is ignored, even if it yields a rejected promise.
 
         // g. Perform ! Call(promiseCapability.[[Reject]], undefined, « a newly created TypeError object »).
-        auto error = TypeError::create(realm, MUST(String::formatted(ErrorType::IsUndefined.message(), "throw method")));
+        auto error = TypeError::create(realm, Utf16String::formatted(ErrorType::IsUndefined.format(), "throw method"));
         MUST(call(vm, *promise_capability->reject(), js_undefined(), error));
 
         // h. Return promiseCapability.[[Promise]].
@@ -249,7 +249,7 @@ JS_DEFINE_NATIVE_FUNCTION(AsyncFromSyncIteratorPrototype::throw_)
     // 12. If result is not an Object, then
     if (!result.is_object()) {
         // a. Perform ! Call(promiseCapability.[[Reject]], undefined, « a newly created TypeError object »).
-        auto error = TypeError::create(realm, MUST(String::formatted(ErrorType::NotAnObject.message(), "SyncIteratorThrowResult")));
+        auto error = TypeError::create(realm, Utf16String::formatted(ErrorType::NotAnObject.format(), "SyncIteratorThrowResult"));
         MUST(call(vm, *promise_capability->reject(), js_undefined(), error));
 
         // b. Return promiseCapability.[[Promise]].

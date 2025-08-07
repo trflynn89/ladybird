@@ -1802,7 +1802,7 @@ ThrowCompletionOr<Value> perform_import_call(VM& vm, Value specifier, Value opti
         // a. If options is not an Object, then
         if (!options.is_object()) {
             // i. Perform ! Call(promiseCapability.[[Reject]], undefined, « a newly created TypeError object »).
-            auto error = TypeError::create(realm, MUST(String::formatted(ErrorType::NotAnObject.message(), "options"sv)));
+            auto error = TypeError::create(realm, Utf16String::formatted(ErrorType::NotAnObject.format(), "options"sv));
             MUST(call(vm, *promise_capability->reject(), js_undefined(), error));
 
             // ii. Return promiseCapability.[[Promise]].
@@ -1818,7 +1818,7 @@ ThrowCompletionOr<Value> perform_import_call(VM& vm, Value specifier, Value opti
             // i. If attributesObj is not an Object, then
             if (!attributes_obj.is_object()) {
                 // 1. Perform ! Call(promiseCapability.[[Reject]], undefined, « a newly created TypeError object »).
-                auto error = TypeError::create(realm, MUST(String::formatted(ErrorType::NotAnObject.message(), "with"sv)));
+                auto error = TypeError::create(realm, Utf16String::formatted(ErrorType::NotAnObject.format(), "with"sv));
                 MUST(call(vm, *promise_capability->reject(), js_undefined(), error));
 
                 // 2. Return promiseCapability.[[Promise]].
@@ -1842,7 +1842,7 @@ ThrowCompletionOr<Value> perform_import_call(VM& vm, Value specifier, Value opti
                     // a. If value is not a String, then
                     if (!value.is_string()) {
                         // i. Perform ! Call(promiseCapability.[[Reject]], undefined, « a newly created TypeError object »).
-                        auto error = TypeError::create(realm, MUST(String::formatted(ErrorType::NotAString.message(), "Import attribute value"sv)));
+                        auto error = TypeError::create(realm, Utf16String::formatted(ErrorType::NotAString.format(), "Import attribute value"sv));
                         MUST(call(vm, *promise_capability->reject(), js_undefined(), error));
 
                         // ii. Return promiseCapability.[[Promise]].
@@ -1858,7 +1858,7 @@ ThrowCompletionOr<Value> perform_import_call(VM& vm, Value specifier, Value opti
         // e. If AllImportAttributesSupported(attributes) is false, then
         if (!all_import_attributes_supported(vm, attributes)) {
             // i. Perform ! Call(promiseCapability.[[Reject]], undefined, « a newly created TypeError object »).
-            auto error = TypeError::create(realm, MUST(String::formatted(ErrorType::ImportAttributeUnsupported.message())));
+            auto error = TypeError::create(realm, Utf16String::formatted(ErrorType::ImportAttributeUnsupported.format()));
             MUST(call(vm, *promise_capability->reject(), js_undefined(), error));
 
             // ii. Return promiseCapability.[[Promise]].

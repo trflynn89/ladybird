@@ -199,10 +199,10 @@ static WebIDL::ExceptionOr<void> serialize_viewed_array_buffer(JS::VM& vm, Trans
     // 1. If IsArrayBufferViewOutOfBounds(value) is true, then throw a "DataCloneError" DOMException.
     if constexpr (IsSame<ViewType, JS::DataView>) {
         if (JS::is_view_out_of_bounds(view_record))
-            return WebIDL::DataCloneError::create(*vm.current_realm(), MUST(String::formatted(JS::ErrorType::BufferOutOfBounds.message(), "DataView"sv)));
+            return WebIDL::DataCloneError::create(*vm.current_realm(), MUST(String::formatted(JS::ErrorType::BufferOutOfBounds.format(), "DataView"sv)));
     } else {
         if (JS::is_typed_array_out_of_bounds(view_record))
-            return WebIDL::DataCloneError::create(*vm.current_realm(), MUST(String::formatted(JS::ErrorType::BufferOutOfBounds.message(), "TypedArray"sv)));
+            return WebIDL::DataCloneError::create(*vm.current_realm(), MUST(String::formatted(JS::ErrorType::BufferOutOfBounds.format(), "TypedArray"sv)));
     }
 
     // 2. Let buffer be the value of value's [[ViewedArrayBuffer]] internal slot.
