@@ -98,14 +98,19 @@ inline ErrorOr<void> StringBuilder::will_append(size_t size_in_bytes)
     return {};
 }
 
-ErrorOr<void> StringBuilder::ensure_storage_is_utf16()
+ErrorOr<void> StringBuilder::ensure_storage_is_utf16(size_t extra_size_in_code_units)
 {
-    if (!exchange(m_utf16_builder_is_ascii, false))
+    if (!exchange(m_utf16_builder_is_ascii, false)) {
+        TRY(will_append(extra_size_in_code_units * sizeof(char16_t)));
         return {};
+    }
+
     if (is_empty())
         return {};
 
     auto ascii_length = this->length();
+
+    TRY(will_append(ascii_length + (extra_size_in_code_units * sizeof(char16_t))));
     TRY(m_buffer.try_resize(m_buffer.size() + ascii_length));
 
     Bytes source { data(), ascii_length };
@@ -130,8 +135,7 @@ ErrorOr<void> StringBuilder::try_append(StringView string)
         TRY(will_append(string.length()));
         TRY(m_buffer.try_append(string.characters_without_null_termination(), string.length()));
     } else {
-        TRY(ensure_storage_is_utf16());
-        TRY(will_append(string.length() * 2));
+        TRY(ensure_storage_is_utf16(string.length()));
 
         for (auto code_point : Utf8View { string })
             TRY(try_append_code_point(code_point));
@@ -149,8 +153,7 @@ void StringBuilder::append(StringView string)
         (void)will_append(string.length());
         m_buffer.append(string.characters_without_null_termination(), string.length());
     } else {
-        MUST(ensure_storage_is_utf16());
-        (void)will_append(string.length() * 2);
+        MUST(ensure_storage_is_utf16(string.length()));
 
         for (auto code_point : Utf8View { string })
             append_code_point(code_point);
@@ -167,8 +170,7 @@ ErrorOr<void> StringBuilder::try_append(Utf16View const& utf16_view)
     auto append_as_utf8 = m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && utf16_view.is_ascii());
 
     if (!append_as_utf8) {
-        TRY(ensure_storage_is_utf16());
-        TRY(will_append(utf16_view.length_in_code_units() * 2));
+        TRY(ensure_storage_is_utf16(utf16_view.length_in_code_units()));
 
         for (size_t i = 0; i < utf16_view.length_in_code_units(); ++i)
             TRY(try_append_code_unit(utf16_view.code_unit_at(i)));
@@ -244,8 +246,7 @@ ErrorOr<void> StringBuilder::try_append(char ch)
         TRY(will_append(1));
         TRY(m_buffer.try_append(ch));
     } else {
-        TRY(ensure_storage_is_utf16());
-        TRY(will_append(2));
+        TRY(ensure_storage_is_utf16(1));
 
         auto utf16_char = static_cast<char16_t>(ch);
         TRY(m_buffer.try_append(&utf16_char, sizeof(utf16_char)));
@@ -260,8 +261,7 @@ void StringBuilder::append(char ch)
         (void)will_append(1);
         m_buffer.append(ch);
     } else {
-        MUST(ensure_storage_is_utf16());
-        (void)will_append(2);
+        MUST(ensure_storage_is_utf16(1));
 
         auto utf16_char = static_cast<char16_t>(ch);
         m_buffer.append(&utf16_char, sizeof(utf16_char));
@@ -279,8 +279,7 @@ ErrorOr<void> StringBuilder::try_append_code_unit(char16_t ch)
             TRY(AK::UnicodeUtils::try_code_point_to_utf8(ch, [this](char c) { return m_buffer.try_append(c); }));
         }
     } else {
-        TRY(ensure_storage_is_utf16());
-        TRY(will_append(2));
+        TRY(ensure_storage_is_utf16(1));
         TRY(m_buffer.try_append(&ch, sizeof(ch)));
     }
 
@@ -298,8 +297,7 @@ void StringBuilder::append_code_unit(char16_t ch)
             (void)AK::UnicodeUtils::code_point_to_utf8(ch, [this](char c) { m_buffer.append(c); });
         }
     } else {
-        MUST(ensure_storage_is_utf16());
-        (void)will_append(2);
+        MUST(ensure_storage_is_utf16(1));
         m_buffer.append(&ch, sizeof(ch));
     }
 }
@@ -314,8 +312,7 @@ ErrorOr<void> StringBuilder::try_append_code_point(u32 code_point)
     auto append_as_utf8 = m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && is_ascii(code_point));
 
     if (!append_as_utf8) {
-        TRY(ensure_storage_is_utf16());
-        TRY(will_append(2));
+        TRY(ensure_storage_is_utf16(1));
 
         if (code_point < UnicodeUtils::FIRST_SUPPLEMENTARY_PLANE_CODE_POINT) {
             auto code_unit = static_cast<char16_t>(code_point);
@@ -367,8 +364,7 @@ void StringBuilder::append_code_point(u32 code_point)
     auto append_as_utf8 = m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && is_ascii(code_point));
 
     if (!append_as_utf8) {
-        MUST(ensure_storage_is_utf16());
-        (void)will_append(2);
+        MUST(ensure_storage_is_utf16(1));
 
         if (code_point < UnicodeUtils::FIRST_SUPPLEMENTARY_PLANE_CODE_POINT) {
             auto code_unit = static_cast<char16_t>(code_point);

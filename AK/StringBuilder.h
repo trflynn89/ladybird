@@ -124,7 +124,7 @@ private:
     Optional<Buffer::OutlineBuffer> leak_buffer_for_string_construction();
 
     ErrorOr<void> will_append(size_t);
-    ErrorOr<void> ensure_storage_is_utf16();
+    ErrorOr<void> ensure_storage_is_utf16(size_t extra_size_in_code_units);
 
     u8* data();
     u8 const* data() const;
