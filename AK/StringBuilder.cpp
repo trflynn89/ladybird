@@ -121,25 +121,6 @@ ErrorOr<void> StringBuilder::ensure_storage_is_utf16()
     return {};
 }
 
-size_t StringBuilder::length() const
-{
-    return m_buffer.size() - string_builder_prefix_size(m_mode);
-}
-
-bool StringBuilder::is_empty() const
-{
-    return length() == 0;
-}
-
-void StringBuilder::trim(size_t count)
-{
-    if (m_mode == Mode::UTF16)
-        count *= 2;
-
-    auto decrease_count = min(m_buffer.size(), count);
-    m_buffer.resize(m_buffer.size() - decrease_count);
-}
-
 ErrorOr<void> StringBuilder::try_append(StringView string)
 {
     if (string.is_empty())
@@ -159,6 +140,92 @@ ErrorOr<void> StringBuilder::try_append(StringView string)
     return {};
 }
 
+void StringBuilder::append(StringView string)
+{
+    MUST(try_append(string));
+}
+
+ErrorOr<void> StringBuilder::try_append(Utf16View const& utf16_view)
+{
+    if (utf16_view.is_empty())
+        return {};
+    if (utf16_view.has_ascii_storage())
+        return try_append(utf16_view.bytes());
+
+    auto append_as_utf8 = m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && utf16_view.is_ascii());
+
+    if (!append_as_utf8) {
+        TRY(ensure_storage_is_utf16());
+        TRY(will_append(utf16_view.length_in_code_units() * 2));
+
+        for (size_t i = 0; i < utf16_view.length_in_code_units(); ++i)
+            TRY(try_append_code_unit(utf16_view.code_unit_at(i)));
+
+        return {};
+    }
+
+    auto remaining_view = utf16_view.utf16_span();
+    auto maximum_utf8_length = UnicodeUtils::maximum_utf8_length_from_utf16(remaining_view);
+
+    // Possibly over-allocate a little to ensure we don't have to allocate later.
+    TRY(will_append(maximum_utf8_length));
+
+    for (;;) {
+        auto* uninitialized_data_pointer = static_cast<char*>(m_buffer.end_pointer());
+
+        // Fast path.
+        auto result = simdutf::convert_utf16_to_utf8_with_errors(remaining_view.data(), remaining_view.size(), uninitialized_data_pointer);
+        if (result.error == simdutf::SUCCESS) {
+            auto bytes_just_written = result.count;
+            m_buffer.set_size(m_buffer.size() + bytes_just_written);
+            break;
+        }
+
+        // Slow path. Found unmatched surrogate code unit.
+        auto first_invalid_code_unit = result.count;
+        ASSERT(first_invalid_code_unit < remaining_view.size());
+
+        // Unfortunately, `simdutf` does not tell us how many bytes it just wrote in case of an error, so we have to calculate it ourselves.
+        auto bytes_just_written = simdutf::utf8_length_from_utf16(remaining_view.data(), first_invalid_code_unit);
+
+        do {
+            auto code_unit = remaining_view[first_invalid_code_unit++];
+
+            // Invalid surrogate code units are U+D800 - U+DFFF, so they are always encoded using 3 bytes.
+            ASSERT(code_unit >= 0xD800 && code_unit <= 0xDFFF);
+            ASSERT(m_buffer.size() + bytes_just_written + 3 < m_buffer.capacity());
+            uninitialized_data_pointer[bytes_just_written++] = ((code_unit >> 12) & 0x0f) | 0xe0;
+            uninitialized_data_pointer[bytes_just_written++] = ((code_unit >> 6) & 0x3f) | 0x80;
+            uninitialized_data_pointer[bytes_just_written++] = ((code_unit >> 0) & 0x3f) | 0x80;
+        } while (first_invalid_code_unit < remaining_view.size() && UnicodeUtils::is_utf16_low_surrogate(remaining_view.data()[first_invalid_code_unit]));
+
+        // Code unit might no longer be invalid, retry on the remaining data.
+        m_buffer.set_size(m_buffer.size() + bytes_just_written);
+        remaining_view = remaining_view.slice(first_invalid_code_unit);
+    }
+
+    return {};
+}
+
+void StringBuilder::append(Utf16View const& utf16_view)
+{
+    MUST(try_append(utf16_view));
+}
+
+ErrorOr<void> StringBuilder::try_append(Utf32View const& utf32_view)
+{
+    for (size_t i = 0; i < utf32_view.length(); ++i) {
+        auto code_point = utf32_view.code_points()[i];
+        TRY(try_append_code_point(code_point));
+    }
+    return {};
+}
+
+void StringBuilder::append(Utf32View const& utf32_view)
+{
+    MUST(try_append(utf32_view));
+}
+
 ErrorOr<void> StringBuilder::try_append(char ch)
 {
     if (m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && is_ascii(ch))) {
@@ -170,6 +237,11 @@ ErrorOr<void> StringBuilder::try_append(char ch)
     }
 
     return {};
+}
+
+void StringBuilder::append(char ch)
+{
+    MUST(try_append(ch));
 }
 
 ErrorOr<void> StringBuilder::try_append_code_unit(char16_t ch)
@@ -185,6 +257,90 @@ ErrorOr<void> StringBuilder::try_append_code_unit(char16_t ch)
     return {};
 }
 
+void StringBuilder::append_code_unit(char16_t ch)
+{
+    MUST(try_append_code_unit(ch));
+}
+
+ErrorOr<void> StringBuilder::try_append_code_point(u32 code_point)
+{
+    if (!is_unicode(code_point)) {
+        TRY(try_append_code_point(UnicodeUtils::REPLACEMENT_CODE_POINT));
+        return {};
+    }
+
+    if (m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && is_ascii(code_point))) {
+        TRY(AK::UnicodeUtils::try_code_point_to_utf8(code_point, [this](char c) { return try_append(c); }));
+    } else {
+        TRY(ensure_storage_is_utf16());
+
+        TRY(AK::UnicodeUtils::try_code_point_to_utf16(code_point, [this](char16_t c) { return m_buffer.try_append(&c, sizeof(c)); }));
+    }
+
+    return {};
+}
+
+void StringBuilder::append_code_point(u32 code_point)
+{
+    if (!is_unicode(code_point)) {
+        append_code_point(UnicodeUtils::REPLACEMENT_CODE_POINT);
+        return;
+    }
+
+    auto append_as_utf8 = m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && is_ascii(code_point));
+
+    if (!append_as_utf8) {
+        MUST(ensure_storage_is_utf16());
+        (void)(will_append(2));
+
+        if (code_point < UnicodeUtils::FIRST_SUPPLEMENTARY_PLANE_CODE_POINT) {
+            auto code_unit = static_cast<char16_t>(code_point);
+            m_buffer.append(&code_unit, sizeof(code_unit));
+            return;
+        }
+
+        (void)(will_append(2));
+        code_point -= UnicodeUtils::FIRST_SUPPLEMENTARY_PLANE_CODE_POINT;
+
+        auto code_unit = static_cast<u16>(UnicodeUtils::HIGH_SURROGATE_MIN | (code_point >> 10));
+        m_buffer.append(&code_unit, sizeof(code_unit));
+
+        code_unit = static_cast<u16>(UnicodeUtils::LOW_SURROGATE_MIN | (code_point & 0x3ff));
+        m_buffer.append(&code_unit, sizeof(code_unit));
+
+        return;
+    }
+
+    if (code_point <= 0x7f) {
+        m_buffer.append(static_cast<char>(code_point));
+    } else if (code_point <= 0x07ff) {
+        (void)will_append(2);
+        m_buffer.append(static_cast<char>((((code_point >> 6) & 0x1f) | 0xc0)));
+        m_buffer.append(static_cast<char>((((code_point >> 0) & 0x3f) | 0x80)));
+    } else if (code_point <= 0xffff) {
+        (void)will_append(3);
+        m_buffer.append(static_cast<char>((((code_point >> 12) & 0x0f) | 0xe0)));
+        m_buffer.append(static_cast<char>((((code_point >> 6) & 0x3f) | 0x80)));
+        m_buffer.append(static_cast<char>((((code_point >> 0) & 0x3f) | 0x80)));
+    } else {
+        (void)will_append(4);
+        m_buffer.append(static_cast<char>((((code_point >> 18) & 0x07) | 0xf0)));
+        m_buffer.append(static_cast<char>((((code_point >> 12) & 0x3f) | 0x80)));
+        m_buffer.append(static_cast<char>((((code_point >> 6) & 0x3f) | 0x80)));
+        m_buffer.append(static_cast<char>((((code_point >> 0) & 0x3f) | 0x80)));
+    }
+}
+
+ErrorOr<void> StringBuilder::try_append(char const* characters, size_t length)
+{
+    return try_append(StringView { characters, length });
+}
+
+void StringBuilder::append(char const* characters, size_t length)
+{
+    MUST(try_append(characters, length));
+}
+
 ErrorOr<void> StringBuilder::try_append_repeated(char ch, size_t n)
 {
     auto append_as_utf8 = m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && is_ascii(ch));
@@ -194,6 +350,11 @@ ErrorOr<void> StringBuilder::try_append_repeated(char ch, size_t n)
         TRY(try_append(ch));
 
     return {};
+}
+
+void StringBuilder::append_repeated(char ch, size_t n)
+{
+    MUST(try_append_repeated(ch, n));
 }
 
 ErrorOr<void> StringBuilder::try_append_repeated(StringView string, size_t n)
@@ -212,6 +373,11 @@ ErrorOr<void> StringBuilder::try_append_repeated(StringView string, size_t n)
         TRY(try_append(string));
 
     return {};
+}
+
+void StringBuilder::append_repeated(StringView string, size_t n)
+{
+    MUST(try_append_repeated(string, n));
 }
 
 ErrorOr<void> StringBuilder::try_append_repeated(Utf16View const& string, size_t n)
@@ -236,44 +402,51 @@ ErrorOr<void> StringBuilder::try_append_repeated(Utf16View const& string, size_t
     return {};
 }
 
-void StringBuilder::append(StringView string)
-{
-    MUST(try_append(string));
-}
-
-ErrorOr<void> StringBuilder::try_append(char const* characters, size_t length)
-{
-    return try_append(StringView { characters, length });
-}
-
-void StringBuilder::append(char const* characters, size_t length)
-{
-    MUST(try_append(characters, length));
-}
-
-void StringBuilder::append(char ch)
-{
-    MUST(try_append(ch));
-}
-
-void StringBuilder::append_code_unit(char16_t ch)
-{
-    MUST(try_append_code_unit(ch));
-}
-
-void StringBuilder::append_repeated(char ch, size_t n)
-{
-    MUST(try_append_repeated(ch, n));
-}
-
-void StringBuilder::append_repeated(StringView string, size_t n)
-{
-    MUST(try_append_repeated(string, n));
-}
-
 void StringBuilder::append_repeated(Utf16View const& string, size_t n)
 {
     MUST(try_append_repeated(string, n));
+}
+
+ErrorOr<void> StringBuilder::try_append_escaped_for_json(StringView string)
+{
+    for (auto ch : string) {
+        switch (ch) {
+        case '\b':
+            TRY(try_append("\\b"sv));
+            break;
+        case '\n':
+            TRY(try_append("\\n"sv));
+            break;
+        case '\t':
+            TRY(try_append("\\t"sv));
+            break;
+        case '\"':
+            TRY(try_append("\\\""sv));
+            break;
+        case '\\':
+            TRY(try_append("\\\\"sv));
+            break;
+        default:
+            if (ch >= 0 && ch <= 0x1f)
+                TRY(try_appendff("\\u{:04x}", ch));
+            else
+                TRY(try_append(ch));
+        }
+    }
+    return {};
+}
+
+void StringBuilder::append_escaped_for_json(StringView string)
+{
+    MUST(try_append_escaped_for_json(string));
+}
+
+void StringBuilder::append_as_lowercase(char ch)
+{
+    if (ch >= 'A' && ch <= 'Z')
+        append(ch + 0x20);
+    else
+        append(ch);
 }
 
 ErrorOr<ByteBuffer> StringBuilder::to_byte_buffer() const
@@ -354,196 +527,23 @@ void StringBuilder::clear()
     m_buffer.resize(string_builder_prefix_size(m_mode));
 }
 
-ErrorOr<void> StringBuilder::try_append_code_point(u32 code_point)
+size_t StringBuilder::length() const
 {
-    if (!is_unicode(code_point)) {
-        TRY(try_append_code_point(UnicodeUtils::REPLACEMENT_CODE_POINT));
-        return {};
-    }
-
-    if (m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && is_ascii(code_point))) {
-        TRY(AK::UnicodeUtils::try_code_point_to_utf8(code_point, [this](char c) { return try_append(c); }));
-    } else {
-        TRY(ensure_storage_is_utf16());
-
-        TRY(AK::UnicodeUtils::try_code_point_to_utf16(code_point, [this](char16_t c) { return m_buffer.try_append(&c, sizeof(c)); }));
-    }
-
-    return {};
+    return m_buffer.size() - string_builder_prefix_size(m_mode);
 }
 
-void StringBuilder::append_code_point(u32 code_point)
+bool StringBuilder::is_empty() const
 {
-    if (!is_unicode(code_point)) {
-        append_code_point(UnicodeUtils::REPLACEMENT_CODE_POINT);
-        return;
-    }
-
-    auto append_as_utf8 = m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && is_ascii(code_point));
-
-    if (!append_as_utf8) {
-        MUST(ensure_storage_is_utf16());
-        (void)(will_append(2));
-
-        if (code_point < UnicodeUtils::FIRST_SUPPLEMENTARY_PLANE_CODE_POINT) {
-            auto code_unit = static_cast<char16_t>(code_point);
-            m_buffer.append(&code_unit, sizeof(code_unit));
-            return;
-        }
-
-        (void)(will_append(2));
-        code_point -= UnicodeUtils::FIRST_SUPPLEMENTARY_PLANE_CODE_POINT;
-
-        auto code_unit = static_cast<u16>(UnicodeUtils::HIGH_SURROGATE_MIN | (code_point >> 10));
-        m_buffer.append(&code_unit, sizeof(code_unit));
-
-        code_unit = static_cast<u16>(UnicodeUtils::LOW_SURROGATE_MIN | (code_point & 0x3ff));
-        m_buffer.append(&code_unit, sizeof(code_unit));
-
-        return;
-    }
-
-    if (code_point <= 0x7f) {
-        m_buffer.append(static_cast<char>(code_point));
-    } else if (code_point <= 0x07ff) {
-        (void)will_append(2);
-        m_buffer.append(static_cast<char>((((code_point >> 6) & 0x1f) | 0xc0)));
-        m_buffer.append(static_cast<char>((((code_point >> 0) & 0x3f) | 0x80)));
-    } else if (code_point <= 0xffff) {
-        (void)will_append(3);
-        m_buffer.append(static_cast<char>((((code_point >> 12) & 0x0f) | 0xe0)));
-        m_buffer.append(static_cast<char>((((code_point >> 6) & 0x3f) | 0x80)));
-        m_buffer.append(static_cast<char>((((code_point >> 0) & 0x3f) | 0x80)));
-    } else {
-        (void)will_append(4);
-        m_buffer.append(static_cast<char>((((code_point >> 18) & 0x07) | 0xf0)));
-        m_buffer.append(static_cast<char>((((code_point >> 12) & 0x3f) | 0x80)));
-        m_buffer.append(static_cast<char>((((code_point >> 6) & 0x3f) | 0x80)));
-        m_buffer.append(static_cast<char>((((code_point >> 0) & 0x3f) | 0x80)));
-    }
+    return length() == 0;
 }
 
-ErrorOr<void> StringBuilder::try_append(Utf16View const& utf16_view)
+void StringBuilder::trim(size_t count)
 {
-    if (utf16_view.is_empty())
-        return {};
-    if (utf16_view.has_ascii_storage())
-        return try_append(utf16_view.bytes());
+    if (m_mode == Mode::UTF16)
+        count *= 2;
 
-    auto append_as_utf8 = m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && utf16_view.is_ascii());
-
-    if (!append_as_utf8) {
-        TRY(ensure_storage_is_utf16());
-        TRY(will_append(utf16_view.length_in_code_units() * 2));
-
-        for (size_t i = 0; i < utf16_view.length_in_code_units(); ++i)
-            TRY(try_append_code_unit(utf16_view.code_unit_at(i)));
-
-        return {};
-    }
-
-    auto remaining_view = utf16_view.utf16_span();
-    auto maximum_utf8_length = UnicodeUtils::maximum_utf8_length_from_utf16(remaining_view);
-
-    // Possibly over-allocate a little to ensure we don't have to allocate later.
-    TRY(will_append(maximum_utf8_length));
-
-    for (;;) {
-        auto* uninitialized_data_pointer = static_cast<char*>(m_buffer.end_pointer());
-
-        // Fast path.
-        auto result = simdutf::convert_utf16_to_utf8_with_errors(remaining_view.data(), remaining_view.size(), uninitialized_data_pointer);
-        if (result.error == simdutf::SUCCESS) {
-            auto bytes_just_written = result.count;
-            m_buffer.set_size(m_buffer.size() + bytes_just_written);
-            break;
-        }
-
-        // Slow path. Found unmatched surrogate code unit.
-        auto first_invalid_code_unit = result.count;
-        ASSERT(first_invalid_code_unit < remaining_view.size());
-
-        // Unfortunately, `simdutf` does not tell us how many bytes it just wrote in case of an error, so we have to calculate it ourselves.
-        auto bytes_just_written = simdutf::utf8_length_from_utf16(remaining_view.data(), first_invalid_code_unit);
-
-        do {
-            auto code_unit = remaining_view[first_invalid_code_unit++];
-
-            // Invalid surrogate code units are U+D800 - U+DFFF, so they are always encoded using 3 bytes.
-            ASSERT(code_unit >= 0xD800 && code_unit <= 0xDFFF);
-            ASSERT(m_buffer.size() + bytes_just_written + 3 < m_buffer.capacity());
-            uninitialized_data_pointer[bytes_just_written++] = (((code_unit >> 12) & 0x0f) | 0xe0);
-            uninitialized_data_pointer[bytes_just_written++] = (((code_unit >> 6) & 0x3f) | 0x80);
-            uninitialized_data_pointer[bytes_just_written++] = (((code_unit >> 0) & 0x3f) | 0x80);
-        } while (first_invalid_code_unit < remaining_view.size() && UnicodeUtils::is_utf16_low_surrogate(remaining_view.data()[first_invalid_code_unit]));
-
-        // Code unit might no longer be invalid, retry on the remaining data.
-        m_buffer.set_size(m_buffer.size() + bytes_just_written);
-        remaining_view = remaining_view.slice(first_invalid_code_unit);
-    }
-
-    return {};
-}
-
-void StringBuilder::append(Utf16View const& utf16_view)
-{
-    MUST(try_append(utf16_view));
-}
-
-ErrorOr<void> StringBuilder::try_append(Utf32View const& utf32_view)
-{
-    for (size_t i = 0; i < utf32_view.length(); ++i) {
-        auto code_point = utf32_view.code_points()[i];
-        TRY(try_append_code_point(code_point));
-    }
-    return {};
-}
-
-void StringBuilder::append(Utf32View const& utf32_view)
-{
-    MUST(try_append(utf32_view));
-}
-
-void StringBuilder::append_as_lowercase(char ch)
-{
-    if (ch >= 'A' && ch <= 'Z')
-        append(ch + 0x20);
-    else
-        append(ch);
-}
-
-void StringBuilder::append_escaped_for_json(StringView string)
-{
-    MUST(try_append_escaped_for_json(string));
-}
-
-ErrorOr<void> StringBuilder::try_append_escaped_for_json(StringView string)
-{
-    for (auto ch : string) {
-        switch (ch) {
-        case '\b':
-            TRY(try_append("\\b"sv));
-            break;
-        case '\n':
-            TRY(try_append("\\n"sv));
-            break;
-        case '\t':
-            TRY(try_append("\\t"sv));
-            break;
-        case '\"':
-            TRY(try_append("\\\""sv));
-            break;
-        case '\\':
-            TRY(try_append("\\\\"sv));
-            break;
-        default:
-            if (ch >= 0 && ch <= 0x1f)
-                TRY(try_appendff("\\u{:04x}", ch));
-            else
-                TRY(try_append(ch));
-        }
-    }
-    return {};
+    auto decrease_count = min(m_buffer.size(), count);
+    m_buffer.resize(m_buffer.size() - decrease_count);
 }
 
 auto StringBuilder::leak_buffer_for_string_construction() -> Optional<Buffer::OutlineBuffer>
