@@ -131,8 +131,8 @@ ErrorOr<void> StringBuilder::try_append(StringView string)
         TRY(m_buffer.try_append(string.characters_without_null_termination(), string.length()));
     } else {
         TRY(ensure_storage_is_utf16());
-
         TRY(will_append(string.length() * 2));
+
         for (auto code_point : Utf8View { string })
             TRY(try_append_code_point(code_point));
     }
@@ -142,7 +142,19 @@ ErrorOr<void> StringBuilder::try_append(StringView string)
 
 void StringBuilder::append(StringView string)
 {
-    MUST(try_append(string));
+    if (string.is_empty())
+        return;
+
+    if (m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && string.is_ascii())) {
+        (void)will_append(string.length());
+        m_buffer.append(string.characters_without_null_termination(), string.length());
+    } else {
+        MUST(ensure_storage_is_utf16());
+        (void)will_append(string.length() * 2);
+
+        for (auto code_point : Utf8View { string })
+            append_code_point(code_point);
+    }
 }
 
 ErrorOr<void> StringBuilder::try_append(Utf16View const& utf16_view)
@@ -233,7 +245,10 @@ ErrorOr<void> StringBuilder::try_append(char ch)
         TRY(m_buffer.try_append(ch));
     } else {
         TRY(ensure_storage_is_utf16());
-        TRY(try_append_code_unit(ch));
+        TRY(will_append(2));
+
+        auto utf16_char = static_cast<char16_t>(ch);
+        TRY(m_buffer.try_append(&utf16_char, sizeof(utf16_char)));
     }
 
     return {};
@@ -241,13 +256,28 @@ ErrorOr<void> StringBuilder::try_append(char ch)
 
 void StringBuilder::append(char ch)
 {
-    MUST(try_append(ch));
+    if (m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && is_ascii(ch))) {
+        (void)will_append(1);
+        m_buffer.append(ch);
+    } else {
+        MUST(ensure_storage_is_utf16());
+        (void)will_append(2);
+
+        auto utf16_char = static_cast<char16_t>(ch);
+        m_buffer.append(&utf16_char, sizeof(utf16_char));
+    }
 }
 
 ErrorOr<void> StringBuilder::try_append_code_unit(char16_t ch)
 {
     if (m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && is_ascii(ch))) {
-        TRY(try_append_code_point(ch));
+        if (is_ascii(ch)) {
+            TRY(will_append(1));
+            TRY(m_buffer.try_append(static_cast<char>(ch)));
+        } else {
+            TRY(will_append(UnicodeUtils::bytes_to_store_code_point_in_utf8(ch)));
+            TRY(AK::UnicodeUtils::try_code_point_to_utf8(ch, [this](char c) { return m_buffer.try_append(c); }));
+        }
     } else {
         TRY(ensure_storage_is_utf16());
         TRY(will_append(2));
@@ -259,22 +289,69 @@ ErrorOr<void> StringBuilder::try_append_code_unit(char16_t ch)
 
 void StringBuilder::append_code_unit(char16_t ch)
 {
-    MUST(try_append_code_unit(ch));
+    if (m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && is_ascii(ch))) {
+        if (is_ascii(ch)) {
+            (void)will_append(1);
+            m_buffer.append(static_cast<char>(ch));
+        } else {
+            (void)will_append(UnicodeUtils::bytes_to_store_code_point_in_utf8(ch));
+            (void)AK::UnicodeUtils::code_point_to_utf8(ch, [this](char c) { m_buffer.append(c); });
+        }
+    } else {
+        MUST(ensure_storage_is_utf16());
+        (void)will_append(2);
+        m_buffer.append(&ch, sizeof(ch));
+    }
 }
 
 ErrorOr<void> StringBuilder::try_append_code_point(u32 code_point)
 {
-    if (!is_unicode(code_point)) {
+    if (!is_unicode(code_point)) [[unlikely]] {
         TRY(try_append_code_point(UnicodeUtils::REPLACEMENT_CODE_POINT));
         return {};
     }
 
-    if (m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && is_ascii(code_point))) {
-        TRY(AK::UnicodeUtils::try_code_point_to_utf8(code_point, [this](char c) { return try_append(c); }));
-    } else {
-        TRY(ensure_storage_is_utf16());
+    auto append_as_utf8 = m_mode == Mode::UTF8 || (m_utf16_builder_is_ascii && is_ascii(code_point));
 
-        TRY(AK::UnicodeUtils::try_code_point_to_utf16(code_point, [this](char16_t c) { return m_buffer.try_append(&c, sizeof(c)); }));
+    if (!append_as_utf8) {
+        TRY(ensure_storage_is_utf16());
+        TRY(will_append(2));
+
+        if (code_point < UnicodeUtils::FIRST_SUPPLEMENTARY_PLANE_CODE_POINT) {
+            auto code_unit = static_cast<char16_t>(code_point);
+            TRY(m_buffer.try_append(&code_unit, sizeof(code_unit)));
+            return {};
+        }
+
+        TRY(will_append(2));
+        code_point -= UnicodeUtils::FIRST_SUPPLEMENTARY_PLANE_CODE_POINT;
+
+        auto code_unit = static_cast<u16>(UnicodeUtils::HIGH_SURROGATE_MIN | (code_point >> 10));
+        TRY(m_buffer.try_append(&code_unit, sizeof(code_unit)));
+
+        code_unit = static_cast<u16>(UnicodeUtils::LOW_SURROGATE_MIN | (code_point & 0x3ff));
+        TRY(m_buffer.try_append(&code_unit, sizeof(code_unit)));
+
+        return {};
+    }
+
+    if (code_point <= 0x7f) {
+        TRY(m_buffer.try_append(static_cast<char>(code_point)));
+    } else if (code_point <= 0x07ff) {
+        TRY(will_append(2));
+        TRY(m_buffer.try_append(static_cast<char>((((code_point >> 6) & 0x1f) | 0xc0))));
+        TRY(m_buffer.try_append(static_cast<char>((((code_point >> 0) & 0x3f) | 0x80))));
+    } else if (code_point <= 0xffff) {
+        TRY(will_append(3));
+        TRY(m_buffer.try_append(static_cast<char>((((code_point >> 12) & 0x0f) | 0xe0))));
+        TRY(m_buffer.try_append(static_cast<char>((((code_point >> 6) & 0x3f) | 0x80))));
+        TRY(m_buffer.try_append(static_cast<char>((((code_point >> 0) & 0x3f) | 0x80))));
+    } else {
+        TRY(will_append(4));
+        TRY(m_buffer.try_append(static_cast<char>((((code_point >> 18) & 0x07) | 0xf0))));
+        TRY(m_buffer.try_append(static_cast<char>((((code_point >> 12) & 0x3f) | 0x80))));
+        TRY(m_buffer.try_append(static_cast<char>((((code_point >> 6) & 0x3f) | 0x80))));
+        TRY(m_buffer.try_append(static_cast<char>((((code_point >> 0) & 0x3f) | 0x80))));
     }
 
     return {};
@@ -282,7 +359,7 @@ ErrorOr<void> StringBuilder::try_append_code_point(u32 code_point)
 
 void StringBuilder::append_code_point(u32 code_point)
 {
-    if (!is_unicode(code_point)) {
+    if (!is_unicode(code_point)) [[unlikely]] {
         append_code_point(UnicodeUtils::REPLACEMENT_CODE_POINT);
         return;
     }
@@ -291,7 +368,7 @@ void StringBuilder::append_code_point(u32 code_point)
 
     if (!append_as_utf8) {
         MUST(ensure_storage_is_utf16());
-        (void)(will_append(2));
+        (void)will_append(2);
 
         if (code_point < UnicodeUtils::FIRST_SUPPLEMENTARY_PLANE_CODE_POINT) {
             auto code_unit = static_cast<char16_t>(code_point);
@@ -299,7 +376,7 @@ void StringBuilder::append_code_point(u32 code_point)
             return;
         }
 
-        (void)(will_append(2));
+        (void)will_append(2);
         code_point -= UnicodeUtils::FIRST_SUPPLEMENTARY_PLANE_CODE_POINT;
 
         auto code_unit = static_cast<u16>(UnicodeUtils::HIGH_SURROGATE_MIN | (code_point >> 10));
