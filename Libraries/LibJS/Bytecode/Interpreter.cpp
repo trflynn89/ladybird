@@ -2268,18 +2268,18 @@ void NewRegExp::execute_impl(Bytecode::Interpreter& interpreter) const
             Utf16String::from_utf8(interpreter.current_executable().get_string(m_flags_index))));
 }
 
-#define JS_DEFINE_NEW_BUILTIN_ERROR_OP(ErrorName)                                                                      \
-    void New##ErrorName::execute_impl(Bytecode::Interpreter& interpreter) const                                        \
-    {                                                                                                                  \
-        auto& vm = interpreter.vm();                                                                                   \
-        auto& realm = *vm.current_realm();                                                                             \
-        interpreter.set(dst(), ErrorName::create(realm, interpreter.current_executable().get_string(m_error_string))); \
-    }                                                                                                                  \
-    ByteString New##ErrorName::to_byte_string_impl(Bytecode::Executable const& executable) const                       \
-    {                                                                                                                  \
-        return ByteString::formatted("New" #ErrorName " {}, {}",                                                       \
-            format_operand("dst"sv, m_dst, executable),                                                                \
-            executable.string_table->get(m_error_string));                                                             \
+#define JS_DEFINE_NEW_BUILTIN_ERROR_OP(ErrorName)                                                \
+    void New##ErrorName::execute_impl(Bytecode::Interpreter& interpreter) const                  \
+    {                                                                                            \
+        auto& vm = interpreter.vm();                                                             \
+        auto& realm = *vm.current_realm();                                                       \
+        interpreter.set(dst(), ErrorName::create(realm, builtin_error_message(m_error)));        \
+    }                                                                                            \
+    ByteString New##ErrorName::to_byte_string_impl(Bytecode::Executable const& executable) const \
+    {                                                                                            \
+        return ByteString::formatted("New" #ErrorName " {}, {}",                                 \
+            format_operand("dst"sv, m_dst, executable),                                          \
+            builtin_error_message(m_error));                                                     \
     }
 
 JS_ENUMERATE_NEW_BUILTIN_ERROR_OPS(JS_DEFINE_NEW_BUILTIN_ERROR_OP)

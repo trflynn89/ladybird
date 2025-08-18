@@ -8,6 +8,7 @@
 
 #include <AK/Format.h>
 #include <LibJS/Forward.h>
+#include <LibJS/Runtime/ErrorTypes.h>
 
 namespace JS::Bytecode {
 
@@ -67,6 +68,24 @@ inline size_t builtin_argument_count(Builtin value)
 }
 
 Optional<Builtin> get_builtin(MemberExpression const& expression);
+
+enum class BuiltinError : u16 {
+#define __ENUMERATE_JS_ERROR(name, message) \
+    name,
+    JS_ENUMERATE_ERROR_TYPES(__ENUMERATE_JS_ERROR)
+#undef __ENUMERATE_JS_ERROR
+};
+
+inline String builtin_error_message(BuiltinError error)
+{
+    switch (error) {
+#define __ENUMERATE_JS_ERROR(name, _) \
+    case BuiltinError::name:          \
+        return ErrorType::name.message();
+        JS_ENUMERATE_ERROR_TYPES(__ENUMERATE_JS_ERROR)
+#undef __ENUMERATE_JS_ERROR
+    }
+}
 
 }
 

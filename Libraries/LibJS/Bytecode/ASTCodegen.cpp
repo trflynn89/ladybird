@@ -2168,7 +2168,7 @@ Bytecode::CodeGenerationErrorOr<Optional<ScopedOperand>> YieldExpression::genera
         // 5. NOTE: The next step throws a TypeError to indicate that there was a yield* protocol violation: iterator does not have a throw method.
         // 6. Throw a TypeError exception.
         auto exception = generator.allocate_register();
-        generator.emit<Bytecode::Op::NewTypeError>(exception, generator.intern_string(ErrorType::YieldFromIteratorMissingThrowMethod.message()));
+        generator.emit<Bytecode::Op::NewTypeError>(exception, BuiltinError::YieldFromIteratorMissingThrowMethod);
         generator.perform_needed_unwinds<Bytecode::Op::Throw>();
         generator.emit<Bytecode::Op::Throw>(exception);
 

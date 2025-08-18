@@ -261,10 +261,10 @@ private:
 #define JS_DECLARE_NEW_BUILTIN_ERROR_OP(ErrorName)                         \
     class New##ErrorName final : public Instruction {                      \
     public:                                                                \
-        New##ErrorName(Operand dst, StringTableIndex error_string)         \
+        New##ErrorName(Operand dst, BuiltinError error)                    \
             : Instruction(Type::New##ErrorName)                            \
             , m_dst(dst)                                                   \
-            , m_error_string(error_string)                                 \
+            , m_error(error)                                               \
         {                                                                  \
         }                                                                  \
                                                                            \
@@ -276,11 +276,11 @@ private:
         }                                                                  \
                                                                            \
         Operand dst() const { return m_dst; }                              \
-        StringTableIndex error_string() const { return m_error_string; }   \
+        BuiltinError error() const { return m_error; }                     \
                                                                            \
     private:                                                               \
         Operand m_dst;                                                     \
-        StringTableIndex m_error_string;                                   \
+        BuiltinError m_error;                                              \
     };
 
 JS_ENUMERATE_NEW_BUILTIN_ERROR_OPS(JS_DECLARE_NEW_BUILTIN_ERROR_OP)
