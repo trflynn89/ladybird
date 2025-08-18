@@ -216,7 +216,7 @@ VM::VM(ErrorMessages error_messages)
 
 VM::~VM() = default;
 
-Utf16String const& VM::error_message(ErrorMessage type) const
+String const& VM::error_message(ErrorMessage type) const
 {
     VERIFY(type < ErrorMessage::__Count);
 

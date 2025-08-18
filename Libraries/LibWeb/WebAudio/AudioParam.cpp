@@ -58,7 +58,7 @@ Bindings::AutomationRate AudioParam::automation_rate() const
 WebIDL::ExceptionOr<void> AudioParam::set_automation_rate(Bindings::AutomationRate automation_rate)
 {
     if (automation_rate != m_automation_rate && m_fixed_automation_rate == FixedAutomationRate::Yes)
-        return WebIDL::InvalidStateError::create(realm(), "Automation rate cannot be changed"_utf16);
+        return WebIDL::InvalidStateError::create(realm(), "Automation rate cannot be changed"_string);
 
     m_automation_rate = automation_rate;
     return {};

@@ -98,7 +98,7 @@ public:
 
     Optional<IdentifierTableIndex> length_identifier;
 
-    Utf16String const& get_string(StringTableIndex index) const { return string_table->get(index); }
+    String const& get_string(StringTableIndex index) const { return string_table->get(index); }
     Utf16FlyString const& get_identifier(IdentifierTableIndex index) const { return identifier_table->get(index); }
 
     Optional<Utf16FlyString const&> get_identifier(Optional<IdentifierTableIndex> const& index) const

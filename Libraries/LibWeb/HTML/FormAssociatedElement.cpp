@@ -479,7 +479,7 @@ WebIDL::ExceptionOr<void> FormAssociatedTextControlElement::set_selection_start_
     if (is<HTMLInputElement>(html_element)) {
         auto& input_element = static_cast<HTMLInputElement&>(html_element);
         if (!input_element.selection_or_range_applies())
-            return WebIDL::InvalidStateError::create(html_element.realm(), "setSelectionStart does not apply to this input type"_utf16);
+            return WebIDL::InvalidStateError::create(html_element.realm(), "setSelectionStart does not apply to this input type"_string);
     }
 
     // 2. Let end be the value of this element's selectionEnd attribute.
@@ -532,7 +532,7 @@ WebIDL::ExceptionOr<void> FormAssociatedTextControlElement::set_selection_end_bi
     if (is<HTMLInputElement>(html_element)) {
         auto& input_element = static_cast<HTMLInputElement&>(html_element);
         if (!input_element.selection_or_range_applies())
-            return WebIDL::InvalidStateError::create(html_element.realm(), "setSelectionEnd does not apply to this input type"_utf16);
+            return WebIDL::InvalidStateError::create(html_element.realm(), "setSelectionEnd does not apply to this input type"_string);
     }
 
     // 2. Set the selection range with the value of this element's selectionStart attribute, the
@@ -585,7 +585,7 @@ WebIDL::ExceptionOr<void> FormAssociatedTextControlElement::set_selection_direct
     if (is<HTMLInputElement>(html_element)) {
         auto const& input_element = static_cast<HTMLInputElement const&>(html_element);
         if (!input_element.selection_direction_applies())
-            return WebIDL::InvalidStateError::create(input_element.realm(), "selectionDirection does not apply to element"_utf16);
+            return WebIDL::InvalidStateError::create(input_element.realm(), "selectionDirection does not apply to element"_string);
     }
 
     set_the_selection_range(m_selection_start, m_selection_end, string_to_selection_direction(direction));
@@ -606,7 +606,7 @@ WebIDL::ExceptionOr<void> FormAssociatedTextControlElement::set_range_text_bindi
     // 1. If this element is an input element, and setRangeText() does not apply to this element,
     //    throw an "InvalidStateError" DOMException.
     if (is<HTMLInputElement>(html_element) && !static_cast<HTMLInputElement&>(html_element).selection_or_range_applies())
-        return WebIDL::InvalidStateError::create(html_element.realm(), "setRangeText does not apply to this input type"_utf16);
+        return WebIDL::InvalidStateError::create(html_element.realm(), "setRangeText does not apply to this input type"_string);
 
     return set_range_text(replacement, start, end, selection_mode);
 }
@@ -625,7 +625,7 @@ WebIDL::ExceptionOr<void> FormAssociatedTextControlElement::set_range_text(Utf16
 
     // 4. If start is greater than end, then throw an "IndexSizeError" DOMException.
     if (start > end)
-        return WebIDL::IndexSizeError::create(html_element.realm(), "The start argument must be less than or equal to the end argument"_utf16);
+        return WebIDL::IndexSizeError::create(html_element.realm(), "The start argument must be less than or equal to the end argument"_string);
 
     // 5. If start is greater than the length of the relevant value of the text control, then set it to the length of the relevant value of the text control.
     auto the_relevant_value = relevant_value();
@@ -732,7 +732,7 @@ WebIDL::ExceptionOr<void> FormAssociatedTextControlElement::set_selection_range(
     //    element, throw an "InvalidStateError" DOMException.
     auto& html_element = form_associated_element_to_html_element();
     if (is<HTMLInputElement>(html_element) && !static_cast<HTMLInputElement&>(html_element).selection_or_range_applies())
-        return WebIDL::InvalidStateError::create(html_element.realm(), "setSelectionRange does not apply to this input type"_utf16);
+        return WebIDL::InvalidStateError::create(html_element.realm(), "setSelectionRange does not apply to this input type"_string);
 
     // 2. Set the selection range with start, end, and direction.
     set_the_selection_range(start, end, string_to_selection_direction(direction));

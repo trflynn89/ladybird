@@ -113,7 +113,7 @@ WebIDL::ExceptionOr<void> WorkerGlobalScope::import_scripts(Vector<String> const
 
         // 2. If urlRecord is failure, then throw a "SyntaxError" DOMException.
         if (!url_record.has_value())
-            return WebIDL::SyntaxError::create(realm(), "Invalid URL"_utf16);
+            return WebIDL::SyntaxError::create(realm(), "Invalid URL"_string);
 
         // 3. Append urlRecord to urlRecords.
         url_records.unchecked_append(url_record.release_value());

@@ -111,7 +111,7 @@ GC::Ref<WebIDL::Promise> CookieStore::get(String name)
 
     // 3. If origin is an opaque origin, then return a promise rejected with a "SecurityError" DOMException.
     if (origin.is_opaque())
-        return WebIDL::create_rejected_promise(realm, WebIDL::SecurityError::create(realm, "Document origin is opaque"_utf16));
+        return WebIDL::create_rejected_promise(realm, WebIDL::SecurityError::create(realm, "Document origin is opaque"_string));
 
     // 4. Let url be settings’s creation URL.
     auto url = settings.creation_url;
@@ -157,7 +157,7 @@ GC::Ref<WebIDL::Promise> CookieStore::get(CookieStoreGetOptions const& options)
 
     // 3. If origin is an opaque origin, then return a promise rejected with a "SecurityError" DOMException.
     if (origin.is_opaque())
-        return WebIDL::create_rejected_promise(realm, WebIDL::SecurityError::create(realm, "Document origin is opaque"_utf16));
+        return WebIDL::create_rejected_promise(realm, WebIDL::SecurityError::create(realm, "Document origin is opaque"_string));
 
     // 4. Let url be settings’s creation URL.
     auto url = settings.creation_url;
@@ -236,7 +236,7 @@ GC::Ref<WebIDL::Promise> CookieStore::get_all(String name)
 
     // 3. If origin is an opaque origin, then return a promise rejected with a "SecurityError" DOMException.
     if (origin.is_opaque())
-        return WebIDL::create_rejected_promise(realm, WebIDL::SecurityError::create(realm, "Document origin is opaque"_utf16));
+        return WebIDL::create_rejected_promise(realm, WebIDL::SecurityError::create(realm, "Document origin is opaque"_string));
 
     // 4. Let url be settings’s creation URL.
     auto url = settings.creation_url;
@@ -277,7 +277,7 @@ GC::Ref<WebIDL::Promise> CookieStore::get_all(CookieStoreGetOptions const& optio
 
     // 3. If origin is an opaque origin, then return a promise rejected with a "SecurityError" DOMException.
     if (origin.is_opaque())
-        return WebIDL::create_rejected_promise(realm, WebIDL::SecurityError::create(realm, "Document origin is opaque"_utf16));
+        return WebIDL::create_rejected_promise(realm, WebIDL::SecurityError::create(realm, "Document origin is opaque"_string));
 
     // 4. Let url be settings’s creation URL.
     auto url = settings.creation_url;
@@ -525,7 +525,7 @@ GC::Ref<WebIDL::Promise> CookieStore::set(String name, String value)
 
     // 3. If origin is an opaque origin, then return a promise rejected with a "SecurityError" DOMException.
     if (origin.is_opaque())
-        return WebIDL::create_rejected_promise(realm, WebIDL::SecurityError::create(realm, "Document origin is opaque"_utf16));
+        return WebIDL::create_rejected_promise(realm, WebIDL::SecurityError::create(realm, "Document origin is opaque"_string));
 
     // 4. Let url be settings’s creation URL.
     auto url = settings.creation_url;
@@ -573,7 +573,7 @@ GC::Ref<WebIDL::Promise> CookieStore::set(CookieInit const& options)
 
     // 3. If origin is an opaque origin, then return a promise rejected with a "SecurityError" DOMException.
     if (origin.is_opaque())
-        return WebIDL::create_rejected_promise(realm, WebIDL::SecurityError::create(realm, "Document origin is opaque"_utf16));
+        return WebIDL::create_rejected_promise(realm, WebIDL::SecurityError::create(realm, "Document origin is opaque"_string));
 
     // 4. Let url be settings’s creation URL.
     auto url = settings.creation_url;
@@ -638,7 +638,7 @@ GC::Ref<WebIDL::Promise> CookieStore::delete_(String name)
 
     // 3. If origin is an opaque origin, then return a promise rejected with a "SecurityError" DOMException.
     if (origin.is_opaque())
-        return WebIDL::create_rejected_promise(realm, WebIDL::SecurityError::create(realm, "Document origin is opaque"_utf16));
+        return WebIDL::create_rejected_promise(realm, WebIDL::SecurityError::create(realm, "Document origin is opaque"_string));
 
     // 4. Let url be settings’s creation URL.
     auto url = settings.creation_url;
@@ -681,7 +681,7 @@ GC::Ref<WebIDL::Promise> CookieStore::delete_(CookieStoreDeleteOptions const& op
 
     // 3. If origin is an opaque origin, then return a promise rejected with a "SecurityError" DOMException.
     if (origin.is_opaque())
-        return WebIDL::create_rejected_promise(realm, WebIDL::SecurityError::create(realm, "Document origin is opaque"_utf16));
+        return WebIDL::create_rejected_promise(realm, WebIDL::SecurityError::create(realm, "Document origin is opaque"_string));
 
     // 4. Let url be settings’s creation URL.
     auto url = settings.creation_url;

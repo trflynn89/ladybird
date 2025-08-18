@@ -35,18 +35,18 @@ WebIDL::ExceptionOr<GC::Ref<ScriptProcessorNode>> ScriptProcessorNode::create(JS
     // IndexSizeError MUST be thrown.
     if (number_of_input_channels == 0 && number_of_output_channels == 0) {
         return WebIDL::IndexSizeError::create(realm,
-            "Number of input and output channels cannot both be zero in a ScriptProcessorNode"_utf16);
+            "Number of input and output channels cannot both be zero in a ScriptProcessorNode"_string);
     }
 
     // This parameter determines the number of channels for this node’s input. The default value is 2. Values of up to
     // 32 must be supported. A NotSupportedError must be thrown if the number of channels is not supported.
     if (number_of_input_channels > BaseAudioContext::MAX_NUMBER_OF_CHANNELS)
-        return WebIDL::NotSupportedError::create(realm, "Invalid number of input channels"_utf16);
+        return WebIDL::NotSupportedError::create(realm, "Invalid number of input channels"_string);
 
     // This parameter determines the number of channels for this node’s output. The default value is 2. Values of up to
     // 32 must be supported. A NotSupportedError must be thrown if the number of channels is not supported.
     if (number_of_output_channels > BaseAudioContext::MAX_NUMBER_OF_CHANNELS)
-        return WebIDL::NotSupportedError::create(realm, "Invalid number of output channels"_utf16);
+        return WebIDL::NotSupportedError::create(realm, "Invalid number of output channels"_string);
 
     auto script_processor_node = realm.create<ScriptProcessorNode>(realm, context,
         number_of_input_channels, number_of_output_channels);
@@ -79,7 +79,8 @@ WebIDL::ExceptionOr<void> ScriptProcessorNode::set_channel_count(WebIDL::Unsigne
 {
     // ScriptProcessorNode: The channel count cannot be changed, and an NotSupportedError exception MUST be thrown for
     // any attempt to change the value.
-    return WebIDL::InvalidStateError::create(realm(), "Cannot modify channel count in a ScriptProcessorNode"_utf16);
+    return WebIDL::InvalidStateError::create(realm(),
+        "Cannot modify channel count in a ScriptProcessorNode"_string);
 }
 
 WebIDL::ExceptionOr<void> ScriptProcessorNode::set_channel_count_mode(Bindings::ChannelCountMode channel_count_mode)
@@ -88,7 +89,7 @@ WebIDL::ExceptionOr<void> ScriptProcessorNode::set_channel_count_mode(Bindings::
     // ScriptProcessorNode: The channel count mode cannot be changed from "explicit" and an NotSupportedError exception
     // MUST be thrown for any attempt to change the value.
     if (channel_count_mode != Bindings::ChannelCountMode::Explicit)
-        return WebIDL::InvalidStateError::create(realm(), "Channel count mode must be 'explicit'"_utf16);
+        return WebIDL::InvalidStateError::create(realm(), "Channel count mode must be 'explicit'"_string);
 
     return AudioNode::set_channel_count_mode(channel_count_mode);
 }
@@ -115,7 +116,7 @@ WebIDL::ExceptionOr<void> ScriptProcessorNode::set_buffer_size(WebIDL::Long buff
     // If the value of this parameter is not one of the allowed power-of-2 values listed above, an IndexSizeError MUST
     // be thrown.
     if (!first_is_one_of(buffer_size, 256, 512, 1024, 2048, 4096, 8192, 16384))
-        return WebIDL::IndexSizeError::create(realm(), "Unsupported buffer size for a ScriptProcessorNode"_utf16);
+        return WebIDL::IndexSizeError::create(realm(), "Unsupported buffer size for a ScriptProcessorNode"_string);
 
     m_buffer_size = buffer_size;
     return {};

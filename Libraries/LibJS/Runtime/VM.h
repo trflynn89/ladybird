@@ -102,7 +102,7 @@ public:
         // Keep this last:
         __Count,
     };
-    Utf16String const& error_message(ErrorMessage) const;
+    String const& error_message(ErrorMessage) const;
 
     bool did_reach_stack_space_limit() const
     {
@@ -216,15 +216,15 @@ public:
     }
 
     template<typename T>
-    Completion throw_completion(ErrorType const& type)
+    Completion throw_completion(ErrorType type)
     {
-        return throw_completion<T>(type.message());
+        return throw_completion<T>(String::from_utf8_without_validation(type.message().bytes()));
     }
 
     template<typename T, typename... Args>
-    Completion throw_completion(ErrorType const& type, Args&&... args)
+    Completion throw_completion(ErrorType type, Args&&... args)
     {
-        return throw_completion<T>(Utf16String::formatted(type.format(), forward<Args>(args)...));
+        return throw_completion<T>(MUST(String::formatted(type.message(), forward<Args>(args)...)));
     }
 
     Value get_new_target();
@@ -303,7 +303,7 @@ public:
     Vector<StackTraceElement> stack_trace() const;
 
 private:
-    using ErrorMessages = AK::Array<Utf16String, to_underlying(ErrorMessage::__Count)>;
+    using ErrorMessages = AK::Array<String, to_underlying(ErrorMessage::__Count)>;
 
     struct WellKnownSymbols {
 #define __JS_ENUMERATE(SymbolName, snake_name) \

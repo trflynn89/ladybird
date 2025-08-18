@@ -245,7 +245,7 @@ WebIDL::ExceptionOr<void> CSSStyleProperties::set_property(StringView property_n
 {
     // 1. If the computed flag is set, then throw a NoModificationAllowedError exception.
     if (is_computed())
-        return WebIDL::NoModificationAllowedError::create(realm(), "Cannot modify properties in result of getComputedStyle()"_utf16);
+        return WebIDL::NoModificationAllowedError::create(realm(), "Cannot modify properties in result of getComputedStyle()"_string);
 
     // FIXME: 2. If property is not a custom property, follow these substeps:
     // FIXME:    1. Let property be property converted to ASCII lowercase.
@@ -895,7 +895,7 @@ WebIDL::ExceptionOr<String> CSSStyleProperties::remove_property(StringView prope
 {
     // 1. If the readonly flag is set, then throw a NoModificationAllowedError exception.
     if (is_readonly())
-        return WebIDL::NoModificationAllowedError::create(realm(), "Cannot remove property: CSSStyleProperties is read-only."_utf16);
+        return WebIDL::NoModificationAllowedError::create(realm(), "Cannot remove property: CSSStyleProperties is read-only."_string);
 
     auto property_id = property_id_from_string(property_name);
     if (!property_id.has_value())
@@ -1226,7 +1226,7 @@ WebIDL::ExceptionOr<void> CSSStyleProperties::set_css_text(StringView css_text)
 {
     // 1. If the readonly flag is set, then throw a NoModificationAllowedError exception.
     if (is_readonly()) {
-        return WebIDL::NoModificationAllowedError::create(realm(), "Cannot modify properties: CSSStyleProperties is read-only."_utf16);
+        return WebIDL::NoModificationAllowedError::create(realm(), "Cannot modify properties: CSSStyleProperties is read-only."_string);
     }
 
     // 2. Empty the declarations.
