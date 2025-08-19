@@ -135,10 +135,14 @@ ErrorOr<void> StringBuilder::try_append(StringView string)
         TRY(will_append(string.length()));
         TRY(m_buffer.try_append(string.characters_without_null_termination(), string.length()));
     } else {
-        TRY(ensure_storage_is_utf16(string.length()));
+        auto code_unit_length = simdutf::utf16_length_from_utf8(string.characters_without_null_termination(), string.length());
+        TRY(ensure_storage_is_utf16(code_unit_length));
 
-        for (auto code_point : Utf8View { string })
-            TRY(try_append_code_point(code_point));
+        auto* target = reinterpret_cast<char16_t*>(m_buffer.data() + m_buffer.size());
+        TRY(m_buffer.try_resize(m_buffer.size() + (code_unit_length * sizeof(char16_t))));
+
+        auto result = simdutf::convert_utf8_to_utf16(string.characters_without_null_termination(), string.length(), target);
+        VERIFY(result == code_unit_length);
     }
 
     return {};
@@ -153,10 +157,14 @@ void StringBuilder::append(StringView string)
         (void)will_append(string.length());
         m_buffer.append(string.characters_without_null_termination(), string.length());
     } else {
-        MUST(ensure_storage_is_utf16(string.length()));
+        auto code_unit_length = simdutf::utf16_length_from_utf8(string.characters_without_null_termination(), string.length());
+        MUST(ensure_storage_is_utf16(code_unit_length));
 
-        for (auto code_point : Utf8View { string })
-            append_code_point(code_point);
+        auto* target = reinterpret_cast<char16_t*>(m_buffer.data() + m_buffer.size());
+        m_buffer.resize(m_buffer.size() + (code_unit_length * sizeof(char16_t)));
+
+        auto result = simdutf::convert_utf8_to_utf16(string.characters_without_null_termination(), string.length(), target);
+        VERIFY(result == code_unit_length);
     }
 }
 
@@ -172,8 +180,11 @@ ErrorOr<void> StringBuilder::try_append(Utf16View const& utf16_view)
     if (!append_as_utf8) {
         TRY(ensure_storage_is_utf16(utf16_view.length_in_code_units()));
 
-        for (size_t i = 0; i < utf16_view.length_in_code_units(); ++i)
-            TRY(try_append_code_unit(utf16_view.code_unit_at(i)));
+        auto previous_size = m_buffer.size();
+        TRY(m_buffer.try_resize(previous_size + (utf16_view.length_in_code_units() * sizeof(char16_t))));
+
+        Span<char16_t> target { reinterpret_cast<char16_t*>(m_buffer.data() + previous_size), utf16_view.length_in_code_units() };
+        utf16_view.utf16_span().copy_to(target);
 
         return {};
     }
