@@ -64,6 +64,14 @@ public:
 
     ErrorOr<LexicalPath> path_for_downloaded_file(StringView file) const;
 
+    virtual void display_download_confirmation_dialog(StringView download_name, LexicalPath const& path) const;
+    virtual void display_error_dialog(StringView error_message) const;
+
+    Action& copy_selection_action() { return *m_copy_selection_action; }
+    Action& paste_action() { return *m_paste_action; }
+    Action& select_all_action() { return *m_select_all_action; }
+    Action& view_source_action() { return *m_view_source_action; }
+
     enum class DevtoolsState {
         Disabled,
         Enabled,
@@ -82,6 +90,8 @@ protected:
     virtual void create_platform_options(BrowserOptions&, WebContentOptions&) { }
     virtual NonnullOwnPtr<Core::EventLoop> create_platform_event_loop();
 
+    virtual Optional<ViewImplementation&> active_web_view() const { return {}; }
+
     virtual Optional<ByteString> ask_user_for_download_folder() const { return {}; }
 
     Main::Arguments& arguments() { return m_arguments; }
@@ -92,6 +102,8 @@ private:
     ErrorOr<void> launch_request_server();
     ErrorOr<void> launch_image_decoder_server();
     ErrorOr<void> launch_devtools_server();
+
+    void initialize_actions();
 
     virtual Vector<DevTools::TabDescription> tab_list() const override;
     virtual Vector<DevTools::CSSProperty> css_property_list() const override;
@@ -147,6 +159,11 @@ private:
 
     OwnPtr<Core::EventLoop> m_event_loop;
     OwnPtr<ProcessManager> m_process_manager;
+
+    RefPtr<Action> m_copy_selection_action;
+    RefPtr<Action> m_paste_action;
+    RefPtr<Action> m_select_all_action;
+    RefPtr<Action> m_view_source_action;
 
 #if defined(AK_OS_MACOS)
     OwnPtr<MachPortServer> m_mach_port_server;

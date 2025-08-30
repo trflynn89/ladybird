@@ -19,6 +19,7 @@
 #include <LibWebView/Database.h>
 #include <LibWebView/HeadlessWebView.h>
 #include <LibWebView/HelperProcess.h>
+#include <LibWebView/Menu.h>
 #include <LibWebView/URL.h>
 #include <LibWebView/UserAgent.h>
 #include <LibWebView/Utilities.h>
@@ -57,6 +58,7 @@ Application::Application(Optional<ByteString> ladybird_binary_path)
     s_the = this;
 
     platform_init(move(ladybird_binary_path));
+    initialize_actions();
 }
 
 Application::~Application()
@@ -597,6 +599,39 @@ ErrorOr<LexicalPath> Application::path_for_downloaded_file(StringView file) cons
         return Error::from_errno(ENOENT);
 
     return LexicalPath::join(downloads_directory, file);
+}
+
+void Application::display_download_confirmation_dialog(StringView download_name, LexicalPath const& path) const
+{
+    outln("{} saved to: {}", download_name, path);
+}
+
+void Application::display_error_dialog(StringView error_message) const
+{
+    warnln("{}", error_message);
+}
+
+void Application::initialize_actions()
+{
+    m_copy_selection_action = Action::create("&Copy"_string, ActionID::CopySelection, [this]() {
+        if (auto active_web_view = this->active_web_view(); active_web_view.has_value())
+            active_web_view->insert_text_into_clipboard(active_web_view->selected_text());
+    });
+
+    m_paste_action = Action::create("&Paste"_string, ActionID::Paste, [this]() {
+        if (auto active_web_view = this->active_web_view(); active_web_view.has_value())
+            active_web_view->paste_text_from_clipboard();
+    });
+
+    m_select_all_action = Action::create("Select &All"_string, ActionID::SelectAll, [this]() {
+        if (auto active_web_view = this->active_web_view(); active_web_view.has_value())
+            active_web_view->select_all();
+    });
+
+    m_view_source_action = Action::create("View &Source"_string, ActionID::ViewSource, [this]() {
+        if (auto active_web_view = this->active_web_view(); active_web_view.has_value())
+            active_web_view->get_source();
+    });
 }
 
 ErrorOr<Application::DevtoolsState> Application::toggle_devtools_enabled()
