@@ -172,8 +172,6 @@ public:
     Function<void()> on_close;
     Function<void(URL::URL const&)> on_link_hover;
     Function<void()> on_link_unhover;
-    Function<void(URL::URL const&, ByteString const& target, unsigned modifiers)> on_link_click;
-    Function<void(URL::URL const&, ByteString const& target, unsigned modifiers)> on_link_middle_click;
     Function<void(Utf16String const&)> on_title_change;
     Function<void(URL::URL const&)> on_url_change;
     Function<void(URL::URL const&, bool)> on_load_start;

@@ -423,27 +423,6 @@ void BrowserWindow::initialize_tab(Tab* tab)
         return new_tab.view().handle();
     };
 
-    tab->view().on_tab_open_request = [this](auto url, auto activate_tab) {
-        auto& tab = new_tab_from_url(url, activate_tab);
-        return tab.view().handle();
-    };
-
-    tab->view().on_link_click = [this](auto url, auto target, unsigned modifiers) {
-        // TODO: maybe activate tabs according to some configuration, this is just normal current browser behavior
-        if (modifiers == Web::UIEvents::Mod_Ctrl) {
-            m_current_tab->view().on_tab_open_request(url, Web::HTML::ActivateTab::No);
-        } else if (target == "_blank") {
-            m_current_tab->view().on_tab_open_request(url, Web::HTML::ActivateTab::Yes);
-        } else {
-            m_current_tab->view().load(url);
-        }
-    };
-
-    tab->view().on_link_middle_click = [this](auto url, auto target, unsigned modifiers) {
-        m_current_tab->view().on_link_click(url, target, Web::UIEvents::Mod_Ctrl);
-        (void)modifiers;
-    };
-
     m_tabs_container->setTabIcon(m_tabs_container->indexOf(tab), tab->favicon());
     create_close_button_for_tab(tab);
 }

@@ -37,6 +37,7 @@ private:
     virtual NonnullOwnPtr<Core::EventLoop> create_platform_event_loop() override;
 
     virtual Optional<WebView::ViewImplementation&> active_web_view() const override;
+    virtual void open_url_in_new_tab(URL::URL const&, Web::HTML::ActivateTab) const override;
 
     virtual Optional<ByteString> ask_user_for_download_folder() const override;
     virtual void display_download_confirmation_dialog(StringView download_name, LexicalPath const& path) const override;

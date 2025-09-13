@@ -21,6 +21,7 @@
 #include <LibWeb/CSS/PreferredColorScheme.h>
 #include <LibWeb/CSS/PreferredContrast.h>
 #include <LibWeb/CSS/PreferredMotion.h>
+#include <LibWeb/HTML/ActivateTab.h>
 #include <LibWebView/Forward.h>
 #include <LibWebView/Options.h>
 #include <LibWebView/Process.h>
@@ -56,7 +57,9 @@ public:
     static ProcessManager& process_manager() { return *the().m_process_manager; }
 
     ErrorOr<NonnullRefPtr<WebContentClient>> launch_web_content_process(ViewImplementation&);
+
     virtual Optional<ViewImplementation&> active_web_view() const { return {}; }
+    virtual void open_url_in_new_tab(URL::URL const&, Web::HTML::ActivateTab) const { }
 
     void add_child_process(Process&&);
 

@@ -244,18 +244,17 @@ void WebContentClient::did_unhover_link(u64 page_id)
 
 void WebContentClient::did_click_link(u64 page_id, URL::URL url, ByteString target, unsigned modifiers)
 {
-    if (auto view = view_for_page_id(page_id); view.has_value()) {
-        if (view->on_link_click)
-            view->on_link_click(url, target, modifiers);
-    }
+    if (modifiers == Web::UIEvents::Mod_Ctrl)
+        Application::the().open_url_in_new_tab(url, Web::HTML::ActivateTab::No);
+    else if (target == "_blank"sv)
+        Application::the().open_url_in_new_tab(url, Web::HTML::ActivateTab::Yes);
+    else if (auto view = view_for_page_id(page_id); view.has_value())
+        view->load(url);
 }
 
-void WebContentClient::did_middle_click_link(u64 page_id, URL::URL url, ByteString target, unsigned modifiers)
+void WebContentClient::did_middle_click_link(u64, URL::URL url, ByteString, unsigned)
 {
-    if (auto view = view_for_page_id(page_id); view.has_value()) {
-        if (view->on_link_middle_click)
-            view->on_link_middle_click(url, target, modifiers);
-    }
+    Application::the().open_url_in_new_tab(url, Web::HTML::ActivateTab::No);
 }
 
 void WebContentClient::did_request_context_menu(u64 page_id, Gfx::IntPoint content_position)
