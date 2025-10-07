@@ -5,6 +5,7 @@
  */
 
 #include <LibWebView/Application.h>
+#include <LibWebView/URLConstants.h>
 
 #import <Application/ApplicationDelegate.h>
 #import <Interface/InfoBar.h>
@@ -131,6 +132,7 @@
     auto message = MUST(String::formatted("DevTools is enabled on port {}", WebView::Application::browser_options().devtools_port));
 
     [self.info_bar showWithMessage:Ladybird::string_to_ns_string(message)
+                          helpLink:WebView::devtools_help_url
                 dismissButtonTitle:@"Disable"
               dismissButtonClicked:^{
                   MUST(WebView::Application::the().toggle_devtools_enabled());

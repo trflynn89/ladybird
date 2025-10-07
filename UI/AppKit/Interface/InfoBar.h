@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include <LibURL/Forward.h>
+
 #import <Cocoa/Cocoa.h>
 
 @class Tab;
@@ -15,6 +17,7 @@ using InfoBarDismissed = void (^)(void);
 @interface InfoBar : NSStackView
 
 - (void)showWithMessage:(NSString*)message
+                helpLink:(URL::URL)help_link
       dismissButtonTitle:(NSString*)title
     dismissButtonClicked:(InfoBarDismissed)on_dismissed
                activeTab:(Tab*)tab;
