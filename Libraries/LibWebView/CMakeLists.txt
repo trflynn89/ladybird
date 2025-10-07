@@ -24,6 +24,7 @@ set(SOURCES
     SourceHighlighter.cpp
     StorageJar.cpp
     URL.cpp
+    URLConstants.cpp
     UserAgent.cpp
     Utilities.cpp
     ViewImplementation.cpp
