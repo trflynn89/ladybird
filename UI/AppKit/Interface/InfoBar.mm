@@ -37,7 +37,7 @@ static constexpr CGFloat const INFO_BAR_HEIGHT = 40;
         [self addView:self.dismiss_button inGravity:NSStackViewGravityTrailing];
 
         [self setOrientation:NSUserInterfaceLayoutOrientationHorizontal];
-        [self setEdgeInsets:NSEdgeInsets { 0, 8, 0, 8 }];
+        [self setEdgeInsets:NSEdgeInsets { 0, 24, 0, 24 }];
 
         [[self heightAnchor] constraintEqualToConstant:INFO_BAR_HEIGHT].active = YES;
     }
