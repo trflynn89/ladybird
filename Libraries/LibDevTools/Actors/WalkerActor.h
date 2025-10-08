@@ -28,13 +28,8 @@ public:
     static bool is_suitable_for_dom_inspection(JsonValue const&);
     JsonValue serialize_root() const;
 
-    struct DOMNode {
-        JsonObject const& node;
-        NodeIdentifier identifier;
-        NonnullRefPtr<TabActor> tab;
-    };
-    static Optional<DOMNode> dom_node_for(WeakPtr<WalkerActor> const&, StringView actor);
-    Optional<DOMNode> dom_node(StringView actor);
+    static Optional<Node> dom_node_for(WeakPtr<WalkerActor> const&, StringView actor);
+    Optional<Node> dom_node(StringView actor);
 
 private:
     WalkerActor(DevToolsServer&, String name, WeakPtr<TabActor>, JsonObject dom_tree);
