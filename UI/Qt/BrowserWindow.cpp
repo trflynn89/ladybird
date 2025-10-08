@@ -28,6 +28,7 @@
 #include <QScreen>
 #include <QShortcut>
 #include <QStatusBar>
+#include <QToolButton>
 #include <QWheelEvent>
 #include <QWindow>
 
@@ -279,12 +280,16 @@ BrowserWindow::BrowserWindow(Vector<URL::URL> const& initial_urls, IsPopupWindow
 
 void BrowserWindow::on_devtools_enabled()
 {
+    auto* help_button = new QToolButton(this);
+    help_button->setText("?");
+
     auto* disable_button = new QPushButton("Disable", this);
 
     connect(disable_button, &QPushButton::clicked, this, []() {
         MUST(WebView::Application::the().toggle_devtools_enabled());
     });
 
+    statusBar()->addPermanentWidget(help_button);
     statusBar()->addPermanentWidget(disable_button);
 
     auto message = MUST(String::formatted("DevTools is enabled on port {}", WebView::Application::browser_options().devtools_port));
