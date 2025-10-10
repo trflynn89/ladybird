@@ -25,11 +25,23 @@ AccessibilityActor::AccessibilityActor(DevToolsServer& devtools, String name, We
 
 AccessibilityActor::~AccessibilityActor() = default;
 
+void AccessibilityActor::enable()
+{
+    if (m_enabled)
+        return;
+
+    m_enabled = true;
+
+    JsonObject init_event;
+    init_event.set("type"sv, "init"sv);
+    send_message(move(init_event));
+}
+
 void AccessibilityActor::handle_message(Message const& message)
 {
     if (message.type == "bootstrap"sv) {
         JsonObject bootstrap;
-        bootstrap.set("enabled"sv, true);
+        bootstrap.set("enabled"sv, m_enabled);
 
         JsonObject response;
         response.set("state"sv, move(bootstrap));

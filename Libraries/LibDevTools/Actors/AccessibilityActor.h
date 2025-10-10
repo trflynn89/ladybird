@@ -20,6 +20,8 @@ public:
     static RefPtr<TabActor> tab_for(WeakPtr<AccessibilityActor> const&);
     static RefPtr<AccessibilityWalkerActor> walker_for(WeakPtr<AccessibilityActor> const&);
 
+    void enable();
+
 private:
     AccessibilityActor(DevToolsServer&, String name, WeakPtr<TabActor>);
 
@@ -29,6 +31,7 @@ private:
 
     WeakPtr<TabActor> m_tab;
     WeakPtr<AccessibilityWalkerActor> m_walker;
+    bool m_enabled { false };
 };
 
 }
