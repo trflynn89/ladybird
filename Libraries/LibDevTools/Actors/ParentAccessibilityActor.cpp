@@ -40,10 +40,10 @@ void ParentAccessibilityActor::handle_message(Message const& message)
         JsonObject response;
         response.set("canBeDisabled"sv, true);
         response.set("type"sv, "canBeDisabledChange"sv);
-        send_message(move(response));
+        send_response(message, move(response));
 
         // And then the blank response.
-        send_response(message, JsonObject {});
+        send_message({});
 
         // And each AccessibilityActor is enabled and sends an "init" event
         for (auto const& [name, actor] : devtools().actor_registry()) {

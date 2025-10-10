@@ -69,10 +69,19 @@ void AccessibilityNodeActor::handle_message(Message const& message)
 
     if (message.type == "audit"sv) {
         // FIXME: Implement accessibility audits.
+        JsonObject audit;
+        audit.set("CONTRAST"sv, JsonValue {});
+        audit.set("KEYBOARD"sv, JsonValue {});
+        audit.set("TEXT_LABEL"sv, JsonValue {});
+
         JsonObject response;
         response.set("type"sv, "audited"sv);
-        response.set("audit"sv, JsonObject {});
+        response.set("audit"sv, audit);
         send_response(message, move(response));
+
+        response.set("audit"sv, move(audit));
+        send_message(move(response));
+
         return;
     }
 
