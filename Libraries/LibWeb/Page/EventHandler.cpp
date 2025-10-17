@@ -125,7 +125,7 @@ static Gfx::Cursor resolve_cursor(Layout::NodeWithStyle const& layout_node, Vect
                     return Gfx::StandardCursor::IBeam;
                 case CSS::CursorPredefined::Move:
                 case CSS::CursorPredefined::AllScroll:
-                    return Gfx::StandardCursor::Move;
+                    return Gfx::StandardCursor::Scroll;
                 case CSS::CursorPredefined::Progress:
                 case CSS::CursorPredefined::Wait:
                     return Gfx::StandardCursor::Wait;
@@ -520,7 +520,8 @@ EventResult EventHandler::handle_mouseup(CSSPixelPoint visual_viewport_position,
                 if (button == UIEvents::MouseButton::Primary) {
                     run_activation_behavior = node->dispatch_event(UIEvents::MouseEvent::create_from_platform_event(node->realm(), m_navigable->active_window_proxy(), UIEvents::EventNames::click, screen_position, page_offset, viewport_position, offset, {}, button, buttons, modifiers).release_value_but_fixme_should_propagate_errors());
                 } else if (button == UIEvents::MouseButton::Middle) {
-                    run_activation_behavior = node->dispatch_event(UIEvents::MouseEvent::create_from_platform_event(node->realm(), m_navigable->active_window_proxy(), UIEvents::EventNames::auxclick, screen_position, page_offset, viewport_position, offset, {}, button, buttons, modifiers).release_value_but_fixme_should_propagate_errors());
+                    if (!m_in_middle_mouse_scroll)
+                        run_activation_behavior = node->dispatch_event(UIEvents::MouseEvent::create_from_platform_event(node->realm(), m_navigable->active_window_proxy(), UIEvents::EventNames::auxclick, screen_position, page_offset, viewport_position, offset, {}, button, buttons, modifiers).release_value_but_fixme_should_propagate_errors());
                 } else if (button == UIEvents::MouseButton::Secondary) {
                     // Allow the user to bypass custom context menus by holding shift, like Firefox.
                     if ((modifiers & UIEvents::Mod_Shift) == 0)
@@ -597,7 +598,11 @@ after_node_use:
     if (button == UIEvents::MouseButton::Primary) {
         m_in_mouse_selection = false;
         m_mouse_selection_target = nullptr;
+    } else if (button == UIEvents::MouseButton::Middle && m_in_middle_mouse_scroll) {
+        m_navigable->page().client().page_did_request_cursor_change(Gfx::StandardCursor::None);
+        m_in_middle_mouse_scroll = false;
     }
+
     return handled_event;
 }
 
@@ -727,6 +732,9 @@ EventResult EventHandler::handle_mousedown(CSSPixelPoint visual_viewport_positio
                 }
             }
         }
+    } else if (button == UIEvents::MouseButton::Middle) {
+        m_navigable->page().client().page_did_request_cursor_change(Gfx::StandardCursor::Scroll);
+        m_in_middle_mouse_scroll = true;
     }
 
     return EventResult::Handled;
@@ -741,6 +749,9 @@ EventResult EventHandler::handle_mousemove(CSSPixelPoint visual_viewport_positio
         return EventResult::Dropped;
     if (!m_navigable->active_document()->is_fully_active())
         return EventResult::Dropped;
+
+    if (m_in_middle_mouse_scroll)
+        return EventResult::Handled;
 
     auto& document = *m_navigable->active_document();
     auto viewport_position = document.visual_viewport()->map_to_layout_viewport(visual_viewport_position);

@@ -82,6 +82,8 @@ private:
     bool m_in_mouse_selection { false };
     InputEventsTarget* m_mouse_selection_target { nullptr };
 
+    bool m_in_middle_mouse_scroll { false };
+
     GC::Ptr<Painting::Paintable> m_mouse_event_tracking_paintable;
 
     NonnullOwnPtr<DragAndDropEventHandler> m_drag_and_drop_event_handler;

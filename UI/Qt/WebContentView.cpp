@@ -698,6 +698,10 @@ void WebContentView::update_cursor(Gfx::Cursor cursor)
         case Gfx::StandardCursor::Disallowed:
             setCursor(Qt::ForbiddenCursor);
             break;
+        case Gfx::StandardCursor::Scroll:
+            // FIXME: This isn't quite right but is the closest option.
+            setCursor(Qt::SizeAllCursor);
+            break;
         case Gfx::StandardCursor::Eyedropper:
         case Gfx::StandardCursor::Zoom:
             // FIXME: No corresponding Qt cursors, default to Arrow
