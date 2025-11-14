@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<script>
+    const server = httpTestServer();
+
+    async function createRequest(path, options) {
+        if (typeof options === "undefined") {
+            options = {};
+        }
+        if (!options.method) {
+            options.method = "GET";
+        }
+        if (!options.status) {
+            options.status = 200;
+        }
+        if (!options.headers) {
+            options.headers = {};
+        }
+
+        await server.createEcho("OPTIONS", path, {
+            status: 200,
+            headers: {
+                "Access-Control-Allow-Headers": "X-Ladybird-Enable-Cache",
+                "Access-Control-Allow-Methods": options.method,
+                "Access-Control-Allow-Origin": location.origin,
+            },
+        });
+
+        options.headers["Access-Control-Allow-Origin"] = location.origin;
+        options.headers["Access-Control-Expose-Headers"] = "X-Ladybird-Cache-Status";
+
+        return server.createEcho(options.method, path, {
+            status: options.status,
+            headers: options.headers,
+        });
+    }
+
+    async function cacheFetch(url, method) {
+        if (typeof method === "undefined") {
+            method = "GET";
+        }
+
+        return fetch(url, {
+            method: method,
+            mode: "cors",
+            headers: {
+                "X-Ladybird-Enable-Cache": "1",
+            },
+        });
+    }
+
+    function expectCacheStatus(response, status) {
+        const result = response.headers.get("X-Ladybird-Cache-Status");
+
+        if (result !== status) {
+            println(`Expected response to contain a cache status of '${status}': received: '${result}'`);
+        }
+    }
+
+    asyncTest(async done => {
+        // Disable memory cache to ensure all requests reach RequestServer.
+        const httpMemoryCacheWasEnabled = internals.setHttpMemoryCacheEnabled(false);
+        let url, response;
+
+        // Validate that non-GET/HEAD requests are not cached.
+        await (async () => {
+            for (const method of ["POST", "PUT", "DELETE"]) {
+                url = await createRequest(`/cache-test-${method.toLowerCase()}`, {
+                    method: method,
+                    headers: {
+                        "Cache-Control": "max-age: 999",
+                    },
+                });
+
+                response = await cacheFetch(url, method);
+                expectCacheStatus(response, "not-cached");
+            }
+        })();
+
+        // Validate that responses without a Cache-Control or Expires header are not cached.
+        await (async () => {
+            url = await createRequest("/cache-test-missing-headers");
+
+            response = await cacheFetch(url);
+            expectCacheStatus(response, "not-cached");
+        })();
+
+        // Validate that responses with a no-store directive are not cached.
+        await (async () => {
+            url = await createRequest("/cache-test-no-store", {
+                headers: {
+                    "Cache-Control": "no-store",
+                },
+            });
+
+            response = await cacheFetch(url);
+            expectCacheStatus(response, "not-cached");
+        })();
+
+        // Validate that responses with a max-age directive, but no Date header, are not cached.
+        await (async () => {
+            url = await createRequest("/cache-test-max-age-no-lifetime", {
+                headers: {
+                    "Cache-Control": "max-age=1",
+                },
+            });
+
+            response = await cacheFetch(url);
+            expectCacheStatus(response, "not-cached");
+        })();
+
+        // Validate that responses with a max-age directive, but no lifetime headers, are not cached.
+        await (async () => {
+            url = await createRequest("/cache-test-max-age-lifetime", {
+                headers: {
+                    "Cache-Control": "max-age=1",
+                    Date: new Date().toUTCString(),
+                },
+            });
+
+            response = await cacheFetch(url);
+            expectCacheStatus(response, "not-cached");
+        })();
+
+        internals.setHttpMemoryCacheEnabled(httpMemoryCacheWasEnabled);
+        println("PASS!");
+        done();
+    });
+</script>

@@ -15,18 +15,24 @@ namespace RequestServer {
 
 static constexpr auto INDEX_DATABASE = "INDEX"sv;
 
-ErrorOr<DiskCache> DiskCache::create()
+ErrorOr<DiskCache> DiskCache::create(Mode mode)
 {
-    auto cache_directory = LexicalPath::join(Core::StandardPaths::cache_directory(), "Ladybird"sv, "Cache"sv);
+    auto cache_name = mode == Mode::Normal ? "Ladybird"sv : "LadybirdTest"sv;
+    auto cache_directory = LexicalPath::join(Core::StandardPaths::cache_directory(), cache_name, "Cache"sv);
 
     auto database = TRY(Database::Database::create(cache_directory.string(), INDEX_DATABASE));
     auto index = TRY(CacheIndex::create(database));
 
-    return DiskCache { move(database), move(cache_directory), move(index) };
+    // Start with a clean slate in test mode.
+    if (mode == Mode::Testing)
+        index.remove_entries_accessed_since(UnixDateTime::earliest(), {});
+
+    return DiskCache { mode, move(database), move(cache_directory), move(index) };
 }
 
-DiskCache::DiskCache(NonnullRefPtr<Database::Database> database, LexicalPath cache_directory, CacheIndex index)
-    : m_database(move(database))
+DiskCache::DiskCache(Mode mode, NonnullRefPtr<Database::Database> database, LexicalPath cache_directory, CacheIndex index)
+    : m_mode(mode)
+    , m_database(move(database))
     , m_cache_directory(move(cache_directory))
     , m_index(move(index))
 {
@@ -36,6 +42,11 @@ Variant<Optional<CacheEntryWriter&>, DiskCache::CacheHasOpenEntry> DiskCache::cr
 {
     if (!is_cacheable(request.method()))
         return Optional<CacheEntryWriter&> {};
+
+    if (m_mode == Mode::Testing) {
+        if (!request.request_headers().contains("X-Ladybird-Enable-Cache"sv))
+            return Optional<CacheEntryWriter&> {};
+    }
 
     auto serialized_url = serialize_url_for_cache_storage(request.url());
     auto cache_key = create_cache_key(serialized_url, request.method());

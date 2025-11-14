@@ -144,7 +144,8 @@ void CacheIndex::remove_entries_accessed_since(UnixDateTime since, Function<void
             auto cache_key = m_database.result_column<u64>(statement_id, 0);
             m_entries.remove(cache_key);
 
-            on_entry_removed(cache_key);
+            if (on_entry_removed)
+                on_entry_removed(cache_key);
         },
         since);
 }
