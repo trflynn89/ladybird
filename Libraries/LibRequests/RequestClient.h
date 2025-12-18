@@ -8,6 +8,7 @@
 
 #include <AK/HashMap.h>
 #include <LibHTTP/HeaderList.h>
+#include <LibHTTP/ReloadRequest.h>
 #include <LibIPC/ConnectionToServer.h>
 #include <LibRequests/CacheSizes.h>
 #include <LibRequests/RequestTimingInfo.h>
@@ -31,7 +32,7 @@ public:
     explicit RequestClient(NonnullOwnPtr<IPC::Transport>);
     virtual ~RequestClient() override;
 
-    RefPtr<Request> start_request(ByteString const& method, URL::URL const&, Optional<HTTP::HeaderList const&> request_headers = {}, ReadonlyBytes request_body = {}, Core::ProxyData const& = {});
+    RefPtr<Request> start_request(ByteString const& method, URL::URL const&, HTTP::ReloadRequest = HTTP::ReloadRequest::No, Optional<HTTP::HeaderList const&> request_headers = {}, ReadonlyBytes request_body = {}, Core::ProxyData const& = {});
 
     RefPtr<WebSocket> websocket_connect(URL::URL const&, ByteString const& origin, Vector<ByteString> const& protocols, Vector<ByteString> const& extensions, HTTP::HeaderList const& request_headers);
 

@@ -140,7 +140,7 @@ ErrorOr<void> CacheEntryWriter::write_status_and_reason(u32 status_code, Optiona
 
         // We can cache already-expired responses if there are other cache directives that allow us to revalidate the
         // response on subsequent requests. For example, `Cache-Control: max-age=0, must-revalidate`.
-        if (cache_lifetime_status(response_headers, freshness_lifetime, current_age) == CacheLifetimeStatus::Expired)
+        if (cache_lifetime_status(response_headers, freshness_lifetime, current_age, ReloadRequest::No) == CacheLifetimeStatus::Expired)
             return Error::from_string_literal("Response has already expired");
 
         TRY(m_file->write_value(m_cache_header));

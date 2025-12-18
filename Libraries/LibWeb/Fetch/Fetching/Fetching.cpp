@@ -2118,6 +2118,7 @@ GC::Ref<PendingResponse> nonstandard_resource_loader_file_or_http_network_fetch(
     load_request.set_url(request->current_url());
     load_request.set_page(page);
     load_request.set_method(request->method());
+    load_request.set_reload_request(request->reload_navigation() ? HTTP::ReloadRequest::Yes : HTTP::ReloadRequest::No);
     load_request.set_store_set_cookie_headers(include_credentials == IncludeCredentials::Yes);
 
     if (auto const* body = request->body().get_pointer<GC::Ref<Infrastructure::Body>>()) {

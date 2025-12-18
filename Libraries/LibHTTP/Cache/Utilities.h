@@ -12,6 +12,7 @@
 #include <AK/Types.h>
 #include <LibHTTP/Forward.h>
 #include <LibHTTP/HeaderList.h>
+#include <LibHTTP/ReloadRequest.h>
 #include <LibURL/Forward.h>
 
 namespace HTTP {
@@ -39,7 +40,7 @@ enum class CacheLifetimeStatus {
     MustRevalidate,
     StaleWhileRevalidate,
 };
-CacheLifetimeStatus cache_lifetime_status(HeaderList const&, AK::Duration freshness_lifetime, AK::Duration current_age);
+CacheLifetimeStatus cache_lifetime_status(HeaderList const&, AK::Duration freshness_lifetime, AK::Duration current_age, ReloadRequest);
 
 struct RevalidationAttributes {
     static RevalidationAttributes create(HeaderList const&);

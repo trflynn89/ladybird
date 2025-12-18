@@ -10,6 +10,7 @@
 #include <AK/Time.h>
 #include <LibCore/ElapsedTimer.h>
 #include <LibHTTP/HeaderList.h>
+#include <LibHTTP/ReloadRequest.h>
 #include <LibURL/URL.h>
 #include <LibWeb/Export.h>
 #include <LibWeb/Forward.h>
@@ -33,6 +34,9 @@ public:
     ByteBuffer const& body() const { return m_body; }
     void set_body(ByteBuffer body) { m_body = move(body); }
 
+    HTTP::ReloadRequest reload_request() const { return m_reload_request; }
+    void set_reload_request(HTTP::ReloadRequest reload_request) { m_reload_request = reload_request; }
+
     bool store_set_cookie_headers() const { return m_store_set_cookie_headers; }
     void set_store_set_cookie_headers(bool store_set_cookie_headers) { m_store_set_cookie_headers = store_set_cookie_headers; }
 
@@ -51,6 +55,7 @@ private:
     ByteBuffer m_body;
     Core::ElapsedTimer m_load_timer;
     GC::Root<Page> m_page;
+    HTTP::ReloadRequest m_reload_request { HTTP::ReloadRequest::No };
     bool m_store_set_cookie_headers { true };
 };
 

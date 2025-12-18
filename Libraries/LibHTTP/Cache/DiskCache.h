@@ -16,6 +16,7 @@
 #include <LibDatabase/Database.h>
 #include <LibHTTP/Cache/CacheEntry.h>
 #include <LibHTTP/Cache/CacheIndex.h>
+#include <LibHTTP/ReloadRequest.h>
 #include <LibURL/Forward.h>
 
 namespace HTTP {
@@ -45,7 +46,7 @@ public:
         Read,
         Revalidate,
     };
-    Variant<Optional<CacheEntryReader&>, CacheHasOpenEntry> open_entry(CacheRequest&, URL::URL const&, StringView method, HeaderList const& request_headers, OpenMode);
+    Variant<Optional<CacheEntryReader&>, CacheHasOpenEntry> open_entry(CacheRequest&, URL::URL const&, StringView method, ReloadRequest, HeaderList const& request_headers, OpenMode);
 
     Requests::CacheSizes estimate_cache_size_accessed_since(UnixDateTime since);
     void remove_entries_accessed_since(UnixDateTime since);

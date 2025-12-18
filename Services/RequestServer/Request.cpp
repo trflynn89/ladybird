@@ -27,12 +27,13 @@ NonnullOwnPtr<Request> Request::fetch(
     Resolver& resolver,
     URL::URL url,
     ByteString method,
+    HTTP::ReloadRequest reload_request,
     NonnullRefPtr<HTTP::HeaderList> request_headers,
     ByteBuffer request_body,
     ByteString alt_svc_cache_path,
     Core::ProxyData proxy_data)
 {
-    auto request = adopt_own(*new Request { request_id, Type::Fetch, disk_cache, client, curl_multi, resolver, move(url), move(method), move(request_headers), move(request_body), move(alt_svc_cache_path), proxy_data });
+    auto request = adopt_own(*new Request { request_id, Type::Fetch, disk_cache, client, curl_multi, resolver, move(url), move(method), reload_request, move(request_headers), move(request_body), move(alt_svc_cache_path), proxy_data });
     request->process();
 
     return request;
@@ -73,7 +74,7 @@ NonnullOwnPtr<Request> Request::revalidate(
     ByteString alt_svc_cache_path,
     Core::ProxyData proxy_data)
 {
-    auto request = adopt_own(*new Request { request_id, Type::BackgroundRevalidation, disk_cache, client, curl_multi, resolver, move(url), move(method), move(request_headers), move(request_body), move(alt_svc_cache_path), proxy_data });
+    auto request = adopt_own(*new Request { request_id, Type::BackgroundRevalidation, disk_cache, client, curl_multi, resolver, move(url), move(method), HTTP::ReloadRequest::No, move(request_headers), move(request_body), move(alt_svc_cache_path), proxy_data });
     request->process();
 
     return request;
@@ -88,6 +89,7 @@ Request::Request(
     Resolver& resolver,
     URL::URL url,
     ByteString method,
+    HTTP::ReloadRequest reload_request,
     NonnullRefPtr<HTTP::HeaderList> request_headers,
     ByteBuffer request_body,
     ByteString alt_svc_cache_path,
@@ -100,6 +102,7 @@ Request::Request(
     , m_resolver(resolver)
     , m_url(move(url))
     , m_method(move(method))
+    , m_reload_request(reload_request)
     , m_request_headers(move(request_headers))
     , m_request_body(move(request_body))
     , m_alt_svc_cache_path(move(alt_svc_cache_path))
@@ -219,7 +222,7 @@ void Request::handle_initial_state()
             ? HTTP::DiskCache::OpenMode::Revalidate
             : HTTP::DiskCache::OpenMode::Read;
 
-        m_disk_cache->open_entry(*this, m_url, m_method, m_request_headers, open_mode)
+        m_disk_cache->open_entry(*this, m_url, m_method, m_reload_request, m_request_headers, open_mode)
             .visit(
                 [&](Optional<HTTP::CacheEntryReader&> cache_entry_reader) {
                     m_cache_entry_reader = cache_entry_reader;

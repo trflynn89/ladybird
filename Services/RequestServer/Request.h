@@ -15,6 +15,7 @@
 #include <LibDNS/Resolver.h>
 #include <LibHTTP/Cache/CacheRequest.h>
 #include <LibHTTP/HeaderList.h>
+#include <LibHTTP/ReloadRequest.h>
 #include <LibRequests/NetworkError.h>
 #include <LibRequests/RequestTimingInfo.h>
 #include <LibURL/URL.h>
@@ -36,6 +37,7 @@ public:
         Resolver& resolver,
         URL::URL url,
         ByteString method,
+        HTTP::ReloadRequest reload_request,
         NonnullRefPtr<HTTP::HeaderList> request_headers,
         ByteBuffer request_body,
         ByteString alt_svc_cache_path,
@@ -125,6 +127,7 @@ private:
         Resolver& resolver,
         URL::URL url,
         ByteString method,
+        HTTP::ReloadRequest reload_request,
         NonnullRefPtr<HTTP::HeaderList> request_headers,
         ByteBuffer request_body,
         ByteString alt_svc_cache_path,
@@ -178,6 +181,7 @@ private:
 
     URL::URL m_url;
     ByteString m_method;
+    HTTP::ReloadRequest m_reload_request { HTTP::ReloadRequest::No };
 
     UnixDateTime m_request_start_time { UnixDateTime::now() };
     NonnullRefPtr<HTTP::HeaderList> m_request_headers;

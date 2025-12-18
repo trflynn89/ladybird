@@ -343,7 +343,7 @@ AK::Duration calculate_stale_while_revalidate_lifetime(HeaderList const& headers
     return {};
 }
 
-CacheLifetimeStatus cache_lifetime_status(HeaderList const& headers, AK::Duration freshness_lifetime, AK::Duration current_age)
+CacheLifetimeStatus cache_lifetime_status(HeaderList const& headers, AK::Duration freshness_lifetime, AK::Duration current_age, ReloadRequest reload_request)
 {
     auto revalidation_status = [&](auto revalidation_type) {
         // In order to revalidate a cache entry, we must have one of these headers to attach to the revalidation request.
@@ -351,6 +351,9 @@ CacheLifetimeStatus cache_lifetime_status(HeaderList const& headers, AK::Duratio
             return revalidation_type;
         return CacheLifetimeStatus::Expired;
     };
+
+    if (reload_request == ReloadRequest::Yes)
+        return revalidation_status(CacheLifetimeStatus::MustRevalidate);
 
     auto cache_control = headers.get("Cache-Control"sv);
 

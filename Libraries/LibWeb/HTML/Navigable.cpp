@@ -1160,8 +1160,12 @@ static void create_navigation_params_by_fetching(GC::Ptr<SessionHistoryEntry> en
     }
 
     // 7. If entry's document state's reload pending is true, then set request's reload-navigation flag.
-    if (entry->document_state()->reload_pending())
+    if (entry->document_state()->reload_pending()) {
         request->set_reload_navigation(true);
+
+        // AD-HOC:
+        request->set_cache_mode(Fetch::Infrastructure::Request::CacheMode::Reload);
+    }
 
     // 8. Otherwise, if entry's document state's ever populated is true, then set request's history-navigation flag.
     else if (entry->document_state()->ever_populated())
