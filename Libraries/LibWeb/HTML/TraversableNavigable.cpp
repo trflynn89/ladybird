@@ -636,12 +636,6 @@ TraversableNavigable::HistoryStepResult TraversableNavigable::apply_the_history_
                     potentially_target_specific_source_snapshot_params = navigable->active_document()->snapshot_source_snapshot_params();
                 }
 
-                // 5. Set targetEntry's document state's reload pending to false.
-                target_entry->document_state()->set_reload_pending(false);
-
-                // 6. Let allowPOST be targetEntry's document state's reload pending.
-                auto allow_POST = target_entry->document_state()->reload_pending();
-
                 // https://github.com/whatwg/html/issues/9869
                 // Reloading requires population of the active session history entry, making it inactive.
                 // This results in a situation where tasks that unload the previous document and activate a new
@@ -649,6 +643,12 @@ TraversableNavigable::HistoryStepResult TraversableNavigable::apply_the_history_
                 // After the unloading of the previous document is completed, all fields potentially affected by the
                 // population are copied from the cloned target entry to the actual target entry.
                 auto populated_target_entry = target_entry->clone();
+
+                // 5. Set targetEntry's document state's reload pending to false.
+                target_entry->document_state()->set_reload_pending(false);
+
+                // 6. Let allowPOST be targetEntry's document state's reload pending.
+                auto allow_POST = target_entry->document_state()->reload_pending();
 
                 // 7. In parallel, attempt to populate the history entry's document for targetEntry, given navigable, potentiallyTargetSpecificSourceSnapshotParams,
                 //    targetSnapshotParams, userInvolvement, with allowPOST set to allowPOST and completionSteps set to
