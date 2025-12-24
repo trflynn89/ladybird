@@ -21,7 +21,7 @@ public:
     struct Entry {
         u32 status_code { 0 };
         ByteString reason_phrase;
-
+        NonnullRefPtr<HeaderList> request_headers;
         NonnullRefPtr<HeaderList> response_headers;
         ByteBuffer response_body;
     };
@@ -30,7 +30,7 @@ public:
 
     Optional<Entry const&> open_entry(URL::URL const&, StringView method, HeaderList const& request_headers) const;
 
-    void create_entry(URL::URL const&, StringView method, u32 status_code, ByteString reason_phrase, HeaderList const& response_headers);
+    void create_entry(URL::URL const&, StringView method, HeaderList const& request_headers, u32 status_code, ByteString reason_phrase, HeaderList const& response_headers);
     void finalize_entry(URL::URL const&, StringView method, ByteBuffer response_body);
 
 private:
