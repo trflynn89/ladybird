@@ -44,7 +44,7 @@ Optional<MemoryCache::Entry const&> MemoryCache::open_entry(URL::URL const& url,
     return cache_entry;
 }
 
-void MemoryCache::create_entry(URL::URL const& url, StringView method, u32 status_code, ByteString reason_phrase, HeaderList const& response_headers)
+void MemoryCache::create_entry(URL::URL const& url, StringView method, HeaderList const& request_headers, u32 status_code, ByteString reason_phrase, HeaderList const& response_headers)
 {
     if (!is_cacheable(method))
         return;
@@ -54,12 +54,16 @@ void MemoryCache::create_entry(URL::URL const& url, StringView method, u32 statu
     auto serialized_url = serialize_url_for_cache_storage(url);
     auto cache_key = create_cache_key(serialized_url, method);
 
+    auto request_headers_copy = HeaderList::create();
+    store_header_and_trailer_fields(request_headers_copy, request_headers);
+
     auto response_headers_copy = HeaderList::create();
     store_header_and_trailer_fields(response_headers_copy, response_headers);
 
     Entry cache_entry {
         .status_code = status_code,
         .reason_phrase = move(reason_phrase),
+        .request_headers = move(request_headers_copy),
         .response_headers = move(response_headers_copy),
         .response_body = {},
     };
