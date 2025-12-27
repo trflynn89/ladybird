@@ -88,7 +88,7 @@ Variant<Optional<CacheEntryReader&>, DiskCache::CacheHasOpenEntry> DiskCache::op
     if (check_if_cache_has_open_entry(request, cache_key, url, open_mode == OpenMode::Read ? CheckReaderEntries::No : CheckReaderEntries::Yes))
         return CacheHasOpenEntry {};
 
-    auto index_entry = m_index.find_entry(cache_key);
+    auto index_entry = m_index.find_entry(cache_key, request_headers);
     if (!index_entry.has_value()) {
         dbgln_if(HTTP_DISK_CACHE_DEBUG, "\033[35;1mNo disk cache entry for\033[0m {}", url);
         return Optional<CacheEntryReader&> {};

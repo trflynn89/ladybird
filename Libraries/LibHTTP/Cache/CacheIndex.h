@@ -38,7 +38,7 @@ public:
     void remove_entry(u64 cache_key);
     void remove_entries_accessed_since(UnixDateTime, Function<void(u64 cache_key)> on_entry_removed);
 
-    Optional<Entry&> find_entry(u64 cache_key);
+    Optional<Entry&> find_entry(u64 cache_key, HeaderList const& request_headers);
 
     void update_response_headers(u64 cache_key, NonnullRefPtr<HeaderList>);
     void update_last_access_time(u64 cache_key);
@@ -50,7 +50,7 @@ private:
         Database::StatementID insert_entry { 0 };
         Database::StatementID remove_entry { 0 };
         Database::StatementID remove_entries_accessed_since { 0 };
-        Database::StatementID select_entry { 0 };
+        Database::StatementID select_entries { 0 };
         Database::StatementID update_response_headers { 0 };
         Database::StatementID update_last_access_time { 0 };
         Database::StatementID estimate_cache_size_accessed_since { 0 };
@@ -61,7 +61,7 @@ private:
     NonnullRawPtr<Database::Database> m_database;
     Statements m_statements;
 
-    HashMap<u64, Entry> m_entries;
+    HashMap<u64, Vector<Entry>> m_entries;
 };
 
 }

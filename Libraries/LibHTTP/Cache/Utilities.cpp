@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/QuickSort.h>
 #include <LibCrypto/Hash/SHA1.h>
 #include <LibHTTP/Cache/DiskCache.h>
 #include <LibHTTP/Cache/Utilities.h>
@@ -49,13 +50,9 @@ String serialize_url_for_cache_storage(URL::URL const& url)
     return sanitized.serialize();
 }
 
-u64 create_cache_key(StringView url, StringView method)
+static u64 serialize_hash(Crypto::Hash::SHA1& hasher)
 {
-    auto hasher = Crypto::Hash::SHA1::create();
-    hasher->update(url);
-    hasher->update(method);
-
-    auto digest = hasher->digest();
+    auto digest = hasher.digest();
     auto bytes = digest.bytes();
 
     u64 result = 0;
@@ -69,6 +66,41 @@ u64 create_cache_key(StringView url, StringView method)
     result |= static_cast<u64>(bytes[7]);
 
     return result;
+}
+
+u64 create_cache_key(StringView url, StringView method)
+{
+    auto hasher = Crypto::Hash::SHA1::create();
+    hasher->update(url);
+    hasher->update(method);
+
+    return serialize_hash(*hasher);
+}
+
+u64 create_vary_key(HeaderList const& request_headers, HeaderList const& response_headers)
+{
+    auto vary = response_headers.get("Vary"sv);
+    if (!vary.has_value())
+        return 0;
+
+    auto hasher = Crypto::Hash::SHA1::create();
+    auto found_any_match = false;
+
+    vary->view().for_each_split_view(","sv, SplitBehavior::Nothing, [&](StringView header) {
+        auto value = request_headers.get(header);
+        if (!value.has_value())
+            return IterationDecision::Continue;
+
+        hasher->update(value->trim_whitespace());
+        found_any_match = true;
+
+        return IterationDecision::Continue;
+    });
+
+    if (!found_any_match)
+        return 0;
+
+    return serialize_hash(*hasher);
 }
 
 LexicalPath path_for_cache_key(LexicalPath const& cache_directory, u64 cache_key)
@@ -341,6 +373,90 @@ AK::Duration calculate_stale_while_revalidate_lifetime(HeaderList const& headers
     }
 
     return {};
+}
+
+RefPtr<HeaderList> normalize_request_vary_header_values(HeaderList const& request_headers, HeaderList const& response_headers)
+{
+    auto vary = response_headers.get_decode_and_split("Vary"sv);
+    if (!vary.has_value())
+        return {};
+
+    auto vary_header_values = HeaderList::create();
+
+    for (auto const& header : *vary) {
+        //
+
+        auto value = request_headers.get(header);
+    }
+}
+
+// https://httpwg.org/specs/rfc9111.html#caching.negotiated.responses
+bool is_vary_mismatch(HeaderList const& request_headers, HeaderList const& original_request_headers, HeaderList const& response_headers)
+{
+    // When a cache receives a request that can be satisfied by a stored response and that stored response contains a
+    // Vary header field (Section 12.5.5 of [HTTP]), the cache MUST NOT use that stored response without revalidation
+    // unless all the presented request header fields nominated by that Vary field value match those fields in the
+    // original request (i.e., the request that caused the cached response to be stored).
+    auto vary = response_headers.get_decode_and_split("Vary"sv);
+    if (!vary.has_value())
+        return false;
+
+    for (auto const& header : *vary) {
+        // A stored response with a Vary header field value containing a member "*" always fails to match.
+        if (header == "*"sv)
+            return true;
+
+        auto value = request_headers.get_decode_and_split(header);
+        auto original_value = original_request_headers.get_decode_and_split(header);
+
+        // The header fields from two requests are defined to match if and only if those in the first request can be
+        // transformed to those in the second request by applying any of the following:
+        // * adding or removing whitespace, where allowed in the header field's syntax
+        // * combining multiple header field lines with the same field name (see Section 5.2 of [HTTP])
+        // * normalizing both header field values in a way that is known to have identical semantics, according to the
+        //   header field's specification (e.g., reordering field values when order is not significant;
+        //   case-normalization, where values are defined to be case-insensitive)
+
+        // If (after any normalization that might take place) a header field is absent from a request, it can only match
+        // another request if it is also absent there.
+        if (value.has_value() != original_value.has_value())
+            return true;
+        if (!value.has_value())
+            continue;
+
+        // FIXME: Handle headers for which re-ordering and case-insensitive matching are not allowed.
+        if (value->size() != original_value->size())
+            return true;
+
+        quick_sort(*value);
+        quick_sort(*original_value);
+
+        for (size_t i = 0; i < value->size(); ++i) {
+            if (value->at(i).equals_ignoring_ascii_case(original_value->at(i)))
+                return true;
+        }
+    }
+
+    return false;
+}
+
+// https://httpwg.org/specs/rfc9111.html#caching.negotiated.responses
+bool is_higher_ranked_request(HeaderList const& candidate_headers, HeaderList const& current_best_headers)
+{
+    // If multiple stored responses match, the cache will need to choose one to use. When a nominated request header
+    // field has a known mechanism for ranking preference (e.g., qvalues on Accept and similar request header fields),
+    // that mechanism MAY be used to choose a preferred response. If such a mechanism is not available, or leads to
+    // equally preferred responses, the most recent response (as determined by the Date header field) is chosen, as
+    // per Section 4.
+    auto candidate_date = parse_http_date(candidate_headers.get("Date"sv));
+    auto current_best_date = parse_http_date(current_best_headers.get("Date"sv));
+
+    if (!current_best_date.has_value())
+        return candidate_date.has_value();
+    if (!candidate_date.has_value())
+        return false;
+
+    return *candidate_date > *current_best_date;
 }
 
 CacheLifetimeStatus cache_lifetime_status(HeaderList const& headers, AK::Duration freshness_lifetime, AK::Duration current_age)
