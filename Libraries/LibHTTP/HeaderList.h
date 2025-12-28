@@ -52,6 +52,17 @@ public:
 
     [[nodiscard]] Vector<ByteString> unique_names() const;
 
+    template<typename Callback>
+    void for_each_header_value(StringView name, Callback&& callback) const
+    {
+        for (auto const& header : m_headers) {
+            if (!header.name.equals_ignoring_ascii_case(name))
+                continue;
+            if (callback(header.value) == IterationDecision::Break)
+                break;
+        }
+    }
+
 private:
     explicit HeaderList(Vector<Header>);
 
