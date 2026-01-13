@@ -10,6 +10,7 @@
 #include <LibUnicode/ICU.h>
 
 #include <unicode/dtptngen.h>
+#include <unicode/gregocal.h>
 #include <unicode/locdspnm.h>
 #include <unicode/numsys.h>
 #include <unicode/tznames.h>
@@ -17,6 +18,7 @@
 namespace Unicode {
 
 static HashMap<String, OwnPtr<LocaleData>> s_locale_cache;
+static HashMap<String, OwnPtr<CalendarData>> s_calendar_cache;
 static HashMap<String, OwnPtr<TimeZoneData>> s_time_zone_cache;
 
 Optional<LocaleData&> LocaleData::for_locale(StringView locale)
@@ -112,6 +114,42 @@ icu::TimeZoneNames& LocaleData::time_zone_names()
     }
 
     return *m_time_zone_names;
+}
+
+Optional<CalendarData&> CalendarData::for_calendar(StringView calendar)
+{
+    auto calendar_data = s_calendar_cache.get(calendar);
+
+    if (!calendar_data.has_value()) {
+        calendar_data = s_calendar_cache.ensure(MUST(String::from_utf8(calendar)), [&]() -> OwnPtr<CalendarData> {
+            auto identifier = ByteString::formatted("en@calendar={}", calendar);
+            UErrorCode status = U_ZERO_ERROR;
+
+            auto icu_calendar = adopt_own_if_nonnull(icu::Calendar::createInstance(identifier.characters(), status));
+            if (!icu_calendar || !icu_success(status))
+                return nullptr;
+
+            if (auto* gregorian_calendar = as_if<icu::GregorianCalendar>(icu_calendar.ptr())) {
+                // https://tc39.es/ecma262/#sec-time-values-and-time-range
+                // A time value supports a slightly smaller range of -8,640,000,000,000,000 to 8,640,000,000,000,000 milliseconds.
+                static constexpr double ECMA_262_MINIMUM_TIME = -8.64E15;
+
+                gregorian_calendar->setGregorianChange(ECMA_262_MINIMUM_TIME, status);
+                VERIFY(icu_success(status));
+            }
+
+            return adopt_own(*new CalendarData { icu_calendar.release_nonnull() });
+        });
+    }
+
+    if (calendar_data.value())
+        return *calendar_data.value();
+    return {};
+}
+
+CalendarData::CalendarData(NonnullOwnPtr<icu::Calendar> calendar)
+    : m_calendar(move(calendar))
+{
 }
 
 Optional<TimeZoneData&> TimeZoneData::for_time_zone(StringView time_zone)
