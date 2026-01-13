@@ -1,4 +1,5 @@
 set(TEST_SOURCES
+    TestCalendar.cpp
     TestDisplayNames.cpp
     TestIDNA.cpp
     TestLocale.cpp

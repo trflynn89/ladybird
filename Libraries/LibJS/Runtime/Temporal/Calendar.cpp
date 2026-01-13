@@ -21,6 +21,7 @@
 #include <LibJS/Runtime/Temporal/TimeZone.h>
 #include <LibJS/Runtime/Temporal/ZonedDateTime.h>
 #include <LibJS/Runtime/VM.h>
+#include <LibUnicode/Calendar.h>
 #include <LibUnicode/Locale.h>
 #include <LibUnicode/UnicodeKeywords.h>
 
@@ -114,6 +115,84 @@ static void set_default_field_value(CalendarField field, CalendarFields& fields)
     }
 
     VERIFY_NOT_REACHED();
+}
+
+static constexpr Unicode::ISODate to_unicode_iso_date(ISODate iso_date)
+{
+    return { .year = iso_date.year, .month = static_cast<u8>(iso_date.month - 1), .day = iso_date.day };
+}
+
+static constexpr ISODate from_unicode_iso_date(Unicode::ISODate iso_date)
+{
+    return { .year = iso_date.year, .month = static_cast<u8>(iso_date.month + 1), .day = iso_date.day };
+}
+
+static constexpr Unicode::DateDuration to_unicode_date_duration(DateDuration const& duration)
+{
+    return { .years = duration.years, .months = duration.months, .weeks = duration.weeks, .days = duration.days };
+}
+
+static constexpr DateDuration from_unicode_date_duration(Unicode::DateDuration const& duration)
+{
+    return { .years = duration.years, .months = duration.months, .weeks = duration.weeks, .days = duration.days };
+}
+
+// https://tc39.es/proposal-intl-era-monthcode/#table-additional-month-codes
+struct AdditionalMonthCodes {
+    StringView calendar;
+    Vector<StringView> additional_month_codes;
+};
+static auto ADDITIONAL_MONTH_CODES = to_array<AdditionalMonthCodes>({
+    { "chinese"sv, { { "M01L"sv, "M02L"sv, "M03L"sv, "M04L"sv, "M05L"sv, "M06L"sv, "M07L"sv, "M08L"sv, "M09L"sv, "M10L"sv, "M11L"sv, "M12L"sv } } },
+    { "coptic"sv, { { "M13"sv } } },
+    { "dangi"sv, { { "M01L"sv, "M02L"sv, "M03L"sv, "M04L"sv, "M05L"sv, "M06L"sv, "M07L"sv, "M08L"sv, "M09L"sv, "M10L"sv, "M11L"sv, "M12L"sv } } },
+    { "ethioaa"sv, { { "M13"sv } } },
+    { "ethiopic"sv, { { "M13"sv } } },
+    { "hebrew"sv, { { "M05L"sv } } },
+});
+
+static constexpr bool calender_supports_eras(StringView calendar)
+{
+    return calendar.is_one_of(
+        "buddhist"sv,
+        "coptic"sv,
+        "ethioaa"sv,
+        "ethiopic"sv,
+        "gregory"sv,
+        "hebrew"sv,
+        "indian"sv,
+        "islamic-civil"sv,
+        "islamic-tbla"sv,
+        "islamic-umalqura"sv,
+        "japanese"sv,
+        "persian"sv,
+        "roc"sv);
+}
+
+static constexpr bool is_lunisolar_calendar(StringView calendar)
+{
+    return calendar.is_one_of("chinese", "dangi", "hebrew"sv);
+}
+
+// static constexpr u8 months_per_year_in_non_lunisolar_calendar(StringView calendar)
+// {
+//     return 12u + calendar.is_one_of("coptic"sv, "ethioaa"sv, "ethiopic"sv);
+// }
+
+static bool is_valid_month_code_in_calendar(VM& vm, StringView calendar, StringView month_code)
+{
+    auto [month_number, is_leap_month] = MUST(parse_month_code(vm, month_code));
+
+    if (!is_leap_month && month_number > 0 && month_number <= 12)
+        return true;
+
+    auto it = find_value(ADDITIONAL_MONTH_CODES, [&](auto const& additional_month_codes) {
+        return additional_month_codes.calendar == calendar;
+    });
+    if (!it.has_value())
+        return false;
+
+    return it->additional_month_codes.contains_slow(month_code);
 }
 
 // 12.1.1 CanonicalizeCalendar ( id ), https://tc39.es/proposal-temporal/#sec-temporal-canonicalizecalendar
@@ -412,9 +491,14 @@ CalendarFields calendar_merge_fields(StringView calendar, CalendarFields const& 
 // 12.3.6 NonISODateAdd ( calendar, isoDate, duration, overflow ), https://tc39.es/proposal-temporal/#sec-temporal-nonisodateadd
 ThrowCompletionOr<ISODate> non_iso_date_add(VM& vm, StringView calendar, ISODate iso_date, DateDuration const& duration, Overflow overflow)
 {
-    // FIXME: Return an ISODate for an ISO8601 calendar for now.
-    (void)calendar;
-    return calendar_date_add(vm, "iso8601"sv, iso_date, duration, overflow);
+    // FIXME: Use the overflow parameter somehow.
+    (void)overflow;
+
+    auto result = Unicode::add_duration_to_iso_date_in_calendar(calendar, to_unicode_iso_date(iso_date), to_unicode_date_duration(duration));
+    if (!result.has_value())
+        return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidISODate);
+
+    return from_unicode_iso_date(*result);
 }
 
 // 12.3.7 CalendarDateAdd ( calendar, isoDate, duration, overflow ), https://tc39.es/proposal-temporal/#sec-temporal-calendardateadd
@@ -451,11 +535,14 @@ ThrowCompletionOr<ISODate> calendar_date_add(VM& vm, StringView calendar, ISODat
 }
 
 // 12.3.8 NonISODateUntil ( calendar, one, two, largestUnit ), https://tc39.es/proposal-temporal/#sec-temporal-nonisodateuntil
-DateDuration non_iso_date_until(VM& vm, StringView calendar, ISODate one, ISODate two, Unit largest_unit)
+DateDuration non_iso_date_until(VM&, StringView calendar, ISODate one, ISODate two, Unit largest_unit)
 {
-    // FIXME: Return a DateDuration for an ISO8601 calendar for now.
-    (void)calendar;
-    return calendar_date_until(vm, "iso8601"sv, one, two, largest_unit);
+    dbgln("!!! non_iso_date_until {}/{}/{} -- {}/{}/{}",
+        one.month, one.day, one.year,
+        two.month, two.day, two.year);
+
+    auto result = Unicode::calendar_until(calendar, to_unicode_iso_date(one), to_unicode_iso_date(two), static_cast<Unicode::Unit>(largest_unit));
+    return from_unicode_date_duration(result);
 }
 
 // 12.3.9 CalendarDateUntil ( calendar, one, two, largestUnit ), https://tc39.es/proposal-temporal/#sec-temporal-calendardateuntil
@@ -815,9 +902,19 @@ u8 iso_day_of_week(ISODate iso_date)
 // 12.3.21 NonISOCalendarDateToISO ( calendar, fields, overflow ), https://tc39.es/proposal-temporal/#sec-temporal-nonisocalendardatetoiso
 ThrowCompletionOr<ISODate> non_iso_calendar_date_to_iso(VM& vm, StringView calendar, CalendarFields const& fields, Overflow overflow)
 {
-    // FIXME: Create an ISODateRecord based on an ISO8601 calendar for now. See also: CalendarResolveFields.
-    (void)calendar;
-    return calendar_date_to_iso(vm, "iso8601"sv, fields, overflow);
+    dbgln("!!! non_iso_calendar_date_to_iso: {} {} {} {}", calendar, fields.year, fields.month, fields.day);
+    (void)vm;
+    (void)overflow;
+
+    Unicode::NonISODate non_iso_date {
+        .era_year = fields.era_year,
+        .year = fields.year,
+        .month = fields.month.has_value() ? *fields.month - 1 : fields.month,
+        .day = fields.day,
+    };
+
+    auto result = Unicode::calendar_date_to_iso_date(calendar, non_iso_date);
+    return from_unicode_iso_date(result);
 }
 
 // 12.3.22 CalendarDateToISO ( calendar, fields, overflow ), https://tc39.es/proposal-temporal/#sec-temporal-calendardatetoiso
@@ -838,12 +935,101 @@ ThrowCompletionOr<ISODate> calendar_date_to_iso(VM& vm, StringView calendar, Cal
     return non_iso_calendar_date_to_iso(vm, calendar, fields, overflow);
 }
 
+static constexpr i32 month_day_search_start_year(StringView month_code, u32 day)
+{
+    // Note that ICU4C actually has _no_ years in which leap months M01L and
+    // M09L through M12L have 30 days. The values marked with (*) here are years
+    // in which the leap month occurs with 29 days. ICU4C disagrees with ICU4X
+    // here and it is not clear which is correct.
+    if (month_code == "M01L"sv)
+        return 1651; // *
+    if (month_code == "M02L"sv)
+        return day < 30 ? 1947 : 1765;
+    if (month_code == "M03L"sv)
+        return day < 30 ? 1966 : 1955;
+    if (month_code == "M04L"sv)
+        return day < 30 ? 1963 : 1944;
+    if (month_code == "M05L"sv)
+        return day < 30 ? 1971 : 1952;
+    if (month_code == "M06L"sv)
+        return day < 30 ? 1960 : 1941;
+    if (month_code == "M07L"sv)
+        return day < 30 ? 1968 : 1938;
+    if (month_code == "M08L"sv)
+        return day < 30 ? 1957 : 1718;
+    if (month_code == "M09L"sv)
+        return 1832; // *
+    if (month_code == "M10L"sv)
+        return 1870; // *
+    if (month_code == "M11L"sv)
+        return 1814; // *
+    if (month_code == "M12L"sv)
+        return 1890; // *
+    return 1972;
+}
+
 // 12.3.23 NonISOMonthDayToISOReferenceDate ( calendar, fields, overflow ), https://tc39.es/proposal-temporal/#sec-temporal-nonisomonthdaytoisoreferencedate
 ThrowCompletionOr<ISODate> non_iso_month_day_to_iso_reference_date(VM& vm, StringView calendar, CalendarFields const& fields, Overflow overflow)
 {
+    dbgln("!!! non_iso_month_day_to_iso_reference_date");
+    dbgln("    {}:: {} {} {} {} {}", calendar, fields.era_year, fields.year, fields.month, fields.month_code, fields.day);
     // FIXME: Create an ISODateRecord based on an ISO8601 calendar for now. See also: CalendarResolveFields.
     (void)calendar;
-    return calendar_month_day_to_iso_reference_date(vm, "iso8601"sv, fields, overflow);
+
+    auto supports_eras = calender_supports_eras(calendar);
+    auto era_year = fields.era_year;
+    auto year = fields.year;
+    auto month_code = fields.month_code;
+    auto day = fields.day;
+
+    if (!month_code.has_value() || year.has_value() || (supports_eras && era_year.has_value())) {
+        // Apply overflow behaviour to year/month/day, to get correct monthCode/day
+        auto iso_date = TRY(calendar_date_to_iso(vm, calendar, fields, overflow));
+        auto calendar_date = calendar_iso_to_date(calendar, iso_date);
+
+        month_code = calendar_date.month_code;
+        day = calendar_date.day;
+    }
+
+    if (!is_valid_month_code_in_calendar(vm, calendar, *month_code))
+        return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidCalendarFieldName, "monthCode"sv);
+
+    // FIXME: Apply overflow to day in month. i.e. make sure the day does not exceed the month's number of days.
+
+    // Look backwards starting from one of the calendar years spanning ISO year
+    // 1972, up to 20 calendar years prior, to find a year that has this month
+    // and day. Normal months and days will match immediately, but for leap days
+    // and leap months we may have to look for a while. For searches longer than
+    // 20 years, override the start date in monthDaySearchStartYear.
+    ISODate iso_start_date {
+        .year = month_day_search_start_year(*month_code, *day),
+        .month = 12,
+        .day = 31,
+    };
+
+    return iso_start_date;
+
+    // auto calendar_start_date = calendar_iso_to_date(calendar, iso_start_date);
+
+    // // Note: relies on lexicographical ordering of monthCodes
+    // auto calendar_year = calendar_start_date.month_code > *month_code || (calendar_start_date.month_code == month_code && calendar_start_date.day >= *day)
+    //     ? calendar_start_date.year
+    //     : calendar_start_date.year - 1;
+
+    // for (i32 i = 0; i < 20; i++) {
+    //     auto calendar_date = calendar_start_date;
+    //     calendar_date.year -= i;
+
+    //     auto iso_date = TRY(calendar_date_to_iso(vm, calendar, fields, overflow));
+
+    //     isoDate const = this.calendarToIsoDate(testCalendarDate, 'constrain', cache);
+    //     roundTripCalendarDate const = this.isoToCalendarDate(isoDate, cache);
+    //     if (roundTripCalendarDate.monthCode == = monthCode&& roundTripCalendarDate.day == = day) {
+    //         return isoDate;
+    //     }
+    // }
+
+    // VERIFY_NOT_REACHED();
 }
 
 // 12.3.24 CalendarMonthDayToISOReferenceDate ( calendar, fields, overflow ), https://tc39.es/proposal-temporal/#sec-temporal-calendarmonthdaytoisoreferencedate
@@ -875,9 +1061,32 @@ ThrowCompletionOr<ISODate> calendar_month_day_to_iso_reference_date(VM& vm, Stri
 // 12.3.25 NonISOCalendarISOToDate ( calendar, isoDate ), https://tc39.es/proposal-temporal/#sec-temporal-nonisocalendarisotodate
 CalendarDate non_iso_calendar_iso_to_date(StringView calendar, ISODate iso_date)
 {
-    // FIXME: Return an ISO8601 calendar date for now.
-    (void)calendar;
-    return calendar_iso_to_date("iso8601"sv, iso_date);
+    dbgln("!!! non_iso_calendar_iso_to_date");
+    auto result = Unicode::iso_date_to_calendar_date(calendar, to_unicode_iso_date(iso_date));
+
+    return CalendarDate {
+        .era = result.era,
+        .era_year = result.era_year,
+
+        .year = result.year,
+        .month = static_cast<u8>(result.month + 1),
+        .month_code = result.month_code,
+
+        .day = result.day,
+        .day_of_week = result.day_of_week,
+        .day_of_year = result.day_of_year,
+
+        .week_of_year = {
+            .week = result.week_of_year.week,
+            .year = result.week_of_year.year,
+        },
+
+        .days_in_week = result.days_in_week,
+        .days_in_month = result.days_in_month,
+        .days_in_year = result.days_in_year,
+        .months_in_year = result.months_in_year,
+        .in_leap_year = result.in_leap_year,
+    };
 }
 
 // 12.3.26 CalendarISOToDate ( calendar, isoDate ), https://tc39.es/proposal-temporal/#sec-temporal-calendarisotodate
@@ -929,6 +1138,7 @@ Vector<CalendarField> calendar_extra_fields(StringView calendar, CalendarFieldLi
 // 12.3.28 NonISOFieldKeysToIgnore ( calendar, keys ), https://tc39.es/proposal-temporal/#sec-temporal-nonisofieldkeystoignore
 Vector<CalendarField> non_iso_field_keys_to_ignore(StringView calendar, ReadonlySpan<CalendarField> keys)
 {
+    dbgln("!!! non_iso_field_keys_to_ignore");
     // FIXME: Return keys for an ISO8601 calendar for now.
     (void)calendar;
     return calendar_field_keys_to_ignore("iso8601"sv, keys);
@@ -969,9 +1179,50 @@ Vector<CalendarField> calendar_field_keys_to_ignore(StringView calendar, Readonl
 // 12.3.30 NonISOResolveFields ( calendar, fields, type ), https://tc39.es/proposal-temporal/#sec-temporal-nonisoresolvefields
 ThrowCompletionOr<void> non_iso_resolve_fields(VM& vm, StringView calendar, CalendarFields& fields, DateType type)
 {
-    // FIXME: Resolve fields as an ISO8601 calendar for now. See also: CalendarMonthDayToISOReferenceDate.
-    (void)calendar;
-    return calendar_resolve_fields(vm, "iso8601"sv, fields, type);
+    dbgln("!!! non_iso_resolve_fields {}", (int)type);
+    if ((type == DateType::Date || type == DateType::YearMonth) && !fields.year.has_value()) {
+        if (!calender_supports_eras(calendar))
+            return vm.throw_completion<TypeError>(ErrorType::MissingRequiredProperty, "year"sv);
+
+        if (!fields.era.has_value() || !fields.era_year.has_value())
+            return vm.throw_completion<TypeError>(ErrorType::MissingRequiredProperty, "year (or era and era year)"sv);
+    }
+
+    if ((type == DateType::Date || type == DateType::MonthDay) && !fields.day.has_value())
+        return vm.throw_completion<TypeError>(ErrorType::MissingRequiredProperty, "day"sv);
+
+    if (type == DateType::MonthDay && fields.month.has_value() && !fields.year.has_value()) {
+        if (!calender_supports_eras(calendar))
+            return vm.throw_completion<TypeError>(ErrorType::MissingRequiredProperty, "year"sv);
+
+        if (!fields.era.has_value() || !fields.era_year.has_value())
+            return vm.throw_completion<TypeError>(ErrorType::MissingRequiredProperty, "year (or era and era year)"sv);
+    }
+
+    if (true || !is_lunisolar_calendar(calendar)) {
+        auto month = fields.month;
+        auto month_code = fields.month_code;
+
+        if (!month_code.has_value()) {
+            if (!month.has_value())
+                return vm.throw_completion<TypeError>(ErrorType::MissingRequiredProperty, "month"sv);
+
+            // auto months_per_year = months_per_year_in_non_lunisolar_calendar(calendar);
+            fields.month_code = create_month_code(*month, false);
+        } else {
+            if (!is_valid_month_code_in_calendar(vm, calendar, *month_code))
+                return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidCalendarFieldName, "monthCode"sv);
+
+            auto [month_number, _] = MUST(parse_month_code(vm, *month_code));
+
+            if (month.has_value() && month != month_number)
+                return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidCalendarFieldName, "month"sv);
+
+            fields.month = month_number;
+        }
+    }
+
+    return {};
 }
 
 // 12.3.31 CalendarResolveFields ( calendar, fields, type ), https://tc39.es/proposal-temporal/#sec-temporal-calendarresolvefields
