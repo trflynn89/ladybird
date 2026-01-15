@@ -22,8 +22,8 @@ struct ISODate {
 struct NonISODate {
     Optional<i32> era_year;
     Optional<i32> year;
-    Optional<u32> month;
-    Optional<u32> day;
+    Optional<i8> month;
+    Optional<u8> day;
 };
 
 struct YearWeek {
@@ -67,10 +67,22 @@ enum class Unit {
     Day,
 };
 
-Optional<ISODate> add_duration_to_iso_date_in_calendar(StringView calendar, ISODate iso_date, DateDuration const&);
+enum class Lenient {
+    No,
+    Yes,
+};
+
+Optional<ISODate> add_duration_to_iso_date_in_calendar(StringView calendar, ISODate iso_date, DateDuration const&, Lenient);
 DateDuration calendar_until(StringView calendar, ISODate one, ISODate two, Unit largest_unit);
 
 CalendarDate iso_date_to_calendar_date(StringView calendar, ISODate iso_date);
-ISODate calendar_date_to_iso_date(StringView calendar, NonISODate const& iso_date);
+Optional<ISODate> calendar_date_to_iso_date(StringView calendar, NonISODate const& iso_date, Lenient);
+
+Optional<String> calendar_era(StringView calendar, ISODate date);
+Optional<i32> calendar_era_year(StringView calendar, ISODate date);
+Optional<i32> calendar_year(StringView calendar, ISODate date);
+bool calendar_year_contains_month_code(StringView calendar, i32 year, StringView month_code);
+u8 calendar_months_in_year(StringView calendar, i32 year);
+u8 calendar_days_in_month(StringView calendar, i32 year, i8 month);
 
 }

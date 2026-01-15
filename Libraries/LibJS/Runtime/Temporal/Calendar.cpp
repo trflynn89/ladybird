@@ -117,57 +117,136 @@ static void set_default_field_value(CalendarField field, CalendarFields& fields)
     VERIFY_NOT_REACHED();
 }
 
-static constexpr Unicode::ISODate to_unicode_iso_date(ISODate iso_date)
+[[maybe_unused]] static constexpr Unicode::ISODate to_unicode_iso_date(ISODate iso_date)
 {
     return { .year = iso_date.year, .month = static_cast<u8>(iso_date.month - 1), .day = iso_date.day };
 }
 
-static constexpr ISODate from_unicode_iso_date(Unicode::ISODate iso_date)
+[[maybe_unused]] static constexpr ISODate from_unicode_iso_date(Unicode::ISODate iso_date)
 {
     return { .year = iso_date.year, .month = static_cast<u8>(iso_date.month + 1), .day = iso_date.day };
 }
 
-static constexpr Unicode::DateDuration to_unicode_date_duration(DateDuration const& duration)
+[[maybe_unused]] static constexpr Unicode::DateDuration to_unicode_date_duration(DateDuration const& duration)
 {
     return { .years = duration.years, .months = duration.months, .weeks = duration.weeks, .days = duration.days };
 }
 
-static constexpr DateDuration from_unicode_date_duration(Unicode::DateDuration const& duration)
+[[maybe_unused]] static constexpr DateDuration from_unicode_date_duration(Unicode::DateDuration const& duration)
 {
     return { .years = duration.years, .months = duration.months, .weeks = duration.weeks, .days = duration.days };
 }
 
-// https://tc39.es/proposal-intl-era-monthcode/#table-additional-month-codes
-struct AdditionalMonthCodes {
-    StringView calendar;
-    Vector<StringView> additional_month_codes;
-};
-static auto ADDITIONAL_MONTH_CODES = to_array<AdditionalMonthCodes>({
-    { "chinese"sv, { { "M01L"sv, "M02L"sv, "M03L"sv, "M04L"sv, "M05L"sv, "M06L"sv, "M07L"sv, "M08L"sv, "M09L"sv, "M10L"sv, "M11L"sv, "M12L"sv } } },
-    { "coptic"sv, { { "M13"sv } } },
-    { "dangi"sv, { { "M01L"sv, "M02L"sv, "M03L"sv, "M04L"sv, "M05L"sv, "M06L"sv, "M07L"sv, "M08L"sv, "M09L"sv, "M10L"sv, "M11L"sv, "M12L"sv } } },
-    { "ethioaa"sv, { { "M13"sv } } },
-    { "ethiopic"sv, { { "M13"sv } } },
-    { "hebrew"sv, { { "M05L"sv } } },
+// Table 1: Calendar types described in CLDR, https://tc39.es/proposal-intl-era-monthcode/#table-calendar-types
+static constexpr auto CLDR_CALENDAR_TYPES = to_array<StringView>({
+    "buddhist"sv,
+    "chinese"sv,
+    "coptic"sv,
+    "dangi"sv,
+    "ethioaa"sv,
+    "ethiopic"sv,
+    "ethiopic-amete-alem"sv,
+    "gregory"sv,
+    "hebrew"sv,
+    "indian"sv,
+    "islamic-civil"sv,
+    "islamic-tbla"sv,
+    "islamic-umalqura"sv,
+    "islamicc"sv,
+    "iso8601"sv,
+    "japanese"sv,
+    "persian"sv,
+    "roc"sv,
 });
 
-static constexpr bool calender_supports_eras(StringView calendar)
-{
-    return calendar.is_one_of(
-        "buddhist"sv,
-        "coptic"sv,
-        "ethioaa"sv,
-        "ethiopic"sv,
-        "gregory"sv,
-        "hebrew"sv,
-        "indian"sv,
-        "islamic-civil"sv,
-        "islamic-tbla"sv,
-        "islamic-umalqura"sv,
-        "japanese"sv,
-        "persian"sv,
-        "roc"sv);
-}
+// Table 2: Eras, https://tc39.es/proposal-intl-era-monthcode/#table-eras
+struct CalendarEraData {
+    enum class Kind {
+        Epoch,
+        Offset,
+        Negative,
+    };
+
+    StringView calendar;
+    StringView era;
+    Vector<StringView> alias;
+    Optional<i32> minimumEraYear;
+    Optional<i32> maximumEraYear;
+    Optional<Kind> kind;
+    Optional<i32> offset;
+};
+static auto CALENDAR_ERA_DATA = to_array<CalendarEraData>({
+    // clang-format off
+    { "buddhist"sv,         "be"sv,     {},         {}, {},   CalendarEraData::Kind::Epoch,    {}    },
+    { "coptic"sv,           "am"sv,     {},         {}, {},   CalendarEraData::Kind::Epoch,    {}    },
+    { "ethioaa"sv,          "aa"sv,     {},         {}, {},   CalendarEraData::Kind::Epoch,    {}    },
+    { "ethiopic"sv,         "am"sv,     {},         1,  {},   CalendarEraData::Kind::Epoch,    {}    },
+    { "ethiopic"sv,         "aa"sv,     {},         {}, 5500, CalendarEraData::Kind::Offset,   -5499 },
+    { "gregory"sv,          "ce"sv,     { "ad"sv }, 1,  {},   CalendarEraData::Kind::Epoch,    {}    },
+    { "gregory"sv,          "bce"sv,    { "bc"sv }, 1,  {},   CalendarEraData::Kind::Negative, {}    },
+    { "hebrew"sv,           "am"sv,     {},         {}, {},   CalendarEraData::Kind::Epoch,    {}    },
+    { "indian"sv,           "shaka"sv,  {},         {}, {},   CalendarEraData::Kind::Epoch,    {}    },
+    { "islamic-civil"sv,    "ah"sv,     {},         1,  {},   CalendarEraData::Kind::Epoch,    {}    },
+    { "islamic-civil"sv,    "bh"sv,     {},         1,  {},   CalendarEraData::Kind::Negative, {}    },
+    { "islamic-tbla"sv,     "ah"sv,     {},         1,  {},   CalendarEraData::Kind::Epoch,    {}    },
+    { "islamic-tbla"sv,     "bh"sv,     {},         1,  {},   CalendarEraData::Kind::Negative, {}    },
+    { "islamic-umalqura"sv, "ah"sv,     {},         1,  {},   CalendarEraData::Kind::Epoch,    {}    },
+    { "islamic-umalqura"sv, "bh"sv,     {},         1,  {},   CalendarEraData::Kind::Negative, {}    },
+    { "japanese"sv,         "reiwa"sv,  {},         1,  {},   CalendarEraData::Kind::Offset,   2019  },
+    { "japanese"sv,         "heisei"sv, {},         1,  31,   CalendarEraData::Kind::Offset,   1989  },
+    { "japanese"sv,         "showa"sv,  {},         1,  64,   CalendarEraData::Kind::Offset,   1926  },
+    { "japanese"sv,         "taisho"sv, {},         1,  15,   CalendarEraData::Kind::Offset,   1912  },
+    { "japanese"sv,         "meiji"sv,  {},         1,  45,   CalendarEraData::Kind::Offset,   1868  },
+    { "japanese"sv,         "ce"sv,     { "ad"sv }, 1,  1868, CalendarEraData::Kind::Epoch,    {}    },
+    { "japanese"sv,         "bce"sv,    { "bc"sv }, 1,  {},   CalendarEraData::Kind::Negative, {}    },
+    { "persian"sv,          "ap"sv,     {},         {}, {},   CalendarEraData::Kind::Epoch,    {}    },
+    { "roc"sv,              "roc"sv,    {},         1,  {},   CalendarEraData::Kind::Epoch,    {}    },
+    { "roc"sv,              "broc"sv,   {},         1,  {},   CalendarEraData::Kind::Negative, {}    },
+    // clang-format on
+});
+
+// Table 3: Additional Month Codes in Calendars, https://tc39.es/proposal-intl-era-monthcode/#table-additional-month-codes
+struct AdditionalMonthCodes {
+    enum class Leap {
+        SkipBackward,
+        SkipForward,
+    };
+
+    StringView calendar;
+    Vector<StringView> additional_month_codes;
+    Optional<Leap> leap_to_common_month_transformation;
+};
+static auto ADDITIONAL_MONTH_CODES = to_array<AdditionalMonthCodes>({
+    { "chinese"sv, { "M01L"sv, "M02L"sv, "M03L"sv, "M04L"sv, "M05L"sv, "M06L"sv, "M07L"sv, "M08L"sv, "M09L"sv, "M10L"sv, "M11L"sv, "M12L"sv }, AdditionalMonthCodes::Leap::SkipBackward },
+    { "coptic"sv, { "M13"sv }, {} },
+    { "dangi"sv, { "M01L"sv, "M02L"sv, "M03L"sv, "M04L"sv, "M05L"sv, "M06L"sv, "M07L"sv, "M08L"sv, "M09L"sv, "M10L"sv, "M11L"sv, "M12L"sv }, AdditionalMonthCodes::Leap::SkipBackward },
+    { "ethioaa"sv, { "M13"sv }, {} },
+    { "ethiopic"sv, { "M13"sv }, {} },
+    { "hebrew"sv, { "M05L"sv }, AdditionalMonthCodes::Leap::SkipForward },
+});
+
+// Table 4: Epoch years, https://tc39.es/proposal-intl-era-monthcode/#table-epoch-years
+// struct EpochYears {
+//     StringView calendar;
+//     i32 epoch_year { 0 };
+// };
+// static auto EPOCH_YEARS = to_array<EpochYears>({
+//     { "buddhist"sv, -543 },
+//     { "chinese"sv, 0 },
+//     { "coptic"sv, 283 },
+//     { "dangi"sv, 0 },
+//     { "ethioaa"sv, -5493 },
+//     { "ethiopic"sv, 7 },
+//     { "gregory"sv, 0 },
+//     { "hebrew"sv, -3761 },
+//     { "indian"sv, 78 },
+//     { "islamic-civil"sv, 621 },
+//     { "islamic-tbla"sv, 621 },
+//     { "islamic-umalqura"sv, 621 },
+//     { "japanese"sv, 0 },
+//     { "persian"sv, 621 },
+//     { "roc"sv, 1911 },
+// });
 
 static constexpr bool is_lunisolar_calendar(StringView calendar)
 {
@@ -178,22 +257,6 @@ static constexpr bool is_lunisolar_calendar(StringView calendar)
 // {
 //     return 12u + calendar.is_one_of("coptic"sv, "ethioaa"sv, "ethiopic"sv);
 // }
-
-static bool is_valid_month_code_in_calendar(VM& vm, StringView calendar, StringView month_code)
-{
-    auto [month_number, is_leap_month] = MUST(parse_month_code(vm, month_code));
-
-    if (!is_leap_month && month_number > 0 && month_number <= 12)
-        return true;
-
-    auto it = find_value(ADDITIONAL_MONTH_CODES, [&](auto const& additional_month_codes) {
-        return additional_month_codes.calendar == calendar;
-    });
-    if (!it.has_value())
-        return false;
-
-    return it->additional_month_codes.contains_slow(month_code);
-}
 
 // 12.1.1 CanonicalizeCalendar ( id ), https://tc39.es/proposal-temporal/#sec-temporal-canonicalizecalendar
 ThrowCompletionOr<String> canonicalize_calendar(VM& vm, StringView id)
@@ -489,16 +552,53 @@ CalendarFields calendar_merge_fields(StringView calendar, CalendarFields const& 
 }
 
 // 12.3.6 NonISODateAdd ( calendar, isoDate, duration, overflow ), https://tc39.es/proposal-temporal/#sec-temporal-nonisodateadd
+// 4.1.18 NonISODateAdd ( calendar, isoDate, duration, overflow ), https://tc39.es/proposal-intl-era-monthcode/#sup-temporal-nonisodateadd
 ThrowCompletionOr<ISODate> non_iso_date_add(VM& vm, StringView calendar, ISODate iso_date, DateDuration const& duration, Overflow overflow)
 {
-    // FIXME: Use the overflow parameter somehow.
-    (void)overflow;
+    // 1. Let parts be CalendarISOToDate(calendar, isoDate).
+    auto parts = calendar_iso_to_date(calendar, iso_date);
 
-    auto result = Unicode::add_duration_to_iso_date_in_calendar(calendar, to_unicode_iso_date(iso_date), to_unicode_date_duration(duration));
-    if (!result.has_value())
+    // 2. Let y0 be parts.[[Year]] + duration.[[Years]].
+    auto y0 = parts.year + duration.years;
+
+    // 3. Let m0 be MonthCodeToOrdinal(calendar, y0, ? ConstrainMonthCode(calendar, y0, parts.[[MonthCode]], overflow)).
+    auto m0 = month_code_to_ordinal(vm, calendar, y0, TRY(constrain_month_code(vm, calendar, y0, parts.month_code, overflow)));
+
+    // 4. Let endOfMonth be BalanceNonISODate(calendar, y0, m0 + duration.[[Months]] + 1, 0).
+    auto end_of_month = balance_non_iso_date(calendar, y0, m0 + duration.months + 1, 0);
+
+    // 5. Let baseDay be parts.[[Day]].
+    auto base_day = parts.day;
+
+    u8 regulated_day = 0;
+
+    // 6. If baseDay < endOfMonth.[[Day]], then
+    if (base_day < end_of_month.day) {
+        // a. Let regulatedDay be baseDay.
+        regulated_day = base_day;
+    }
+    // 7. Else,
+    else {
+        // a. If overflow is REJECT, throw a RangeError exception.
+        if (overflow == Overflow::Reject)
+            return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidISODate);
+
+        // b. Let regulatedDay be endOfMonth.[[Day]].
+        regulated_day = end_of_month.day;
+    }
+
+    // 8. Let balancedDate be BalanceNonISODate(calendar, endOfMonth.[[Year]], endOfMonth.[[Month]], regulatedDay + 7 * duration.[[Weeks]] + duration.[[Days]]).
+    auto balanced_date = balance_non_iso_date(calendar, end_of_month.year, end_of_month.month, regulated_day + (7 * duration.weeks) + duration.days);
+
+    // 9. Let result be ? CalendarIntegersToISO(calendar, balancedDate.[[Year]], balancedDate.[[Month]], balancedDate.[[Day]]).
+    auto result = TRY(calendar_integers_to_iso(vm, calendar, balanced_date.year, balanced_date.month, balanced_date.day));
+
+    // 10. If ISODateWithinLimits(result) is false, throw a RangeError exception.
+    if (!iso_date_within_limits(result))
         return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidISODate);
 
-    return from_unicode_iso_date(*result);
+    // 11. Return result.
+    return result;
 }
 
 // 12.3.7 CalendarDateAdd ( calendar, isoDate, duration, overflow ), https://tc39.es/proposal-temporal/#sec-temporal-calendardateadd
@@ -535,12 +635,35 @@ ThrowCompletionOr<ISODate> calendar_date_add(VM& vm, StringView calendar, ISODat
 }
 
 // 12.3.8 NonISODateUntil ( calendar, one, two, largestUnit ), https://tc39.es/proposal-temporal/#sec-temporal-nonisodateuntil
+// 4.1.19 NonISODateUntil ( calendar, one, two, largestUnit ), https://tc39.es/proposal-intl-era-monthcode/#sup-temporal-nonisodateuntil
 DateDuration non_iso_date_until(VM&, StringView calendar, ISODate one, ISODate two, Unit largest_unit)
 {
-    dbgln("!!! non_iso_date_until {}/{}/{} -- {}/{}/{}",
-        one.month, one.day, one.year,
-        two.month, two.day, two.year);
-
+    // 1. Let sign be -1 × CompareISODate(one, two).
+    // 2. If sign = 0, return ZeroDateDuration().
+    // 3. Let years be 0.
+    // 4. If largestUnit is year, then
+    //     a. Let candidateYears be sign.
+    //     b. Repeat, while NonISODateSurpasses(calendar, sign, one, two, candidateYears, 0, 0, 0) is false,
+    //         i. Set years to candidateYears.
+    //         ii. Set candidateYears to candidateYears + sign.
+    // 5. Let months be 0.
+    // 6. If largestUnit is year or largestUnit is month, then
+    //     a. Let candidateMonths be sign.
+    //     b. Repeat, while NonISODateSurpasses(calendar, sign, one, two, years, candidateMonths, 0, 0) is false,
+    //         i. Set months to candidateMonths.
+    //         ii. Set candidateMonths to candidateMonths + sign.
+    // 7. Let weeks be 0.
+    // 8. If largestUnit is week, then
+    //     a. Let candidateWeeks be sign.
+    //     b. Repeat, while NonISODateSurpasses(calendar, sign, one, two, years, months, candidateWeeks, 0) is false,
+    //         i. Set weeks to candidateWeeks.
+    //         ii. Set candidateWeeks to candidateWeeks + sign.
+    // 9. Let days be 0.
+    // 10. Let candidateDays be sign.
+    // 11. Repeat, while NonISODateSurpasses(calendar, sign, one, two, years, months, weeks, candidateDays) is false,
+    //     a. Set days to candidateDays.
+    //     b. Set candidateDays to candidateDays + sign.
+    // 12. Return ! CreateDateDurationRecord(years, months, weeks, days).
     auto result = Unicode::calendar_until(calendar, to_unicode_iso_date(one), to_unicode_iso_date(two), static_cast<Unicode::Unit>(largest_unit));
     return from_unicode_date_duration(result);
 }
@@ -900,21 +1023,86 @@ u8 iso_day_of_week(ISODate iso_date)
 }
 
 // 12.3.21 NonISOCalendarDateToISO ( calendar, fields, overflow ), https://tc39.es/proposal-temporal/#sec-temporal-nonisocalendardatetoiso
+// 4.1.20 NonISOCalendarDateToISO ( calendar, fields, overflow ), https://tc39.es/proposal-intl-era-monthcode/#sup-temporal-nonisocalendardatetoiso
 ThrowCompletionOr<ISODate> non_iso_calendar_date_to_iso(VM& vm, StringView calendar, CalendarFields const& fields, Overflow overflow)
 {
-    dbgln("!!! non_iso_calendar_date_to_iso: {} {} {} {}", calendar, fields.year, fields.month, fields.day);
-    (void)vm;
-    (void)overflow;
+    dbgln("!!! non_iso_calendar_date_to_iso: {} {} {} {} {}", calendar, fields.year, fields.month_code, fields.month, fields.day);
 
-    Unicode::NonISODate non_iso_date {
-        .era_year = fields.era_year,
-        .year = fields.year,
-        .month = fields.month.has_value() ? *fields.month - 1 : fields.month,
-        .day = fields.day,
-    };
+    i32 arithmetic_year = 0;
 
-    auto result = Unicode::calendar_date_to_iso_date(calendar, non_iso_date);
-    return from_unicode_iso_date(result);
+    // 1. If fields.[[Era]] and fields.[[EraYear]] are not UNSET, then
+    if (fields.era.has_value() && fields.era_year.has_value()) {
+        // a. If CanonicalizeEraInCalendar(calendar, fields.[[Era]]) is undefined, throw a RangeError exception.
+        if (!canonicalize_era_in_calendar(calendar, *fields.era).has_value())
+            return vm.throw_completion<RangeError>(ErrorType::IntlTemporalInvalidEra, *fields.era, calendar);
+
+        // b. Let arithmeticYear be CalendarDateArithmeticYearForEraYear(calendar, fields.[[Era]], fields.[[EraYear]]).
+        arithmetic_year = calendar_date_arithmetic_year_for_era_year(calendar, *fields.era, *fields.era_year);
+    }
+    // 2. Else,
+    else {
+        // a. Assert: fields.[[Year]] is not UNSET.
+        VERIFY(fields.year.has_value());
+
+        // b. Let arithmeticYear be fields.[[Year]].
+        arithmetic_year = *fields.year;
+    }
+
+    i8 ordinal_month = 0;
+
+    // 3. If fields.[[MonthCode]] is not UNSET, then
+    if (fields.month_code.has_value()) {
+        // a. If IsValidMonthCodeForCalendar(calendar, fields.[[MonthCode]]) is false, throw a RangeError exception.
+        if (!is_valid_month_code_for_calendar(calendar, *fields.month_code))
+            return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidMonthCode);
+
+        // b. Let constrainedMonthCode be ? ConstrainMonthCode(calendar, arithmeticYear, fields.[[MonthCode]], overflow).
+        auto constrained_month_code = TRY(constrain_month_code(vm, calendar, arithmetic_year, *fields.month_code, overflow));
+        dbgln("    {}", constrained_month_code);
+
+        // c. Let ordinalMonth be MonthCodeToOrdinal(calendar, arithmeticYear, constrainedMonthCode).
+        ordinal_month = month_code_to_ordinal(vm, calendar, arithmetic_year, constrained_month_code);
+        dbgln("    {}", ordinal_month);
+    }
+    // 4. Else,
+    else {
+        // a. Assert: fields.[[Month]] is not UNSET.
+        VERIFY(fields.month.has_value());
+
+        // b. Let ordinalMonth be fields.[[Month]].
+        ordinal_month = *fields.month;
+    }
+
+    // 5. Let day be fields.[[Day]].
+    // 6. Assert: day is not UNSET.
+    VERIFY(fields.day.has_value());
+    auto day = *fields.day;
+
+    // 7. Let daysInMonth be CalendarDaysInMonth(calendar, arithmeticYear, ordinalMonth).
+    auto days_in_month = calendar_days_in_month(calendar, arithmetic_year, ordinal_month);
+
+    u8 regulated_day = 0;
+
+    // 8. If daysInMonth < day, then
+    if (days_in_month < day) {
+        // a. If overflow is REJECT, throw a RangeError exception.
+        if (overflow == Overflow::Reject)
+            return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidISODate);
+
+        // b. Let regulatedDay be daysInMonth.
+        regulated_day = days_in_month;
+    }
+    // 9. Else,
+    else {
+        // a. Assert: day ≥ 1.
+        VERIFY(day >= 1);
+
+        // b. Let regulatedDay be day.
+        regulated_day = day;
+    }
+
+    // 10. Return ? CalendarIntegersToISO(calendar, arithmeticYear, ordinalMonth, regulatedDay).
+    return TRY(calendar_integers_to_iso(vm, calendar, arithmetic_year, ordinal_month, regulated_day));
 }
 
 // 12.3.22 CalendarDateToISO ( calendar, fields, overflow ), https://tc39.es/proposal-temporal/#sec-temporal-calendardatetoiso
@@ -935,7 +1123,7 @@ ThrowCompletionOr<ISODate> calendar_date_to_iso(VM& vm, StringView calendar, Cal
     return non_iso_calendar_date_to_iso(vm, calendar, fields, overflow);
 }
 
-static constexpr i32 month_day_search_start_year(StringView month_code, u32 day)
+[[maybe_unused]] static constexpr i32 month_day_search_start_year(StringView month_code, u32 day)
 {
     // Note that ICU4C actually has _no_ years in which leap months M01L and
     // M09L through M12L have 30 days. The values marked with (*) here are years
@@ -971,65 +1159,142 @@ static constexpr i32 month_day_search_start_year(StringView month_code, u32 day)
 // 12.3.23 NonISOMonthDayToISOReferenceDate ( calendar, fields, overflow ), https://tc39.es/proposal-temporal/#sec-temporal-nonisomonthdaytoisoreferencedate
 ThrowCompletionOr<ISODate> non_iso_month_day_to_iso_reference_date(VM& vm, StringView calendar, CalendarFields const& fields, Overflow overflow)
 {
-    dbgln("!!! non_iso_month_day_to_iso_reference_date");
-    dbgln("    {}:: {} {} {} {} {}", calendar, fields.era_year, fields.year, fields.month, fields.month_code, fields.day);
-    // FIXME: Create an ISODateRecord based on an ISO8601 calendar for now. See also: CalendarResolveFields.
-    (void)calendar;
+    dbgln("!!! non_iso_month_day_to_iso_reference_date: {}: {} {} {} {} {}", calendar, fields.era_year, fields.year, fields.month, fields.month_code, fields.day);
 
-    auto supports_eras = calender_supports_eras(calendar);
-    auto era_year = fields.era_year;
-    auto year = fields.year;
+    auto supports_eras = calendar_supports_era(calendar);
+    auto month = fields.month;
     auto month_code = fields.month_code;
     auto day = fields.day;
 
-    if (!month_code.has_value() || year.has_value() || (supports_eras && era_year.has_value())) {
+    if (!month_code.has_value() || fields.year.has_value() || (supports_eras && fields.era_year.has_value())) {
         // Apply overflow behaviour to year/month/day, to get correct monthCode/day
         auto iso_date = TRY(calendar_date_to_iso(vm, calendar, fields, overflow));
         auto calendar_date = calendar_iso_to_date(calendar, iso_date);
 
+        month = calendar_date.month;
         month_code = calendar_date.month_code;
         day = calendar_date.day;
     }
 
-    if (!is_valid_month_code_in_calendar(vm, calendar, *month_code))
+    if (!is_valid_month_code_for_calendar(calendar, *month_code))
         return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidCalendarFieldName, "monthCode"sv);
 
-    // FIXME: Apply overflow to day in month. i.e. make sure the day does not exceed the month's number of days.
+    // FIXME: Apply `overflow` to day in month. i.e. make sure the day does not exceed the month's number of days.
+
+    struct ISODateRange {
+        ISODate start;
+        ISODate end;
+    };
+    static constexpr auto iso_date_ranges = to_array<ISODateRange>({
+        // The reference date is the latest ISO 8601 date corresponding to the calendar date that is between
+        // January 1, 1900 and December 31, 1972 inclusive.
+        { ISODate { .year = 1972, .month = 12, .day = 31 }, ISODate { .year = 1900, .month = 1, .day = 1 } },
+
+        // If there is no such date, it is the earliest ISO 8601 date corresponding to the calendar date between
+        // January 1, 1973 and December 31, 2035.
+        { ISODate { .year = 1973, .month = 1, .day = 1 }, ISODate { .year = 2035, .month = 12, .day = 31 } },
+
+        // If there is still no such date, it is the latest ISO 8601 date corresponding to the calendar date on or
+        // before December 31, 1899.
+        { ISODate { .year = 1899, .month = 12, .day = 31 }, ISODate { .year = -8000, .month = 1, .day = 1 } },
+    });
+
+    CalendarFields new_fields;
+    new_fields.month = month;
+    new_fields.month_code = month_code;
+    new_fields.day = day;
+
+    for (auto const& [start, end] : iso_date_ranges) {
+        dbgln("##############################");
+        auto sign = start.year > end.year ? -1 : 1;
+
+        auto start_calendar_date = calendar_iso_to_date(calendar, start);
+        auto end_calendar_date = calendar_iso_to_date(calendar, end);
+
+        for (auto calendar_year = start_calendar_date.year;
+            sign < 0 ? calendar_year >= end_calendar_date.year : calendar_year <= end_calendar_date.year;
+            calendar_year += sign) {
+            dbgln("==============================");
+            new_fields.year = calendar_year;
+
+            auto iso_date = calendar_date_to_iso(vm, calendar, new_fields, overflow);
+            if (iso_date.is_error())
+                continue;
+
+            if (compare_iso_date(iso_date.value(), start) != sign)
+                continue;
+            if (compare_iso_date(iso_date.value(), end) == sign)
+                continue;
+
+            // auto round_trip_calendar_date = calendar_iso_to_date(calendar, iso_date);
+            // if (round_trip_calendar_date.month_code == month_code && round_trip_calendar_date.day == day)
+            return iso_date.release_value();
+        }
+
+        dbgln("##############################");
+        break;
+    }
+
+    return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidISODate);
+
+    // auto calendar_start_date = calendar_iso_to_date(calendar, iso_start_date);
+
+    // auto calendar_year = calendar_start_date.month_code > *month_code || (calendar_start_date.month_code == month_code && calendar_start_date.day >= *day)
+    //     ? calendar_start_date.year
+    //     : calendar_start_date.year - 1;
+
+    // for (i32 i = 0; i < 20; ++i) {
+    //     CalendarFields new_fields;
+    //     // new_fields.era = calendar_start_date.era;
+    //     // new_fields.era_year = calendar_start_date.era_year;
+    //     new_fields.year = calendar_year - i;
+    //     // new_fields.month = calendar_start_date.month;
+    //     new_fields.month_code = month_code;
+    //     new_fields.day = day;
+
+    //     auto iso_date = TRY(calendar_date_to_iso(vm, calendar, new_fields, overflow));
+    //     auto round_trip_calendar_date = calendar_iso_to_date(calendar, iso_date);
+
+    //     dbgln("!!! {} {} {}, {} {} {}, {} {} {}",
+    //         new_fields.year, new_fields.month_code, new_fields.day,
+    //         iso_date.year, iso_date.month, iso_date.day,
+    //         round_trip_calendar_date.year, round_trip_calendar_date.month_code, round_trip_calendar_date.day);
+
+    //     if (round_trip_calendar_date.month_code == month_code && round_trip_calendar_date.day == day)
+    //         return iso_date;
+    // }
+
+    VERIFY_NOT_REACHED();
 
     // Look backwards starting from one of the calendar years spanning ISO year
     // 1972, up to 20 calendar years prior, to find a year that has this month
     // and day. Normal months and days will match immediately, but for leap days
     // and leap months we may have to look for a while. For searches longer than
     // 20 years, override the start date in monthDaySearchStartYear.
-    ISODate iso_start_date {
-        .year = month_day_search_start_year(*month_code, *day),
-        .month = 12,
-        .day = 31,
-    };
-
-    return iso_start_date;
-
-    // auto calendar_start_date = calendar_iso_to_date(calendar, iso_start_date);
-
+    // const startDateIso = {
+    //   year: this.monthDaySearchStartYear(monthCode, day),
+    //   month: 12,
+    //   day: 31
+    // };
+    // const calendarOfStartDateIso = this.isoToCalendarDate(startDateIso, cache);
     // // Note: relies on lexicographical ordering of monthCodes
-    // auto calendar_year = calendar_start_date.month_code > *month_code || (calendar_start_date.month_code == month_code && calendar_start_date.day >= *day)
-    //     ? calendar_start_date.year
-    //     : calendar_start_date.year - 1;
-
-    // for (i32 i = 0; i < 20; i++) {
-    //     auto calendar_date = calendar_start_date;
-    //     calendar_date.year -= i;
-
-    //     auto iso_date = TRY(calendar_date_to_iso(vm, calendar, fields, overflow));
-
-    //     isoDate const = this.calendarToIsoDate(testCalendarDate, 'constrain', cache);
-    //     roundTripCalendarDate const = this.isoToCalendarDate(isoDate, cache);
-    //     if (roundTripCalendarDate.monthCode == = monthCode&& roundTripCalendarDate.day == = day) {
-    //         return isoDate;
-    //     }
+    // const calendarYear =
+    //   calendarOfStartDateIso.monthCode > monthCode ||
+    //   (calendarOfStartDateIso.monthCode === monthCode && calendarOfStartDateIso.day >= day)
+    //     ? calendarOfStartDateIso.year
+    //     : calendarOfStartDateIso.year - 1;
+    //
+    //
+    //
+    // for (let i = 0; i < 20; i++) {
+    //   let testCalendarDate = this.adjustCalendarDate({ day, monthCode, year: calendarYear - i }, cache);
+    //   const isoDate = this.calendarToIsoDate(testCalendarDate, 'constrain', cache);
+    //   const roundTripCalendarDate = this.isoToCalendarDate(isoDate, cache);
+    //   if (roundTripCalendarDate.monthCode === monthCode && roundTripCalendarDate.day === day) {
+    //     return isoDate;
+    //   }
     // }
-
-    // VERIFY_NOT_REACHED();
+    // assertNotReached(`no recent ${this.id} year with ${monthCode}-${day}, adjust monthDaySearchStartYear`);
 }
 
 // 12.3.24 CalendarMonthDayToISOReferenceDate ( calendar, fields, overflow ), https://tc39.es/proposal-temporal/#sec-temporal-calendarmonthdaytoisoreferencedate
@@ -1125,23 +1390,73 @@ CalendarDate calendar_iso_to_date(StringView calendar, ISODate iso_date)
 }
 
 // 12.3.27 CalendarExtraFields ( calendar, fields ), https://tc39.es/proposal-temporal/#sec-temporal-calendarextrafields
-Vector<CalendarField> calendar_extra_fields(StringView calendar, CalendarFieldList)
+// 4.1.21 CalendarExtraFields ( calendar, fields ), https://tc39.es/proposal-intl-era-monthcode/#sup-temporal-calendarextrafields
+Vector<CalendarField> calendar_extra_fields(StringView calendar, CalendarFieldList fields)
 {
-    // 1. If calendar is "iso8601", return an empty List.
-    if (calendar == "iso8601"sv)
+    // 1. If calendar is not listed in the "Calendar Type" column of Table 1, return an implementation-defined value.
+    if (!CLDR_CALENDAR_TYPES.contains_slow(calendar))
         return {};
 
-    // FIXME: 2. Return an implementation-defined List as described above.
+    // 2. If fields contains an element equal to YEAR and CalendarSupportsEra(calendar) is true, then
+    if (fields.contains_slow(CalendarField::Year) && calendar_supports_era(calendar)) {
+        // a. Return « ERA, ERA-YEAR ».
+        return { CalendarField::Era, CalendarField::EraYear };
+    }
+
+    // 3. Return an empty List.
     return {};
 }
 
 // 12.3.28 NonISOFieldKeysToIgnore ( calendar, keys ), https://tc39.es/proposal-temporal/#sec-temporal-nonisofieldkeystoignore
+// 4.1.22 NonISOFieldKeysToIgnore ( calendar, keys ), https://tc39.es/proposal-intl-era-monthcode/#sup-temporal-nonisofieldkeystoignore
 Vector<CalendarField> non_iso_field_keys_to_ignore(StringView calendar, ReadonlySpan<CalendarField> keys)
 {
     dbgln("!!! non_iso_field_keys_to_ignore");
-    // FIXME: Return keys for an ISO8601 calendar for now.
-    (void)calendar;
-    return calendar_field_keys_to_ignore("iso8601"sv, keys);
+
+    // 1. If calendar is not listed in the "Calendar Type" column of Table 1, return an implementation-defined value.
+    if (!CLDR_CALENDAR_TYPES.contains_slow(calendar))
+        return {};
+
+    // 2. Let ignoredKeys be a copy of keys.
+    Vector<CalendarField> ignored_keys { keys };
+
+    // 3. For each element key of keys, do
+    for (auto key : keys) {
+        // a. If key is MONTH, append MONTH-CODE to ignoredKeys.
+        if (key == CalendarField::Month) {
+            ignored_keys.append(CalendarField::MonthCode);
+        }
+
+        // b. If key is MONTH-CODE, append MONTH.
+        if (key == CalendarField::MonthCode) {
+            ignored_keys.append(CalendarField::Month);
+        }
+
+        // c. If key is one of ERA, ERA-YEAR, or YEAR and CalendarSupportsEra(calendar) is true, then
+        if (key == CalendarField::Era || key == CalendarField::EraYear || key == CalendarField::Year) {
+            if (calendar_supports_era(calendar)) {
+                // i. Append ERA, ERA-YEAR, and YEAR to ignoredKeys.
+                ignored_keys.append(CalendarField::Era);
+                ignored_keys.append(CalendarField::EraYear);
+                ignored_keys.append(CalendarField::Year);
+            }
+        }
+
+        // d. If key is one of DAY, MONTH, or MONTH-CODE and CalendarHasMidYearEras(calendar) is true, then
+        if (key == CalendarField::Day || key == CalendarField::Month || key == CalendarField::MonthCode) {
+            if (calendar_has_mid_year_eras(calendar)) {
+                // i. Append ERA and ERA-YEAR to ignoredKeys.
+                ignored_keys.append(CalendarField::Era);
+                ignored_keys.append(CalendarField::EraYear);
+            }
+        }
+    }
+
+    // 4. NOTE: While ignoredKeys can have duplicate elements, this is not intended to be meaningful. This
+    //   specification only checks whether particular keys are or are not members of the list.
+
+    // 5. Return ignoredKeys.
+    return ignored_keys;
 }
 
 // 12.3.29 CalendarFieldKeysToIgnore ( calendar, keys ), https://tc39.es/proposal-temporal/#sec-temporal-calendarfieldkeystoignore
@@ -1181,7 +1496,7 @@ ThrowCompletionOr<void> non_iso_resolve_fields(VM& vm, StringView calendar, Cale
 {
     dbgln("!!! non_iso_resolve_fields {}", (int)type);
     if ((type == DateType::Date || type == DateType::YearMonth) && !fields.year.has_value()) {
-        if (!calender_supports_eras(calendar))
+        if (!calendar_supports_era(calendar))
             return vm.throw_completion<TypeError>(ErrorType::MissingRequiredProperty, "year"sv);
 
         if (!fields.era.has_value() || !fields.era_year.has_value())
@@ -1192,7 +1507,7 @@ ThrowCompletionOr<void> non_iso_resolve_fields(VM& vm, StringView calendar, Cale
         return vm.throw_completion<TypeError>(ErrorType::MissingRequiredProperty, "day"sv);
 
     if (type == DateType::MonthDay && fields.month.has_value() && !fields.year.has_value()) {
-        if (!calender_supports_eras(calendar))
+        if (!calendar_supports_era(calendar))
             return vm.throw_completion<TypeError>(ErrorType::MissingRequiredProperty, "year"sv);
 
         if (!fields.era.has_value() || !fields.era_year.has_value())
@@ -1210,7 +1525,7 @@ ThrowCompletionOr<void> non_iso_resolve_fields(VM& vm, StringView calendar, Cale
             // auto months_per_year = months_per_year_in_non_lunisolar_calendar(calendar);
             fields.month_code = create_month_code(*month, false);
         } else {
-            if (!is_valid_month_code_in_calendar(vm, calendar, *month_code))
+            if (!is_valid_month_code_for_calendar(calendar, *month_code))
                 return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidCalendarFieldName, "monthCode"sv);
 
             auto [month_number, _] = MUST(parse_month_code(vm, *month_code));
@@ -1281,6 +1596,504 @@ ThrowCompletionOr<void> calendar_resolve_fields(VM& vm, StringView calendar, Cal
 
     // 3. Return UNUSED.
     return {};
+}
+
+// 4.1.1 CalendarSupportsEra ( calendar ), https://tc39.es/proposal-intl-era-monthcode/#sec-temporal-calendarsupportsera
+bool calendar_supports_era(StringView calendar)
+{
+    // 1. If calendar is listed in the "Calendar" column of Table 2, return true.
+    if (find_value(CALENDAR_ERA_DATA, [&](auto const& row) { return row.calendar == calendar; }).has_value())
+        return true;
+
+    // 2. If calendar is listed in the "Calendar Type" column of Table 1, return false.
+    // 3. Return an implementation-defined value.
+    return false;
+}
+
+// 4.1.2 CanonicalizeEraInCalendar ( calendar, era ), https://tc39.es/proposal-intl-era-monthcode/#sec-temporal-canonicalizeeraincalendar
+Optional<StringView> canonicalize_era_in_calendar(StringView calendar, StringView era)
+{
+    // 1. For each row of Table 2, except the header row, do
+    for (auto const& row : CALENDAR_ERA_DATA) {
+        // a. Let cal be the Calendar value of the current row.
+        // b. If cal is equal to calendar, then
+        if (row.calendar == calendar) {
+            // i. Let canonicalName be the Era value of the current row.
+            auto canonical_name = row.era;
+
+            // ii. If canonicalName is equal to era, return canonicalName.
+            if (canonical_name == era)
+                return canonical_name;
+
+            // iii. Let aliases be a List whose elements are the strings given in the "Aliases" column of the row.
+            // iv. If aliases contains era, return canonicalName.
+            if (row.alias.contains_slow(era))
+                return canonical_name;
+        }
+    }
+
+    // 2. If calendar is listed in the "Calendar Type" column of Table 1, return undefined.
+    // 3. Return an implementation-defined value.
+    return {};
+}
+
+// 4.1.3 CalendarHasMidYearEras ( calendar ), https://tc39.es/proposal-intl-era-monthcode/#sec-temporal-calendarhasmidyeareras
+bool calendar_has_mid_year_eras(StringView calendar)
+{
+    // 1. If calendar is "japanese", return true.
+    if (calendar == "japanese"sv)
+        return true;
+
+    // 2. If calendar is listed in the "Calendar Type" column of Table 1, return false.
+    // 3. Return an implementation-defined value.
+    return false;
+}
+
+// 4.1.4 IsValidMonthCodeForCalendar ( calendar, monthCode ), https://tc39.es/proposal-intl-era-monthcode/#sec-temporal-isvalidmonthcodeforcalendar
+bool is_valid_month_code_for_calendar(StringView calendar, StringView month_code)
+{
+    // 1. Let commonMonthCodes be « "M01", "M02", "M03", "M04", "M05", "M06", "M07", "M08", "M09", "M10", "M11", "M12" ».
+    // 2. If commonMonthCodes contains monthCode, return true.
+    if (month_code.is_one_of("M01"sv, "M02"sv, "M03"sv, "M04"sv, "M05"sv, "M06"sv, "M07"sv, "M08"sv, "M09"sv, "M10"sv, "M11"sv, "M12"sv))
+        return true;
+
+    // 3. If calendar is listed in the "Calendar" column of Table 3, then
+    if (auto row = find_value(ADDITIONAL_MONTH_CODES, [&](auto const& row) { return row.calendar == calendar; }); row.has_value()) {
+        // a. Let r be the row in Table 3 with a value in the Calendar column matching calendar.
+        // b. Let specialMonthCodes be a List whose elements are the strings given in the "Additional Month Codes" column of r.
+        // c. If specialMonthCodes contains monthCode, return true.
+        // d. Return false.
+        return row->additional_month_codes.contains_slow(month_code);
+    }
+
+    // 4. If calendar is listed in the "Calendar Type" column of Table 1, return false.
+    // 5. Return an implementation-defined value.
+    return false;
+}
+
+// 4.1.5 YearContainsMonthCode ( calendar, arithmeticYear, monthCode ), https://tc39.es/proposal-intl-era-monthcode/#sec-temporal-yearcontainsmonthcode
+bool year_contains_month_code(StringView calendar, i32 arithmetic_year, StringView month_code)
+{
+    // 1. Assert: IsValidMonthCodeForCalendar(calendar, monthCode) is true.
+    if (!is_valid_month_code_for_calendar(calendar, month_code))
+        return false;
+
+    // 2. If ! ParseMonthCode(monthCode).[[IsLeap]] is false, return true.
+    // NB: We avoid passing in a VM here, and just check if the leap month symbol is specified.
+    if (!month_code.ends_with('L'))
+        return true;
+
+    // 3. Return whether the leap month indicated by monthCode exists in the year arithmeticYear in calendar, using
+    //    calendar-dependent behaviour.
+    return Unicode::calendar_year_contains_month_code(calendar, arithmetic_year, month_code);
+}
+
+// 4.1.6 ConstrainMonthCode ( calendar, arithmeticYear, monthCode, overflow ), https://tc39.es/proposal-intl-era-monthcode/#sec-temporal-constrainmonthcode
+ThrowCompletionOr<StringView> constrain_month_code(VM& vm, StringView calendar, i32 arithmetic_year, StringView month_code, Overflow overflow)
+{
+    // 1. Assert: IsValidMonthCodeForCalendar(calendar, monthCode) is true.
+    VERIFY(is_valid_month_code_for_calendar(calendar, month_code));
+
+    // 2. If YearContainsMonthCode(calendar, arithmeticYear, monthCode) is true, return monthCode.
+    if (year_contains_month_code(calendar, arithmetic_year, month_code))
+        return month_code;
+
+    // 3. If overflow is reject, throw a RangeError exception.
+    if (overflow == Overflow::Reject)
+        return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidMonthCode);
+
+    // 4. If calendar is not listed in the "Calendar Type" column of Table 1, return an implementation-defined value.
+    if (!CLDR_CALENDAR_TYPES.contains_slow(calendar))
+        return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidMonthCode);
+
+    // 5. Assert: calendar is listed in the "Calendar" column of Table 3.
+    // 6. Let r be the row in Table 3 with a value in the Calendar column matching calendar.
+    auto row = find_value(ADDITIONAL_MONTH_CODES, [&](auto const& row) { return row.calendar == calendar; });
+    VERIFY(row.has_value());
+
+    // 7. Let shiftType be the value given in the "Leap to Common Month Tranformation" column of r.
+    // 8. If shiftType is skip-backward, then
+    if (row->leap_to_common_month_transformation == AdditionalMonthCodes::Leap::SkipBackward) {
+        // a. Return CreateMonthCode(! ParseMonthCode(monthCode).[[MonthNumber]], false).
+        return month_code.trim("L"sv, TrimMode::Right);
+    }
+    // 9. Else,
+    else {
+        // a. Assert: monthCode is "M05L".
+        VERIFY(month_code == "M05L"sv);
+
+        // b. Return "M06".
+        return "M06"sv;
+    }
+}
+
+// 4.1.7 MonthCodeToOrdinal ( calendar, arithmeticYear, monthCode ), https://tc39.es/proposal-intl-era-monthcode/#sec-temporal-monthcodetoordinal
+u8 month_code_to_ordinal(VM& vm, StringView calendar, i32 arithmetic_year, StringView month_code)
+{
+    dbgln("### {} {} {}", calendar, arithmetic_year, month_code);
+
+    // 1. Assert: YearContainsMonthCode(calendar, arithmeticYear, monthCode) is true.
+    VERIFY(year_contains_month_code(calendar, arithmetic_year, month_code));
+
+    // 2. Let monthsBefore be 0.
+    u8 months_before = 0;
+
+    // 3. Let number be 1.
+    u8 number = 1;
+
+    // 4. Let isLeap be false.
+    auto is_leap = false;
+
+    // 5. If calendar is not listed in the "Calendar Type" column of Table 1, return an implementation-defined value.
+    if (!CLDR_CALENDAR_TYPES.contains_slow(calendar))
+        return MUST(parse_month_code(vm, month_code)).month_number;
+
+    // 6. Let r be the row in Table 3 with a value in the Calendar column matching calendar.
+    auto row = find_value(ADDITIONAL_MONTH_CODES, [&](auto const& row) { return row.calendar == calendar; });
+    if (!row.has_value())
+        return MUST(parse_month_code(vm, month_code)).month_number;
+
+    // 7. If the "Leap to Common Month Tranformation" column of r is empty, then
+    if (!row->leap_to_common_month_transformation.has_value()) {
+        // a. Return ! ParseMonthCode(monthCode).[[MonthNumber]].
+        return MUST(parse_month_code(vm, month_code)).month_number;
+    }
+
+    // 8. Assert: The "Additional Month Codes" column of r does not contain "M00L" or "M13".
+    VERIFY(!row->additional_month_codes.contains_slow("M00L"sv));
+    VERIFY(!row->additional_month_codes.contains_slow("M13"sv));
+
+    // 9. Assert: The following loop will terminate.
+
+    // 10. Repeat, while number ≤ 12,
+    while (number <= 12) {
+        // a. Let currentMonthCode be CreateMonthCode(number, isLeap).
+        auto current_month_code = create_month_code(number, is_leap);
+        dbgln("    {} '{}' {}", number, current_month_code, months_before);
+
+        // b. If YearContainsMonthCode(calendar, arithmeticYear, currentMonthCode), then
+        if (year_contains_month_code(calendar, arithmetic_year, current_month_code)) {
+            // i. Set monthsBefore to monthsBefore + 1.
+            ++months_before;
+        }
+
+        // c. If currentMonthCode is monthCode, then
+        if (current_month_code == month_code) {
+            // i. Return monthsBefore.
+            return months_before;
+        }
+
+        // d. If isLeap is false, then
+        if (!is_leap) {
+            // i. Set isLeap to true.
+            is_leap = true;
+        }
+        // e. Else,
+        else {
+            // i. Set isLeap to false.
+            is_leap = false;
+
+            // ii. Set number to number + 1.
+            ++number;
+        }
+    }
+
+    VERIFY_NOT_REACHED();
+}
+
+// 4.1.8 CalendarDaysInMonth ( calendar, arithmeticYear, ordinalMonth ), https://tc39.es/proposal-intl-era-monthcode/#sec-temporal-calendardaysinmonth
+u8 calendar_days_in_month(StringView calendar, i32 arithmetic_year, i8 ordinal_month)
+{
+    // 1. Return the number of days in the month of calendar corresponding to arithmeticYear and ordinalMonth.
+    return Unicode::calendar_days_in_month(calendar, arithmetic_year, ordinal_month - 1);
+}
+
+// 4.1.9 CalendarDateEra ( calendar, date ), https://tc39.es/proposal-intl-era-monthcode/#sec-temporal-calendardateera
+Optional<StringView> calendar_date_era(StringView calendar, ISODate date)
+{
+    // 1. If CalendarSupportsEra(calendar) is false, return undefined.
+    if (!calendar_supports_era(calendar))
+        return {};
+
+    // 2. Let era be the String to indicate the era corresponding to date in the context of the calendar represented by
+    //    calendar according to implementation-defined processing.
+    auto era = Unicode::calendar_era(calendar, to_unicode_iso_date(date));
+    if (!era.has_value())
+        return {};
+
+    // 3. Return CanonicalizeEraInCalendar(calendar, era).
+    return canonicalize_era_in_calendar(calendar, *era);
+}
+
+// 4.1.10 CalendarDateEraYear ( calendar, date ), https://tc39.es/proposal-intl-era-monthcode/#sec-temporal-calendardateerayear
+Optional<i32> calendar_date_era_year(StringView calendar, ISODate date)
+{
+    // 1. If CalendarSupportsEra(calendar) is false, return undefined.
+    if (!calendar_supports_era(calendar))
+        return {};
+
+    // 2. Let eraYear be the integer to indicate the era year corresponding to date in the context of the calendar
+    //    represented by calendar according to implementation-defined processing.
+    // 3. Assert: eraYear is an integer.
+    // 4. Return eraYear.
+    return Unicode::calendar_era_year(calendar, to_unicode_iso_date(date));
+}
+
+// 4.1.11 CalendarDateArithmeticYear ( calendar, date ), https://tc39.es/proposal-intl-era-monthcode/#sec-temporal-calendardatearithmeticyear
+i32 calendar_date_arithmetic_year(StringView calendar, ISODate date)
+{
+    // 1. If calendar is not listed in the "Calendar Type" column of Table 1, return an implementation-defined value.
+    if (!CLDR_CALENDAR_TYPES.contains_slow(calendar))
+        return date.year;
+
+    // 2. Let r be the row in Table 4 with a value in the Calendar column matching calendar.
+    // 3. Let epochYear be the value given in the "Epoch ISO Year" column of r.
+    // 4. Let epochDate be the first day of the calendar year starting in ISO year epochYear in the calendar represented
+    //    by calendar, according to implementation-defined processing.
+    // 5. Let newYear be the first day of the calendar year of date in the calendar represented by calendar, according
+    //     to implementation-defined processing.
+    // 6. Let arithmeticYear be the number of whole years between epochDate and newYear in the calendar represented by
+    //    calendar, according to implementation-defined processing.
+    // 7. Return arithmeticYear.
+    return Unicode::calendar_year(calendar, to_unicode_iso_date(date)).value_or(date.year);
+}
+
+// 4.1.12 CalendarDateArithmeticYearForEraYear ( calendar, era, eraYear ), https://tc39.es/proposal-intl-era-monthcode/#sec-temporal-calendardatearithmeticyearforerayear
+i32 calendar_date_arithmetic_year_for_era_year(StringView calendar, StringView era, i32 era_year)
+{
+    // 1. Let era be CanonicalizeEraInCalendar(calendar, era).
+    // 2. Assert: era is not undefined.
+    era = canonicalize_era_in_calendar(calendar, era).release_value();
+
+    // 3. If calendar is not listed in the "Calendar Type" column of Table 1, return an implementation-defined value.
+    if (!CLDR_CALENDAR_TYPES.contains_slow(calendar))
+        return era_year;
+
+    // 4. Let r be the row in Table 2 with a value in the Calendar column matching calendar and a value in the Era
+    //    column matching era.
+    auto row = find_value(CALENDAR_ERA_DATA, [&](auto const& row) { return row.calendar == calendar && row.era == era; });
+    VERIFY(row.has_value());
+
+    // 5. Let eraKind be the value given in the "Era Kind" column of r.
+    auto era_kind = row->kind;
+
+    // 6. Let offset be the value given in the "Offset" column of r.
+    auto offset = row->offset;
+
+    // 7. If eraKind is EPOCH, return eraYear.
+    if (era_kind == CalendarEraData::Kind::Epoch)
+        return era_year;
+
+    // 8. If eraKind is NEGATIVE, return 1 - eraYear.
+    if (era_kind == CalendarEraData::Kind::Negative)
+        return 1 - era_year;
+
+    // 9. Assert: eraKind is OFFSET.
+    VERIFY(era_kind == CalendarEraData::Kind::Offset);
+
+    // 10. Assert: offset is not undefined.
+    VERIFY(offset.has_value());
+
+    // 11. Return offset + eraYear - 1.
+    return *offset + era_year - 1;
+}
+
+// 4.1.13 CalendarIntegersToISO ( calendar, arithmeticYear, ordinalMonth, day ), https://tc39.es/proposal-intl-era-monthcode/#sec-temporal-calendarintegerstoiso
+ThrowCompletionOr<ISODate> calendar_integers_to_iso(VM& vm, StringView calendar, i32 arithmetic_year, i8 ordinal_month, u8 day)
+{
+    // 1. If arithmeticYear, ordinalMonth, and day do not form a valid date in calendar, throw a RangeError exception.
+    // 2. Let isoDate be an ISO Date Record such that CalendarISOToDate(calendar, isoDate) returns a Calendar Date Record
+    //    whose [[Year]], [[Month]], and [[Day]] field values respectively equal arithmeticYear, ordinalMonth, and day.
+    auto iso_date = Unicode::calendar_date_to_iso_date(calendar, { .year = arithmetic_year, .month = ordinal_month - 1, .day = day }, Unicode::Lenient::No);
+    if (!iso_date.has_value())
+        return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidISODate);
+
+    // 3. Return isoDate.
+    return from_unicode_iso_date(iso_date.value());
+}
+
+// 4.1.15 CalendarMonthsInYear ( calendar, arithmeticYear ), https://tc39.es/proposal-intl-era-monthcode/#sec-temporal-calendarmonthsinyear
+u8 calendar_months_in_year(StringView calendar, i32 arithmetic_year)
+{
+    // 1. Return the number of months in arithmetic year arithmeticYear of calendar calendar.
+    return Unicode::calendar_months_in_year(calendar, arithmetic_year);
+}
+
+// 4.1.16 BalanceNonISODate ( calendar, arithmeticYear, ordinalMonth, day )
+NonISODate balance_non_iso_date(StringView calendar, i32 arithmetic_year, i32 ordinal_month, i32 day)
+{
+    // 1. Let resolvedYear be arithmeticYear.
+    auto resolved_year = arithmetic_year;
+
+    // 2. Let resolvedMonth be ordinalMonth.
+    auto resolved_month = ordinal_month;
+
+    // 3. Let monthsInYear be CalendarMonthsInYear(calendar, resolvedYear).
+    auto months_in_year = calendar_months_in_year(calendar, resolved_year);
+
+    // 4. Repeat, while resolvedMonth ≤ 0,
+    while (resolved_month <= 0) {
+        // a. Set resolvedYear to resolvedYear - 1.
+        --resolved_year;
+
+        // b. Set monthsInYear to CalendarMonthsInYear(calendar, resolvedYear).
+        months_in_year = calendar_months_in_year(calendar, resolved_year);
+
+        // c. Set resolvedMonth to resolvedMonth + monthsInYear.
+        resolved_month += months_in_year;
+    }
+
+    // 5. Repeat, while resolvedMonth > monthsInYear,
+    while (resolved_month > months_in_year) {
+        // a. Set resolvedMonth to resolvedMonth - monthsInYear.
+        resolved_month -= months_in_year;
+
+        // b. Set resolvedYear to resolvedYear + 1.
+        ++resolved_year;
+
+        // c. Set monthsInYear to CalendarMonthsInYear(calendar, resolvedYear).
+        months_in_year = calendar_months_in_year(calendar, resolved_year);
+    }
+
+    // 6. Let resolvedDay be day.
+    auto resolved_day = day;
+
+    // 7. Let daysInMonth be CalendarDaysInMonth(calendar, resolvedYear, resolvedMonth).
+    auto days_in_month = calendar_days_in_month(calendar, resolved_year, resolved_month);
+
+    // 8. Repeat, while resolvedDay ≤ 0,
+    while (resolved_day <= 0) {
+        // a. Set resolvedMonth to resolvedMonth - 1.
+        --resolved_month;
+
+        // b. If resolvedMonth is 0, then
+        if (resolved_month == 0) {
+            // i. Set resolvedYear to resolvedYear - 1.
+            --resolved_year;
+
+            // ii. Set monthsInYear to CalendarMonthsInYear(calendar, resolvedYear).
+            months_in_year = calendar_months_in_year(calendar, resolved_year);
+
+            // iii. Set resolvedMonth to monthsInYear.
+            resolved_month = months_in_year;
+        }
+
+        // c. Set daysInMonth to CalendarDaysInMonth(calendar, resolvedYear, resolvedMonth).
+        days_in_month = calendar_days_in_month(calendar, resolved_year, resolved_month);
+
+        // d. Set resolvedDay to resolvedDay + daysInMonth.
+        resolved_day += days_in_month;
+    }
+
+    // 9. Repeat, while resolvedDay > daysInMonth,
+    while (resolved_day > days_in_month) {
+        // a. Set resolvedDay to resolvedDay - daysInMonth.
+        resolved_day -= days_in_month;
+
+        // b. Set resolvedMonth to resolvedMonth + 1.
+        ++resolved_month;
+
+        // c. If resolvedMonth > monthsInYear, then
+        if (resolved_month > months_in_year) {
+            // i. Set resolvedYear to resolvedYear + 1.
+            ++resolved_year;
+
+            // ii. Set monthsInYear to CalendarMonthsInYear(calendar, resolvedYear).
+            months_in_year = calendar_months_in_year(calendar, resolved_year);
+
+            // iii. Set resolvedMonth to 1.
+            resolved_month = 1;
+        }
+
+        // d. Set daysInMonth to CalendarDaysInMonth(calendar, resolvedYear, resolvedMonth).
+        days_in_month = Unicode::calendar_days_in_month(calendar, resolved_year, resolved_month);
+    }
+
+    // 10. Return the Record { [[Year]]: resolvedYear, [[Month]]: resolvedMonth, [[Day]]: resolvedDay }.
+    return { .year = resolved_year, .month = static_cast<u8>(resolved_month), .day = static_cast<u8>(resolved_day) };
+}
+
+// 4.1.17 NonISODateSurpasses ( calendar, sign, fromIsoDate, toIsoDate, years, months, weeks, days ), https://tc39.es/proposal-intl-era-monthcode/#sec-temporal-nonisodatesurpasses
+bool non_iso_date_surpasses(VM& vm, StringView calendar, i8 sign, ISODate from_iso_date, ISODate to_iso_date, i32 years, i32 months, i32 weeks, i32 days)
+{
+    // 1. Let parts be CalendarISOToDate(calendar, fromIsoDate).
+    auto parts = calendar_iso_to_date(calendar, from_iso_date);
+
+    // 2. Let y0 be parts.[[Year]] + years.
+    auto y0 = parts.year + years;
+
+    // 3. Let m0 be MonthCodeToOrdinal(calendar, y0, ! ConstrainMonthCode(calendar, y0, parts.[[MonthCode]], CONSTRAIN)).
+    auto m0 = month_code_to_ordinal(vm, calendar, y0, MUST(constrain_month_code(vm, calendar, y0, parts.month_code, Overflow::Constrain)));
+
+    // 4. Let endOfMonth be BalanceNonISODate(calendar, y0, m0 + months + 1, 0).
+    auto end_of_month = balance_non_iso_date(calendar, y0, m0 + months + 1, 0);
+
+    // 5. Let baseDay be parts.[[Day]].
+    auto base_day = parts.day;
+
+    i32 y1 = 0;
+    i8 m1 = 0;
+    i8 d1 = 0;
+
+    // 6. If weeks is not 0 or days is not 0, then
+    if (weeks != 0 || days != 0) {
+        // a. If baseDay < endOfMonth.[[Day]], then
+        //     i. Let regulatedDay be baseDay.
+        // b. Else,
+        //     i. Let regulatedDay be endOfMonth.[[Day]].
+        auto regulated_day = base_day < end_of_month.day ? base_day : end_of_month.day;
+
+        // c. Let daysInWeek be 7 (the number of days in a week for all supported calendars).
+        static constexpr auto days_in_week = 7;
+
+        // d. Let balancedDate be BalanceNonISODate(calendar, endOfMonth.[[Year]], endOfMonth.[[Month]], regulatedDay + daysInWeek * weeks + days).
+        auto balanced_date = balance_non_iso_date(calendar, end_of_month.year, end_of_month.month, regulated_day + (days_in_week * weeks) + days);
+
+        // e. Let y1 be balancedDate.[[Year]].
+        y1 = balanced_date.year;
+
+        // f. Let m1 be balancedDate.[[Month]].
+        m1 = balanced_date.month;
+
+        // g. Let d1 be balancedDate.[[Day]].
+        d1 = balanced_date.day;
+    }
+    // 7. Else,
+    else {
+        // a. Let y1 be endOfMonth.[[Year]].
+        y1 = end_of_month.year;
+
+        // b. Let m1 be endOfMonth.[[Month]].
+        m1 = end_of_month.month;
+
+        // c. Let d1 be baseDay.
+        d1 = base_day;
+    }
+
+    // 8. Let calDate2 be CalendarISOToDate(calendar, toIsoDate).
+    auto calendar_date2 = calendar_iso_to_date(calendar, to_iso_date);
+
+    // 9. If y1 ≠ calDate2.[[Year]], then
+    if (y1 != calendar_date2.year) {
+        // a. If sign × (y1 - calDate2.[[Year]]) > 0, return true.
+        if (sign * (y1 - calendar_date2.year) > 0)
+            return true;
+    }
+    // 10. Else if m1 ≠ calDate2.[[Month]], then
+    else if (m1 != calendar_date2.month) {
+        // a. If sign × (m1 - calDate2.[[Month]]) > 0, return true.
+        if (sign * (m1 - calendar_date2.month) > 0)
+            return true;
+    }
+    // 11. Else if d1 ≠ calDate2.[[Day]], then
+    else if (d1 != calendar_date2.day) {
+        // a. If sign × (d1 - calDate2.[[Day]]) > 0, return true.
+        if (sign * (d1 - calendar_date2.day) > 0)
+            return true;
+    }
+
+    // 12. Return false.
+    return false;
 }
 
 }

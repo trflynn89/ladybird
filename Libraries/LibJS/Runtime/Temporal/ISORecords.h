@@ -21,6 +21,12 @@ struct ISODate {
     u8 day { 0 };
 };
 
+struct NonISODate {
+    i32 year { 0 };
+    u8 month { 0 };
+    u8 day { 0 };
+};
+
 // 4.5.1 Time Records, https://tc39.es/proposal-temporal/#sec-temporal-time-records
 struct Time {
     double days { 0 };

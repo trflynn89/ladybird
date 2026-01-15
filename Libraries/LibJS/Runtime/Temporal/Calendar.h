@@ -139,4 +139,21 @@ Vector<CalendarField> calendar_field_keys_to_ignore(StringView calendar, Readonl
 ThrowCompletionOr<void> non_iso_resolve_fields(VM&, StringView calendar, CalendarFields&, DateType);
 ThrowCompletionOr<void> calendar_resolve_fields(VM&, StringView calendar, CalendarFields&, DateType);
 
+bool calendar_supports_era(StringView calendar);
+Optional<StringView> canonicalize_era_in_calendar(StringView calendar, StringView era);
+bool calendar_has_mid_year_eras(StringView calendar);
+bool is_valid_month_code_for_calendar(StringView calendar, StringView month_code);
+bool year_contains_month_code(StringView calendar, i32 arithmetic_year, StringView month_code);
+ThrowCompletionOr<StringView> constrain_month_code(VM&, StringView calendar, i32 arithmetic_year, StringView month_code, Overflow overflow);
+u8 month_code_to_ordinal(VM&, StringView calendar, i32 arithmetic_year, StringView month_code);
+u8 calendar_days_in_month(StringView calendar, i32 arithmetic_year, i8 ordinal_month);
+Optional<StringView> calendar_date_era(StringView calendar, ISODate);
+Optional<i32> calendar_date_era_year(StringView calendar, ISODate);
+i32 calendar_date_arithmetic_year(StringView calendar, ISODate);
+i32 calendar_date_arithmetic_year_for_era_year(StringView calendar, StringView era, i32 era_year);
+ThrowCompletionOr<ISODate> calendar_integers_to_iso(VM&, StringView calendar, i32 arithmetic_year, i8 ordinal_month, u8 day);
+u8 calendar_months_in_year(StringView calendar, i32 arithmetic_year);
+NonISODate balance_non_iso_date(StringView calendar, i32 arithmetic_year, i32 ordinal_month, i32 day);
+bool non_iso_date_surpasses(VM&, StringView calendar, i8 sign, ISODate from_iso_date, ISODate to_iso_date, i32 years, i32 months, i32 weeks, i32 days);
+
 }

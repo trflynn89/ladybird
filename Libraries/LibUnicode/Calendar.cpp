@@ -90,6 +90,7 @@ static icu::Calendar& iso_calendar_at_iso_date(ISODate iso_date)
     iso8601_calendar->calendar().set(UCAL_EXTENDED_YEAR, iso_date.year);
     iso8601_calendar->calendar().set(UCAL_MONTH, iso_date.month);
     iso8601_calendar->calendar().set(UCAL_DATE, iso_date.day);
+    // iso8601_calendar->calendar().set(iso_date.year, iso_date.month, iso_date.day);
 
     return iso8601_calendar->calendar();
 }
@@ -101,7 +102,8 @@ static Optional<icu::Calendar&> calendar_at_iso_date(StringView calendar, ISODat
     auto& iso8601_calendar = iso_calendar_at_iso_date(iso_date);
     auto time = ICU_TRY(iso8601_calendar.getTime(status));
 
-    dbgln("iso8601:\t{}/{}/{}",
+    dbgln("{}:\t{}/{}/{}",
+        iso8601_calendar.getType(),
         iso8601_calendar.get(UCAL_MONTH, status) + 1,
         iso8601_calendar.get(UCAL_DATE, status),
         iso8601_calendar.get(UCAL_EXTENDED_YEAR, status));
@@ -114,7 +116,7 @@ static Optional<icu::Calendar&> calendar_at_iso_date(StringView calendar, ISODat
     return target_calendar->calendar();
 }
 
-Optional<ISODate> add_duration_to_iso_date_in_calendar(StringView calendar, ISODate iso_date, DateDuration const& duration)
+Optional<ISODate> add_duration_to_iso_date_in_calendar(StringView calendar, ISODate iso_date, DateDuration const& duration, Lenient lenient)
 {
     dbgln("!!! {} years={} months={} weeks={} days={}", calendar, duration.years, duration.months, duration.weeks, duration.days);
     UErrorCode status = U_ZERO_ERROR;
@@ -122,6 +124,8 @@ Optional<ISODate> add_duration_to_iso_date_in_calendar(StringView calendar, ISOD
     auto target_calendar = calendar_at_iso_date(calendar, iso_date);
     if (!target_calendar.has_value())
         return {};
+
+    target_calendar->setLenient(static_cast<UBool>(lenient == Lenient::Yes));
 
     dbgln("{}:\t{}/{}/{}",
         target_calendar->getType(),
@@ -205,17 +209,20 @@ DateDuration calendar_until(StringView calendar, ISODate one, ISODate two, Unit 
 
 CalendarDate iso_date_to_calendar_date(StringView calendar, ISODate iso_date)
 {
+    UErrorCode status = U_ZERO_ERROR;
+
     auto target_calendar = calendar_at_iso_date(calendar, iso_date);
     if (!target_calendar.has_value())
         return {};
 
     auto result = create_calendar_date(*target_calendar);
 
-    dbgln("{}:\t era={} era_year={} year={} month={} month_code={} day={} day_of_week={} day_of_year={} week_of_year.week={} week_of_year.year={} days_in_week={} days_in_month={} days_in_year={} months_in_year={} in_leap_year={}",
-        calendar,
+    dbgln("{}:\tera={} era_year={} year={} ({}) month={} month_code={} day={} day_of_week={} day_of_year={} week_of_year.week={} week_of_year.year={} days_in_week={} days_in_month={} days_in_year={} months_in_year={} in_leap_year={}",
+        target_calendar->getType(),
         result.era,
         result.era_year,
         result.year,
+        target_calendar->get(UCAL_YEAR, status),
         result.month,
         result.month_code,
         result.day,
@@ -233,7 +240,7 @@ CalendarDate iso_date_to_calendar_date(StringView calendar, ISODate iso_date)
     return result;
 }
 
-ISODate calendar_date_to_iso_date(StringView calendar, NonISODate const& date)
+Optional<ISODate> calendar_date_to_iso_date(StringView calendar, NonISODate const& date, Lenient lenient)
 {
     UErrorCode status = U_ZERO_ERROR;
 
@@ -241,14 +248,16 @@ ISODate calendar_date_to_iso_date(StringView calendar, NonISODate const& date)
     if (!target_calendar.has_value())
         return {};
 
+    target_calendar->calendar().setLenient(static_cast<UBool>(lenient == Lenient::Yes));
+
     if (date.year.has_value())
         target_calendar->calendar().set(UCAL_EXTENDED_YEAR, *date.year);
     else if (date.era_year.has_value())
         target_calendar->calendar().set(UCAL_YEAR, *date.era_year);
     else
-        target_calendar->calendar().set(UCAL_YEAR, 0);
+        VERIFY_NOT_REACHED();
 
-    target_calendar->calendar().set(UCAL_MONTH, date.month.value_or(0));
+    target_calendar->calendar().set(UCAL_ORDINAL_MONTH, date.month.value_or(0));
     target_calendar->calendar().set(UCAL_DATE, date.day.value_or(1));
 
     dbgln("{}:\t{}/{}/{}",
@@ -279,6 +288,92 @@ ISODate calendar_date_to_iso_date(StringView calendar, NonISODate const& date)
         iso8601_calendar->calendar().get(UCAL_EXTENDED_YEAR, status));
 
     return result;
+}
+
+Optional<String> calendar_era(StringView calendar, ISODate date)
+{
+    UErrorCode status = U_ZERO_ERROR;
+
+    auto target_calendar = calendar_at_iso_date(calendar, date);
+    if (!target_calendar.has_value())
+        return {};
+
+    auto era = ICU_TRY(target_calendar->get(UCAL_ERA, status));
+    auto symbols = ICU_TRY(icu::DateFormatSymbols(target_calendar->getType(), status));
+
+    i32 count = 0;
+    auto const* era_names = symbols.getEras(count);
+
+    if (era < 0 || era >= count)
+        return {};
+
+    return MUST(icu_string_to_string(era_names[era]).to_lowercase());
+}
+
+Optional<i32> calendar_era_year(StringView calendar, ISODate date)
+{
+    UErrorCode status = U_ZERO_ERROR;
+
+    auto target_calendar = calendar_at_iso_date(calendar, date);
+    if (!target_calendar.has_value())
+        return {};
+
+    return ICU_TRY(target_calendar->get(UCAL_ERA, status));
+}
+
+Optional<i32> calendar_year(StringView calendar, ISODate date)
+{
+    UErrorCode status = U_ZERO_ERROR;
+
+    auto target_calendar = calendar_at_iso_date(calendar, date);
+    if (!target_calendar.has_value())
+        return {};
+
+    return ICU_TRY(target_calendar->get(UCAL_EXTENDED_YEAR, status));
+}
+
+bool calendar_year_contains_month_code(StringView calendar, i32 year, StringView month_code)
+{
+    UErrorCode status = U_ZERO_ERROR;
+
+    auto target_calendar = CalendarData::for_calendar(calendar);
+    if (!target_calendar.has_value())
+        return false;
+
+    target_calendar->calendar().setLenient(0);
+    target_calendar->calendar().set(UCAL_EXTENDED_YEAR, year);
+
+    ICU_TRY_VOID(target_calendar->calendar().setTemporalMonthCode(ByteString { month_code }.characters(), status));
+    char const* actual_month_code = ICU_TRY(target_calendar->calendar().getTemporalMonthCode(status));
+
+    return month_code == actual_month_code;
+}
+
+u8 calendar_months_in_year(StringView calendar, i32 year)
+{
+    UErrorCode status = U_ZERO_ERROR;
+
+    auto target_calendar = CalendarData::for_calendar(calendar);
+    if (!target_calendar.has_value())
+        return false;
+
+    target_calendar->calendar().set(UCAL_EXTENDED_YEAR, year);
+
+    return ICU_TRY(target_calendar->calendar().getActualMaximum(UCAL_MONTH, status));
+}
+
+u8 calendar_days_in_month(StringView calendar, i32 year, i8 month)
+{
+    UErrorCode status = U_ZERO_ERROR;
+
+    auto target_calendar = CalendarData::for_calendar(calendar);
+    if (!target_calendar.has_value())
+        return false;
+
+    target_calendar->calendar().set(UCAL_EXTENDED_YEAR, year);
+    target_calendar->calendar().set(UCAL_ORDINAL_MONTH, month);
+
+    return ICU_TRY(target_calendar->calendar().getActualMaximum(UCAL_DATE, status));
 }
 
 }
