@@ -305,6 +305,10 @@
       "version": "3.5.3#0"
     },
     {
+      "name": "pthread",
+      "version": "3.0.0#2"
+    },
+    {
       "name": "qtbase",
       "version": "6.10.0#1"
     },
@@ -327,6 +331,18 @@
     {
       "name": "sqlite3",
       "version": "3.50.4#0"
+    },
+    {
+      "name": "tiff",
+      "version": "4.7.1#0"
+    },
+    {
+      "name": "vulkan",
+      "version": "2023-12-17"
+    },
+    {
+      "name": "vulkan-headers",
+      "version": "1.4.328.0#0"
     },
     {
       "name": "woff2",
