@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <AK/Enum.h>
 #include <AK/StdLibExtraDetails.h>
 
 // Enables bitwise operators for the specified Enum type.
@@ -84,4 +85,12 @@
     {                                                                      \
         using Type = UnderlyingType<Enum>;                                 \
         return static_cast<Type>(value & mask) != 0;                       \
+    }                                                                      \
+                                                                           \
+    auto magic_enum_define_range_adl(Enum)                                 \
+    {                                                                      \
+        return magic_enum::customize::adl_info()                           \
+            .prefix<sizeof(#Enum) - 1>()                                   \
+            .minmax<10, 10>()                                              \
+            .flag<true>();                                                 \
     }

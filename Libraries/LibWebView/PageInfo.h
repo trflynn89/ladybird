@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <AK/Enum.h>
 #include <AK/EnumBits.h>
 
 namespace WebView {
@@ -20,4 +21,9 @@ enum class PageInfoType {
 
 AK_ENUM_BITWISE_OPERATORS(PageInfoType);
 
+static_assert(magic_enum::enum_contains<PageInfoType>(
+    PageInfoType::Text | PageInfoType::LayoutTree));
+
 }
+
+// AK_ENUM_IS_BITWISE(WebView::PageInfoType);
