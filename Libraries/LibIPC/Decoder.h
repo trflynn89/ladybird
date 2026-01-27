@@ -9,6 +9,7 @@
 
 #include <AK/ByteString.h>
 #include <AK/Concepts.h>
+#include <AK/Enum.h>
 #include <AK/Forward.h>
 #include <AK/NumericLimits.h>
 #include <AK/Queue.h>
@@ -82,6 +83,12 @@ template<Enum T>
 ErrorOr<T> decode(Decoder& decoder)
 {
     auto value = TRY(decoder.decode<UnderlyingType<T>>());
+
+    if constexpr (magic_enum::is_magic_enum_supported) {
+        if (!magic_enum::enum_contains<T>(value))
+            return Error::from_string_literal("IPC decode: Invalid enum value");
+    }
+
     return static_cast<T>(value);
 }
 

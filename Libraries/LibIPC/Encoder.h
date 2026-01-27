@@ -8,6 +8,7 @@
 #pragma once
 
 #include <AK/Concepts.h>
+#include <AK/Enum.h>
 #include <AK/HashMap.h>
 #include <AK/IPv4Address.h>
 #include <AK/StdLibExtras.h>
@@ -73,6 +74,10 @@ ErrorOr<void> encode(Encoder& encoder, T const& value)
 template<Enum T>
 ErrorOr<void> encode(Encoder& encoder, T const& value)
 {
+    if constexpr (magic_enum::is_magic_enum_supported) {
+        VERIFY(magic_enum::enum_contains<T>(value));
+    }
+
     return encoder.encode(to_underlying(value));
 }
 
