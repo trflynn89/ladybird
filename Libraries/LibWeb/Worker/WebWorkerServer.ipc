@@ -1,6 +1,7 @@
 #include <LibURL/URL.h>
 #include <LibIPC/File.h>
 #include <LibWeb/Bindings/AgentType.h>
+#include <LibWeb/Bindings/RequestPrototype.h>
 #include <LibWeb/Bindings/WorkerPrototype.h>
 #include <LibWeb/HTML/StructuredSerialize.h>
 #include <LibWeb/HTML/Scripting/SerializedEnvironmentSettingsObject.h>
