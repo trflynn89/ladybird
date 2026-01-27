@@ -67,6 +67,9 @@ else()
 endif()
 configure_file(Backtrace.h.in Backtrace.h @ONLY)
 
+find_package(magic_enum CONFIG REQUIRED)
+target_link_libraries(AK PUBLIC magic_enum::magic_enum)
+
 find_package(simdutf REQUIRED)
 swizzle_target_properties_for_swift(simdutf::simdutf)
 target_link_libraries(AK PRIVATE simdutf::simdutf)

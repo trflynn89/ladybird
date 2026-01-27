@@ -104,6 +104,7 @@
       ]
     },
     "libxml2",
+    "magic-enum",
     {
       "name": "mman",
       "platform": "windows"
@@ -295,6 +296,10 @@
     {
       "name": "libxml2",
       "version": "2.13.8#1"
+    },
+    {
+      "name": "magic-enum",
+      "version": "0.9.7#1"
     },
     {
       "name": "mman",
