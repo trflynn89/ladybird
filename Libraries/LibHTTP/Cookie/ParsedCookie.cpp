@@ -4,19 +4,18 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/CharacterTypes.h>
 #include <AK/DateConstants.h>
 #include <AK/Function.h>
 #include <AK/StdLibExtras.h>
 #include <AK/Time.h>
 #include <AK/Vector.h>
+#include <LibHTTP/Cookie/ParsedCookie.h>
 #include <LibIPC/Decoder.h>
 #include <LibIPC/Encoder.h>
 #include <LibURL/URL.h>
-#include <LibWeb/Cookie/ParsedCookie.h>
-#include <LibWeb/Infra/Strings.h>
-#include <ctype.h>
 
-namespace Web::Cookie {
+namespace HTTP::Cookie {
 
 static void parse_attributes(URL::URL const&, ParsedCookie& parsed_cookie, StringView unparsed_attributes);
 static void process_attribute(URL::URL const&, ParsedCookie& parsed_cookie, StringView attribute_name, StringView attribute_value);
@@ -198,7 +197,7 @@ void on_expires_attribute(ParsedCookie& parsed_cookie, StringView attribute_valu
 
     // 3. Let cookie-age-limit be the maximum age of the cookie (which SHOULD be 400 days in the future or sooner, see
     //    Section 5.5).
-    auto cookie_age_limit = UnixDateTime::now() + maximum_cookie_age;
+    auto cookie_age_limit = UnixDateTime::now() + MAXIMUM_COOKIE_AGE;
 
     // 4. If the expiry-time is more than cookie-age-limit, the user agent MUST set the expiry time to cookie-age-limit
     //    in seconds.
@@ -240,7 +239,7 @@ void on_max_age_attribute(ParsedCookie& parsed_cookie, StringView attribute_valu
     }
 
     // 5. Let cookie-age-limit be the maximum age of the cookie (which SHOULD be 400 days or less, see Section 5.5).
-    auto cookie_age_limit = maximum_cookie_age;
+    auto cookie_age_limit = MAXIMUM_COOKIE_AGE;
 
     // 6. Set delta-seconds to the smaller of its present value and cookie-age-limit.
     if (*delta_seconds > cookie_age_limit.to_seconds())
@@ -334,7 +333,7 @@ Optional<UnixDateTime> parse_date_time(StringView date_string)
     unsigned year = 0;
 
     auto to_uint = [](StringView token, unsigned& result) {
-        if (!all_of(token, isdigit))
+        if (!all_of(token, is_ascii_digit))
             return false;
 
         if (auto converted = token.to_number<unsigned>(); converted.has_value()) {
@@ -468,7 +467,7 @@ Optional<UnixDateTime> parse_date_time(StringView date_string)
 }
 
 template<>
-ErrorOr<void> IPC::encode(Encoder& encoder, Web::Cookie::ParsedCookie const& cookie)
+ErrorOr<void> IPC::encode(Encoder& encoder, HTTP::Cookie::ParsedCookie const& cookie)
 {
     TRY(encoder.encode(cookie.name));
     TRY(encoder.encode(cookie.value));
@@ -484,7 +483,7 @@ ErrorOr<void> IPC::encode(Encoder& encoder, Web::Cookie::ParsedCookie const& coo
 }
 
 template<>
-ErrorOr<Web::Cookie::ParsedCookie> IPC::decode(Decoder& decoder)
+ErrorOr<HTTP::Cookie::ParsedCookie> IPC::decode(Decoder& decoder)
 {
     auto name = TRY(decoder.decode<String>());
     auto value = TRY(decoder.decode<String>());
@@ -494,7 +493,7 @@ ErrorOr<Web::Cookie::ParsedCookie> IPC::decode(Decoder& decoder)
     auto path = TRY(decoder.decode<Optional<String>>());
     auto secure_attribute_present = TRY(decoder.decode<bool>());
     auto http_only_attribute_present = TRY(decoder.decode<bool>());
-    auto same_site_attribute = TRY(decoder.decode<Web::Cookie::SameSite>());
+    auto same_site_attribute = TRY(decoder.decode<HTTP::Cookie::SameSite>());
 
-    return Web::Cookie::ParsedCookie { move(name), move(value), same_site_attribute, move(expiry_time_from_expires_attribute), move(expiry_time_from_max_age_attribute), move(domain), move(path), secure_attribute_present, http_only_attribute_present };
+    return HTTP::Cookie::ParsedCookie { move(name), move(value), same_site_attribute, move(expiry_time_from_expires_attribute), move(expiry_time_from_max_age_attribute), move(domain), move(path), secure_attribute_present, http_only_attribute_present };
 }

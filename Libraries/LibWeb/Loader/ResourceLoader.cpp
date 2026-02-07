@@ -11,12 +11,12 @@
 #include <LibCore/Resource.h>
 #include <LibCore/System.h>
 #include <LibGC/Function.h>
+#include <LibHTTP/Cookie/Cookie.h>
+#include <LibHTTP/Cookie/ParsedCookie.h>
 #include <LibRequests/Request.h>
 #include <LibRequests/RequestClient.h>
 #include <LibTextCodec/Decoder.h>
 #include <LibURL/Parser.h>
-#include <LibWeb/Cookie/Cookie.h>
-#include <LibWeb/Cookie/ParsedCookie.h>
 #include <LibWeb/Fetch/Infrastructure/HTTP/Requests.h>
 #include <LibWeb/Fetch/Infrastructure/URL.h>
 #include <LibWeb/Loader/ContentFilter.h>
@@ -107,10 +107,10 @@ static ByteString sanitized_url_for_logging(URL::URL const& url)
 
 static void store_response_cookies(Page& page, URL::URL const& url, ByteString const& set_cookie_entry)
 {
-    auto cookie = Cookie::parse_cookie(url, TextCodec::isomorphic_decode(set_cookie_entry));
+    auto cookie = HTTP::Cookie::parse_cookie(url, TextCodec::isomorphic_decode(set_cookie_entry));
     if (!cookie.has_value())
         return;
-    page.client().page_did_set_cookie(url, cookie.value(), Cookie::Source::Http);
+    page.client().page_did_set_cookie(url, cookie.value(), HTTP::Cookie::Source::Http);
 }
 
 static NonnullRefPtr<HTTP::HeaderList> response_headers_for_file(StringView path, Optional<time_t> const& modified_time)
