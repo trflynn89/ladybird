@@ -11,11 +11,8 @@
 #include <LibCore/Resource.h>
 #include <LibCore/System.h>
 #include <LibGC/Function.h>
-#include <LibHTTP/Cookie/Cookie.h>
-#include <LibHTTP/Cookie/ParsedCookie.h>
 #include <LibRequests/Request.h>
 #include <LibRequests/RequestClient.h>
-#include <LibTextCodec/Decoder.h>
 #include <LibURL/Parser.h>
 #include <LibWeb/Fetch/Infrastructure/HTTP/Requests.h>
 #include <LibWeb/Fetch/Infrastructure/URL.h>
@@ -103,14 +100,6 @@ static ByteString sanitized_url_for_logging(URL::URL const& url)
     if (url.scheme() == "data"sv)
         return "[data URL]"sv;
     return url.to_byte_string();
-}
-
-static void store_response_cookies(Page& page, URL::URL const& url, ByteString const& set_cookie_entry)
-{
-    auto cookie = HTTP::Cookie::parse_cookie(url, TextCodec::isomorphic_decode(set_cookie_entry));
-    if (!cookie.has_value())
-        return;
-    page.client().page_did_set_cookie(url, cookie.value(), HTTP::Cookie::Source::Http);
 }
 
 static NonnullRefPtr<HTTP::HeaderList> response_headers_for_file(StringView path, Optional<time_t> const& modified_time)
@@ -420,9 +409,7 @@ RefPtr<Requests::Request> ResourceLoader::load(LoadRequest& request, GC::Root<On
         return nullptr;
     }
 
-    auto protocol_headers_received = [this, on_headers_received = move(on_headers_received), request, request_id = protocol_request->id()](auto const& response_headers, auto status_code, auto const& reason_phrase) {
-        handle_network_response_headers(request, response_headers);
-
+    auto protocol_headers_received = [on_headers_received = move(on_headers_received), request, request_id = protocol_request->id()](auto const& response_headers, auto status_code, auto const& reason_phrase) {
         if (auto page = request.page())
             page->client().page_did_receive_network_response_headers(request_id, status_code.value_or(0), reason_phrase, response_headers->headers());
 
@@ -490,23 +477,6 @@ RefPtr<Requests::Request> ResourceLoader::start_network_request(LoadRequest cons
 
     m_active_requests.set(*protocol_request);
     return protocol_request;
-}
-
-void ResourceLoader::handle_network_response_headers(LoadRequest const& request, HTTP::HeaderList const& response_headers)
-{
-    if (!request.page())
-        return;
-
-    if (request.include_credentials() == HTTP::Cookie::IncludeCredentials::Yes) {
-        // From https://fetch.spec.whatwg.org/#concept-http-network-fetch:
-        // 15. If includeCredentials is true, then the user agent should parse and store response
-        //     `Set-Cookie` headers given request and response.
-        for (auto const& [header, value] : response_headers) {
-            if (header.equals_ignoring_ascii_case("Set-Cookie"sv)) {
-                store_response_cookies(*request.page(), request.url().value(), value);
-            }
-        }
-    }
 }
 
 void ResourceLoader::finish_network_request(NonnullRefPtr<Requests::Request> protocol_request)

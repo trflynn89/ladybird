@@ -44,6 +44,7 @@ public:
     NonnullRefPtr<Core::Promise<CacheSizes>> estimate_cache_size_accessed_since(UnixDateTime since);
 
     Function<String(URL::URL const&)> on_retrieve_http_cookie;
+    Function<void(URL::URL const&, HTTP::Cookie::ParsedCookie const&)> on_store_http_cookie;
     Function<void()> on_request_server_died;
 
 private:
@@ -54,6 +55,7 @@ private:
     virtual void headers_became_available(u64 request_id, Vector<HTTP::Header>, Optional<u32>, Optional<String>) override;
 
     virtual void retrieve_http_cookie(int client_id, u64 request_id, URL::URL url) override;
+    virtual void store_http_cookie(URL::URL url, HTTP::Cookie::ParsedCookie) override;
 
     virtual void certificate_requested(u64 request_id) override;
 

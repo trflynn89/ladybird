@@ -11,6 +11,7 @@
 #include <LibCore/Notifier.h>
 #include <LibHTTP/Cache/DiskCache.h>
 #include <LibHTTP/Cache/Utilities.h>
+#include <LibHTTP/Cookie/ParsedCookie.h>
 #include <LibHTTP/Status.h>
 #include <LibTextCodec/Decoder.h>
 #include <RequestServer/CURL.h>
@@ -687,6 +688,9 @@ size_t Request::on_header_received(void* buffer, size_t size, size_t nmemb, void
         auto name = header_line.substring_view(0, *colon_index).trim_whitespace();
         auto value = header_line.substring_view(*colon_index + 1).trim_whitespace();
         request.m_response_headers->append({ name, value });
+
+        if (name.equals_ignoring_ascii_case("Set-Cookie"sv))
+            request.set_cookie_header_received(value);
     }
 
     return total_size;
@@ -747,6 +751,19 @@ ErrorOr<void> Request::inform_client_request_started()
     m_client.async_request_started(m_request_id, IPC::File::adopt_fd(m_client_request_pipe->reader_fd()));
 
     return {};
+}
+
+void Request::set_cookie_header_received(StringView cookie)
+{
+    if (m_include_credentials == HTTP::Cookie::IncludeCredentials::No)
+        return;
+
+    auto parsed_cookie = HTTP::Cookie::parse_cookie(m_url, TextCodec::isomorphic_decode(cookie));
+    if (!parsed_cookie.has_value())
+        return;
+
+    if (auto connection = ConnectionFromClient::primary_connection(); connection.has_value())
+        connection->async_store_http_cookie(m_url, *parsed_cookie);
 }
 
 void Request::transfer_headers_to_client_if_needed()

@@ -168,6 +168,7 @@ private:
     static size_t on_data_received(void* buffer, size_t size, size_t nmemb, void* user_data);
 
     ErrorOr<void> inform_client_request_started();
+    void set_cookie_header_received(StringView cookie);
     void transfer_headers_to_client_if_needed();
     ErrorOr<void> write_queued_bytes_without_blocking();
 

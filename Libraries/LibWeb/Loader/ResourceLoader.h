@@ -80,7 +80,6 @@ private:
     void handle_resource_load_request(LoadRequest const& request, ResourceHandler on_resource, ErrorHandler on_error);
 
     RefPtr<Requests::Request> start_network_request(LoadRequest const&);
-    void handle_network_response_headers(LoadRequest const&, HTTP::HeaderList const&);
     void finish_network_request(NonnullRefPtr<Requests::Request>);
 
     int m_pending_loads { 0 };

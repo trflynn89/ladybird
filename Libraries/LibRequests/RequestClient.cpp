@@ -119,6 +119,12 @@ void RequestClient::retrieve_http_cookie(int client_id, u64 request_id, URL::URL
     async_retrieved_http_cookie(client_id, request_id, cookie);
 }
 
+void RequestClient::store_http_cookie(URL::URL url, HTTP::Cookie::ParsedCookie cookie)
+{
+    if (on_store_http_cookie)
+        on_store_http_cookie(url, cookie);
+}
+
 void RequestClient::certificate_requested(u64 request_id)
 {
     if (auto request = m_requests.get(request_id); request.has_value())

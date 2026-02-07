@@ -1,3 +1,4 @@
+#include <LibHTTP/Cookie/ParsedCookie.h>
 #include <LibHTTP/Header.h>
 #include <LibRequests/CacheSizes.h>
 #include <LibRequests/NetworkError.h>
@@ -11,6 +12,7 @@ endpoint RequestClient
     headers_became_available(u64 request_id, Vector<HTTP::Header> response_headers, Optional<u32> status_code, Optional<String> reason_phrase) =|
 
     retrieve_http_cookie(int client_id, u64 request_id, URL::URL url) =|
+    store_http_cookie(URL::URL url, HTTP::Cookie::ParsedCookie cookie) =|
 
     // Websocket API
     // FIXME: See if this can be merged with the regular APIs
