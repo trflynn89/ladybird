@@ -50,6 +50,7 @@ struct MatchContext {
     GC::Ptr<DOM::Element const> part_owning_parent {};  // Only set temporarily when matching a ::part() pseudo-element
     GC::Ptr<DOM::ShadowRoot const> rule_shadow_root {}; // Shadow root the matched rule belongs to
     bool collect_per_element_selector_involvement_metadata { false };
+    bool for_host_part_matching { false };
     CSS::PseudoClassBitmap attempted_pseudo_class_matches {};
     HasResultCache* has_result_cache { nullptr };
 };

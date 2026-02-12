@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/ScopeGuard.h>
 #include <LibWeb/CSS/CSSStyleSheet.h>
 #include <LibWeb/CSS/ComputedProperties.h>
 #include <LibWeb/CSS/Keyword.h>
@@ -1151,12 +1152,19 @@ static inline bool matches(CSS::Selector::SimpleSelector const& component, DOM::
             // FIXME: Support matching pseudo-elements.
             DOM::AbstractElement const abstract_element { const_cast<DOM::Element&>(element) };
 
-            // Potentially any ancestor shadow-host could be owner of the part, so walk up the tree until we find one.
-            // FIXME: That owner needs to be in scope for the rule. How do we tell?
+            // https://drafts.csswg.org/css-shadow-1/#part
+            // "The ::part() pseudo-element only matches anything when the originating element is a shadow host."
             // FIXME: How does this interact with :host ?
             for (auto ancestor_shadow_root = element.containing_shadow_root();
                 ancestor_shadow_root;
                 ancestor_shadow_root = ancestor_shadow_root->containing_shadow_root()) {
+
+                // https://drafts.csswg.org/css-shadow-1/#part-element-map
+                // "The descendants of an element [...] does not include the shadow trees of the element."
+                bool const is_direct_child_scope = ancestor_shadow_root->host()->containing_shadow_root() == context.rule_shadow_root;
+                bool const is_host_part_own_scope = ancestor_shadow_root == context.rule_shadow_root && context.for_host_part_matching;
+                if (!is_direct_child_scope && !is_host_part_own_scope)
+                    continue;
 
                 auto const& part_element_map = ancestor_shadow_root->part_element_map();
                 bool all_part_names_match = true;
@@ -1194,6 +1202,47 @@ bool matches(CSS::Selector const& selector, int component_list_index, DOM::Eleme
     SelectorKind selector_kind, GC::Ptr<DOM::Element const> anchor)
 {
     auto& compound_selector = selector.compound_selectors()[component_list_index];
+
+    // NB: :host::part() must consult the rule shadow root's part map even when the direct-child scope check would skip
+    //     it. That path only applies when the rule comes from a shadow stylesheet (rule_shadow_root is set); otherwise
+    //     the same-shadow-root exception cannot trigger. Scan this compound for :host, including inside :is() (nesting
+    //     expands &::part() in a :host rule to :is(:host)::part()).
+    bool const saved_for_host_part_matching = context.for_host_part_matching;
+    ScopeGuard restore_for_host_part = [&] { context.for_host_part_matching = saved_for_host_part_matching; };
+    for (auto const& simple : compound_selector.simple_selectors) {
+        if (!context.rule_shadow_root)
+            break;
+        if (simple.type != CSS::Selector::SimpleSelector::Type::PseudoClass)
+            continue;
+        auto const& pseudo_class = simple.pseudo_class();
+        if (pseudo_class.type == CSS::PseudoClass::Host) {
+            context.for_host_part_matching = true;
+            break;
+        }
+        if (pseudo_class.type == CSS::PseudoClass::Is) {
+            bool found = false;
+            for (auto const& arg : pseudo_class.argument_selector_list) {
+                for (auto const& arg_compound : arg->compound_selectors()) {
+                    for (auto const& arg_simple : arg_compound.simple_selectors) {
+                        if (arg_simple.type == CSS::Selector::SimpleSelector::Type::PseudoClass
+                            && arg_simple.pseudo_class().type == CSS::PseudoClass::Host) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (found)
+                        break;
+                }
+                if (found)
+                    break;
+            }
+            if (found) {
+                context.for_host_part_matching = true;
+                break;
+            }
+        }
+    }
+
     NonnullRawPtr element_for_compound_matching { initial_element };
     for (auto& simple_selector : compound_selector.simple_selectors.in_reverse()) {
         if (!matches(simple_selector, *element_for_compound_matching, shadow_host, context, scope, selector_kind, anchor)) {
