@@ -56,6 +56,13 @@ void DisplayListPlayer::execute(DisplayList& display_list, ScrollStateSnapshotBy
     }
 }
 
+void DisplayListPlayer::execute_display_list_into_surface(DisplayList& display_list, Gfx::PaintingSurface& target_surface)
+{
+    TemporaryChange surface_change { m_surface, RefPtr<Gfx::PaintingSurface> { target_surface } };
+    ScrollStateSnapshot scroll_state_snapshot;
+    execute_impl(display_list, scroll_state_snapshot);
+}
+
 static RefPtr<AccumulatedVisualContext const> find_common_ancestor(RefPtr<AccumulatedVisualContext const> a, RefPtr<AccumulatedVisualContext const> b)
 {
     if (!a || !b)
