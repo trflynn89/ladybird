@@ -1,14 +1,6 @@
 name: Package the js repl as a binary artifact
 
-on:
-  push:
-    branches: [master]
-  workflow_dispatch:
-    inputs:
-      reference_to_build:
-        description: 'Branch, tag or commit hash to build'
-        required: true
-        type: string
+on: [pull_request]
 
 env:
   LADYBIRD_SOURCE_DIR: ${{ github.workspace }}
@@ -17,8 +9,7 @@ env:
 
 jobs:
   build-and-package:
-    runs-on: ${{ fromJSON(matrix.runner_labels) }}
-    if: github.repository == 'LadybirdBrowser/ladybird'
+    runs-on: ${{ matrix.runner_label }}
     name: ${{ matrix.os_name }}, ${{ matrix.arch }}
 
     strategy:
@@ -28,20 +19,14 @@ jobs:
         arch: ['x86_64']
         toolchain: ['Clang']
         package_type: ['Linux-x86_64']
-        runner_labels: ['["blacksmith-8vcpu-ubuntu-2404"]']
+        runner_label: ['ubuntu-latest']
 
         include:
           - os_name: 'macOS'
             arch: 'arm64'
             toolchain: 'Clang'
             package_type: 'macOS-arm64'
-            runner_labels: '["macos-15", "self-hosted"]'
-
-          - os_name: 'Linux'
-            arch: 'arm64'
-            toolchain: 'Clang'
-            package_type: 'Linux-aarch64'
-            runner_labels: '["blacksmith-8vcpu-ubuntu-2404-arm"]'
+            runner_label: 'macos-latest'
 
     steps:
       - name: Checkout LadybirdBrowser/ladybird
@@ -68,18 +53,6 @@ jobs:
         with:
           os: ${{ matrix.os_name }}
           arch: ${{ matrix.arch }}
-
-      - name: Restore Caches
-        uses: ./.github/actions/cache-restore
-        id: 'cache-restore'
-        with:
-          runner_labels: ${{ matrix.runner_labels }}
-          os: ${{ matrix.os_name }}
-          arch: ${{ matrix.arch }}
-          cache_key_extra: 'LibJS and LibWasm Artifacts'
-          ccache_path: ${{ env.CCACHE_DIR }}
-          download_cache_path: ${{ github.workspace }}/Build/caches
-          vcpkg_cache_path: ${{ github.workspace }}/Build/caches/vcpkg-binary-cache
 
       - name: Create build directory Ubuntu
         run: |
@@ -111,32 +84,6 @@ jobs:
         run: |
           ninja wasm
 
-      - name: Package js and wasm
-        working-directory: Build/distribution
-        run: |
-          cpack
-
-          # Inject the COMMIT file for older builds (before commit 5c5de0e30e04).
-          for package in ladybird-*.tar.gz; do
-            if ! tar -tzf "${package}" | grep -qx COMMIT; then
-              echo "${{ steps.build-commit.outputs.sha }}" > COMMIT
-              gunzip "${package}"
-              tar --append --file="${package%.gz}" COMMIT
-              gzip "${package%.gz}"
-              rm COMMIT
-            fi
-          done
-
-      - name: Save Caches
-        uses: ./.github/actions/cache-save
-        with:
-          runner_labels: ${{ matrix.runner_labels }}
-          arch: 'Lagom'
-          ccache_path: ${{ env.CCACHE_DIR }}
-          ccache_primary_key: ${{ steps.cache-restore.outputs.ccache_primary_key }}
-          vcpkg_cache_path: ${{ github.workspace }}/Build/caches/vcpkg-binary-cache
-          vcpkg_cache_primary_key: ${{ steps.cache-restore.outputs.vcpkg_cache_primary_key }}
-
       - name: Sanity-check the js repl
         shell: bash
         run: |
@@ -162,17 +109,3 @@ jobs:
               exit 1
             fi
           fi
-
-      - name: Upload js package
-        uses: actions/upload-artifact@v6
-        with:
-          name: ladybird-js-${{ matrix.package_type }}
-          path: Build/distribution/ladybird-js-*.tar.gz
-          retention-days: 7
-
-      - name: Upload wasm package
-        uses: actions/upload-artifact@v6
-        with:
-          name: ladybird-wasm-${{ matrix.package_type }}
-          path: Build/distribution/ladybird-wasm-*.tar.gz
-          retention-days: 7

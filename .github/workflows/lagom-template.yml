@@ -9,7 +9,7 @@ on:
       os_name:
         required: true
         type: string
-      runner_labels:
+      runner_label:
         required: true
         type: string
       arch:
@@ -38,7 +38,7 @@ env:
 
 jobs:
   CI:
-    runs-on: ${{ fromJSON(inputs.runner_labels) }}
+    runs-on: ${{ inputs.runner_label }}
 
     steps:
       # Pull requests can trail behind `master` and can cause breakage if merging before running the CI checks on an updated branch.
@@ -101,7 +101,6 @@ jobs:
         uses: ./.github/actions/cache-restore
         id: 'cache-restore'
         with:
-          runner_labels: ${{ inputs.runner_labels }}
           os: ${{ inputs.os_name }}
           arch: ${{ inputs.arch }}
           toolchain: ${{ inputs.toolchain }}
@@ -180,7 +179,6 @@ jobs:
       - name: Save Caches
         uses: ./.github/actions/cache-save
         with:
-          runner_labels: ${{ inputs.runner_labels }}
           arch: ${{ inputs.arch }}
           ccache_path: ${{ env.CCACHE_DIR }}
           ccache_primary_key: ${{ steps.cache-restore.outputs.ccache_primary_key }}
