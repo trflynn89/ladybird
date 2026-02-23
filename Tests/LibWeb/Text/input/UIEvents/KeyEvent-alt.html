@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<input id="input" />
+<script src="../include.js"></script>
+<script>
+    test(() => {
+        input.addEventListener("keydown", e => {
+            println(`key="${e.key}" code=${e.code} altKey=${e.altKey}`);
+        });
+
+        internals.sendKey(input, "L", internals.MOD_ALT);
+    });
+</script>

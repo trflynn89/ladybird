@@ -1464,7 +1464,7 @@ GC::Ptr<DOM::Node> EventHandler::focus_candidate_for_position(CSSPixelPoint visu
 
 static constexpr bool should_ignore_keydown_event(u32 code_point, u32 modifiers)
 {
-    if (modifiers & (UIEvents::KeyModifier::Mod_Ctrl | UIEvents::KeyModifier::Mod_Alt | UIEvents::KeyModifier::Mod_Super))
+    if (modifiers & UIEvents::KeyModifier::Mod_PlatformCtrl)
         return true;
 
     // FIXME: There are probably also keys with non-zero code points that should be filtered out.
