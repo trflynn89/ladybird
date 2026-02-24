@@ -385,7 +385,7 @@ bool UnsignedBigInteger::operator==(UnsignedBigInteger const& other) const
 
 bool UnsignedBigInteger::operator!=(UnsignedBigInteger const& other) const
 {
-    return !(*this == other);
+    return mp_cmp(&m_mp, &other.m_mp) != MP_EQ;
 }
 
 bool UnsignedBigInteger::operator<(UnsignedBigInteger const& other) const
@@ -395,17 +395,19 @@ bool UnsignedBigInteger::operator<(UnsignedBigInteger const& other) const
 
 bool UnsignedBigInteger::operator<=(UnsignedBigInteger const& other) const
 {
-    return *this < other || *this == other;
+    auto result = mp_cmp(&m_mp, &other.m_mp);
+    return result == MP_EQ || result == MP_LT;
 }
 
 bool UnsignedBigInteger::operator>(UnsignedBigInteger const& other) const
 {
-    return *this != other && !(*this < other);
+    return mp_cmp(&m_mp, &other.m_mp) == MP_GT;
 }
 
 bool UnsignedBigInteger::operator>=(UnsignedBigInteger const& other) const
 {
-    return *this > other || *this == other;
+    auto result = mp_cmp(&m_mp, &other.m_mp);
+    return result == MP_EQ || result == MP_GT;
 }
 
 UnsignedBigInteger::CompareResult UnsignedBigInteger::compare_to_double(double value) const
