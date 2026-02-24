@@ -274,26 +274,6 @@ FLATTEN SignedBigInteger SignedBigInteger::bitwise_xor(SignedBigInteger const& o
     return bitwise_or(other).minus(bitwise_and(other));
 }
 
-bool SignedBigInteger::operator==(UnsignedBigInteger const& other) const
-{
-    return mp_cmp(&m_mp, &other.m_mp) == MP_EQ;
-}
-
-bool SignedBigInteger::operator!=(UnsignedBigInteger const& other) const
-{
-    return !(*this == other);
-}
-
-bool SignedBigInteger::operator<(UnsignedBigInteger const& other) const
-{
-    return mp_cmp(&m_mp, &other.m_mp) == MP_LT;
-}
-
-bool SignedBigInteger::operator>(UnsignedBigInteger const& other) const
-{
-    return *this != other && !(*this < other);
-}
-
 FLATTEN ErrorOr<SignedBigInteger> SignedBigInteger::shift_left(size_t num_bits) const
 {
     SignedBigInteger result;
@@ -378,7 +358,7 @@ bool SignedBigInteger::operator==(SignedBigInteger const& other) const
 
 bool SignedBigInteger::operator!=(SignedBigInteger const& other) const
 {
-    return !(*this == other);
+    return mp_cmp(&m_mp, &other.m_mp) != MP_EQ;
 }
 
 bool SignedBigInteger::operator<(SignedBigInteger const& other) const
@@ -388,17 +368,39 @@ bool SignedBigInteger::operator<(SignedBigInteger const& other) const
 
 bool SignedBigInteger::operator<=(SignedBigInteger const& other) const
 {
-    return *this < other || *this == other;
+    auto result = mp_cmp(&m_mp, &other.m_mp);
+    return result == MP_EQ || result == MP_LT;
 }
 
 bool SignedBigInteger::operator>(SignedBigInteger const& other) const
 {
-    return *this != other && !(*this < other);
+    return mp_cmp(&m_mp, &other.m_mp) == MP_GT;
 }
 
 bool SignedBigInteger::operator>=(SignedBigInteger const& other) const
 {
-    return !(*this < other);
+    auto result = mp_cmp(&m_mp, &other.m_mp);
+    return result == MP_EQ || result == MP_GT;
+}
+
+bool SignedBigInteger::operator==(UnsignedBigInteger const& other) const
+{
+    return mp_cmp(&m_mp, &other.m_mp) == MP_EQ;
+}
+
+bool SignedBigInteger::operator!=(UnsignedBigInteger const& other) const
+{
+    return mp_cmp(&m_mp, &other.m_mp) != MP_EQ;
+}
+
+bool SignedBigInteger::operator<(UnsignedBigInteger const& other) const
+{
+    return mp_cmp(&m_mp, &other.m_mp) == MP_LT;
+}
+
+bool SignedBigInteger::operator>(UnsignedBigInteger const& other) const
+{
+    return mp_cmp(&m_mp, &other.m_mp) == MP_GT;
 }
 
 UnsignedBigInteger::CompareResult SignedBigInteger::compare_to_double(double value) const
