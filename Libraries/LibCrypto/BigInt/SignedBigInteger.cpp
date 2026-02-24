@@ -127,7 +127,7 @@ ErrorOr<SignedBigInteger> SignedBigInteger::from_base(u16 N, StringView str)
     return result;
 }
 
-ErrorOr<String> SignedBigInteger::to_base(u16 N) const
+String SignedBigInteger::to_base(u16 N) const
 {
     VERIFY(N <= 36);
     if (is_zero())
@@ -135,7 +135,7 @@ ErrorOr<String> SignedBigInteger::to_base(u16 N) const
 
     int size = 0;
     MP_MUST(mp_radix_size(&m_mp, N, &size));
-    auto buffer = TRY(ByteBuffer::create_zeroed(size));
+    auto buffer = MUST(ByteBuffer::create_zeroed(size));
 
     size_t written = 0;
     MP_MUST(mp_to_radix(&m_mp, reinterpret_cast<char*>(buffer.data()), size, &written, N));
@@ -274,10 +274,10 @@ FLATTEN SignedBigInteger SignedBigInteger::bitwise_xor(SignedBigInteger const& o
     return bitwise_or(other).minus(bitwise_and(other));
 }
 
-FLATTEN ErrorOr<SignedBigInteger> SignedBigInteger::shift_left(size_t num_bits) const
+FLATTEN SignedBigInteger SignedBigInteger::shift_left(size_t num_bits) const
 {
     SignedBigInteger result;
-    MP_TRY(mp_mul_2d(&m_mp, num_bits, &result.m_mp));
+    MP_MUST(mp_mul_2d(&m_mp, num_bits, &result.m_mp));
     return result;
 }
 

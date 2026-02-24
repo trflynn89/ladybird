@@ -120,7 +120,7 @@ TEST_CASE(test_unsigned_bigint_subtraction_with_large_numbers2)
 
 TEST_CASE(test_unsigned_bigint_subtraction_regression_1)
 {
-    auto num = TRY_OR_FAIL(Crypto::UnsignedBigInteger { 1 }.shift_left(256));
+    auto num = Crypto::UnsignedBigInteger { 1 }.shift_left(256);
     Vector<u32> expected_result {
         4294967295, 4294967295, 4294967295, 4294967295, 4294967295,
         4294967295, 4294967295, 4294967295
@@ -205,7 +205,7 @@ TEST_CASE(test_unsigned_bigint_base10_to_string)
     auto bigint = Crypto::UnsignedBigInteger {
         Vector<u32> { 3806301393, 954919431, 3879607298, 721 }
     };
-    auto result = MUST(bigint.to_base(10));
+    auto result = bigint.to_base(10);
     EXPECT_EQ(result, "57195071295721390579057195715793");
 }
 
@@ -400,7 +400,7 @@ TEST_CASE(test_bigint_shift_left)
     };
 
     for (size_t i = 0; i < tests; ++i)
-        EXPECT_EQ(TRY_OR_FAIL(num.shift_left(results[i].get<0>())).words(), results[i].get<1>());
+        EXPECT_EQ(num.shift_left(results[i].get<0>()).words(), results[i].get<1>());
 }
 
 TEST_CASE(test_bigint_shift_right)
@@ -948,12 +948,12 @@ TEST_CASE(moving_bigints)
         EXPECT(bigint2.is_zero());
     }
 
-    EXPECT_EQ(MUST(bigint1.to_base(10)), "123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789"sv);
+    EXPECT_EQ(bigint1.to_base(10), "123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789"sv);
 
     Crypto::UnsignedBigInteger bigint3 { move(bigint1) };
     EXPECT(bigint1.is_zero());
 
-    EXPECT_EQ(MUST(bigint3.to_base(10)), "123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789"sv);
+    EXPECT_EQ(bigint3.to_base(10), "123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789"sv);
 }
 
 namespace AK {

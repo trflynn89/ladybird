@@ -129,7 +129,7 @@ ErrorOr<UnsignedBigInteger> UnsignedBigInteger::from_base(u16 N, StringView str)
     return result;
 }
 
-ErrorOr<String> UnsignedBigInteger::to_base(u16 N) const
+String UnsignedBigInteger::to_base(u16 N) const
 {
     VERIFY(N <= 36);
     if (is_zero())
@@ -137,7 +137,7 @@ ErrorOr<String> UnsignedBigInteger::to_base(u16 N) const
 
     int size = 0;
     MP_MUST(mp_radix_size(&m_mp, N, &size));
-    auto buffer = TRY(ByteBuffer::create_zeroed(size));
+    auto buffer = MUST(ByteBuffer::create_zeroed(size));
 
     size_t written = 0;
     MP_MUST(mp_to_radix(&m_mp, reinterpret_cast<char*>(buffer.data()), size, &written, N));
@@ -319,10 +319,10 @@ FLATTEN ErrorOr<UnsignedBigInteger> UnsignedBigInteger::bitwise_not_fill_to_one_
     return result;
 }
 
-FLATTEN ErrorOr<UnsignedBigInteger> UnsignedBigInteger::shift_left(size_t num_bits) const
+FLATTEN UnsignedBigInteger UnsignedBigInteger::shift_left(size_t num_bits) const
 {
     UnsignedBigInteger result;
-    MP_TRY(mp_mul_2d(&m_mp, num_bits, &result.m_mp));
+    MP_MUST(mp_mul_2d(&m_mp, num_bits, &result.m_mp));
     return result;
 }
 
@@ -552,5 +552,5 @@ UnsignedBigInteger::CompareResult UnsignedBigInteger::compare_to_double(double v
 
 ErrorOr<void> AK::Formatter<Crypto::UnsignedBigInteger>::format(FormatBuilder& fmtbuilder, Crypto::UnsignedBigInteger const& value)
 {
-    return Formatter<StringView>::format(fmtbuilder, TRY(value.to_base(10)));
+    return Formatter<StringView>::format(fmtbuilder, value.to_base(10));
 }

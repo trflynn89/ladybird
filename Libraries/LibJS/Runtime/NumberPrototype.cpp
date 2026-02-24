@@ -138,9 +138,9 @@ static SignificandAndExponent compute_significand_and_exponent_with_precision(do
 
         // 2 ^ binary_exponent
         if (binary_exponent > 0)
-            numerator = MUST(numerator.shift_left(binary_exponent));
+            numerator = numerator.shift_left(binary_exponent);
         else if (binary_exponent < 0)
-            denominator = MUST(denominator.shift_left(-binary_exponent));
+            denominator = denominator.shift_left(-binary_exponent);
 
         // 10 ^ (precision - exponent - 1)
         if (auto scale = precision - exponent - 1; scale > 0)
@@ -151,7 +151,7 @@ static SignificandAndExponent compute_significand_and_exponent_with_precision(do
         auto [quotient, remainder] = numerator.divided_by(denominator);
 
         // Round half-up to distinguish between equally valid candidates.
-        if (MUST(remainder.shift_left(1)) >= denominator)
+        if (remainder.shift_left(1) >= denominator)
             quotient = quotient.plus(1);
 
         return quotient;
@@ -206,9 +206,9 @@ static SignificandAndExponent compute_significand_and_exponent_with_precision(do
 
             // 2 ^ binary_exponent
             if (binary_exponent > 0)
-                rhs = MUST(rhs.shift_left(binary_exponent));
+                rhs = rhs.shift_left(binary_exponent);
             else if (binary_exponent < 0)
-                lhs = MUST(lhs.shift_left(-binary_exponent));
+                lhs = lhs.shift_left(-binary_exponent);
 
             if (lhs > rhs) {
                 significand = move(alternate);
@@ -295,7 +295,7 @@ JS_DEFINE_NATIVE_FUNCTION(NumberPrototype::to_exponential)
         }
 
         // c. Let m be the String value consisting of the digits of the decimal representation of n (in order, with no leading zeroes).
-        number_string = MUST(significand.to_base(10));
+        number_string = significand.to_base(10);
     }
 
     // 11. If f ≠ 0, then
@@ -484,7 +484,7 @@ JS_DEFINE_NATIVE_FUNCTION(NumberPrototype::to_precision)
 
         // b. Let m be the String value consisting of the digits of the decimal representation of n (in order, with no
         //    leading zeroes).
-        number_string = MUST(result.significand.to_base(10));
+        number_string = result.significand.to_base(10);
 
         // c. If e < -6 or e ≥ p, then
         if ((exponent < -6) || (exponent >= precision)) {
