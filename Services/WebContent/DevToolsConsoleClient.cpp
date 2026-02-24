@@ -73,7 +73,7 @@ static JsonValue serialize_js_value(JS::Realm& realm, JS::Value value)
 
     if (value.is_bigint()) {
         auto serialized = serialize_type("BigInt"sv);
-        serialized.set("text"sv, MUST(value.as_bigint().big_integer().to_base(10)));
+        serialized.set("text"sv, value.as_bigint().big_integer().to_base(10));
         return serialized;
     }
 

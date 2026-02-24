@@ -637,7 +637,7 @@ JS::NativeFunction* create_native_function(JS::VM& vm, Wasm::FunctionAddress add
 
 JS::ThrowCompletionOr<Wasm::Value> to_webassembly_value(JS::VM& vm, JS::Value value, Wasm::ValueType const& type)
 {
-    static ::Crypto::SignedBigInteger two_64 = TRY_OR_THROW_OOM(vm, "1"_sbigint.shift_left(64));
+    static auto two_64 = "1"_sbigint.shift_left(64);
 
     switch (type.kind()) {
     case Wasm::ValueType::I64: {

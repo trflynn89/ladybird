@@ -48,7 +48,7 @@ inline ByteString format_operand(StringView name, Operand encoded_operand, Bytec
         else if (value.is_double())
             builder.appendff("Double({})", value.as_double());
         else if (value.is_bigint())
-            builder.appendff("BigInt({})", MUST(value.as_bigint().to_string()));
+            builder.appendff("BigInt({})", value.as_bigint().to_string());
         else if (value.is_string())
             builder.appendff("String(\"{}\")", value.as_string().utf8_string_view());
         else if (value.is_undefined())

@@ -377,7 +377,7 @@ String Value::to_string_without_side_effects() const
     case SYMBOL_TAG:
         return as_symbol().descriptive_string().to_utf8_but_should_be_ported_to_utf16();
     case BIGINT_TAG:
-        return as_bigint().to_string().release_value();
+        return as_bigint().to_string();
     case OBJECT_TAG:
         return String::formatted("[object {}]", as_object().class_name()).release_value();
     case ACCESSOR_TAG:
@@ -462,7 +462,7 @@ ThrowCompletionOr<String> Value::to_string(VM& vm) const
         return String::number(as_i32());
     // 8. If argument is a BigInt, return BigInt::toString(argument, 10).
     case BIGINT_TAG:
-        return TRY_OR_THROW_OOM(vm, as_bigint().big_integer().to_base(10));
+        return as_bigint().big_integer().to_base(10);
     // 9. Assert: argument is an Object.
     case OBJECT_TAG: {
         // 10. Let primValue be ? ToPrimitive(argument, string).
@@ -513,7 +513,7 @@ ThrowCompletionOr<Utf16String> Value::to_utf16_string(VM& vm) const
         return Utf16String::number(as_i32());
         // 8. If argument is a BigInt, return BigInt::toString(argument, 10).
     case BIGINT_TAG:
-        return Utf16String::from_utf8(MUST(as_bigint().big_integer().to_base(10)));
+        return Utf16String::from_utf8(as_bigint().big_integer().to_base(10));
         // 9. Assert: argument is an Object.
     case OBJECT_TAG: {
         // 10. Let primValue be ? ToPrimitive(argument, string).

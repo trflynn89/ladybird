@@ -294,7 +294,7 @@ public:
             serialized.encode(value.as_double());
         } else if (value.is_bigint()) {
             serialized.encode(ValueTag::BigIntPrimitive);
-            serialized.encode(MUST(value.as_bigint().big_integer().to_base(10)));
+            serialized.encode(value.as_bigint().big_integer().to_base(10));
         } else if (value.is_string()) {
             serialized.encode(ValueTag::StringPrimitive);
             serialized.encode(value.as_string().utf8_string());
@@ -330,7 +330,7 @@ public:
             // 9. Otherwise, if value has a [[BigIntData]] internal slot, then set serialized to { [[Type]]: "BigInt", [[BigIntData]]: value.[[BigIntData]] }.
             else if (auto const* big_int_object = as_if<JS::BigIntObject>(object)) {
                 serialized.encode(ValueTag::BigIntObject);
-                serialized.encode(MUST(big_int_object->bigint().big_integer().to_base(10)));
+                serialized.encode(big_int_object->bigint().big_integer().to_base(10));
             }
 
             // 10. Otherwise, if value has a [[StringData]] internal slot, then set serialized to { [[Type]]: "String", [[StringData]]: value.[[StringData]] }.

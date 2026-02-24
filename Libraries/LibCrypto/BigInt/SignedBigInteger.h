@@ -41,8 +41,8 @@ public:
 
     [[nodiscard]] Bytes export_data(Bytes) const;
 
-    [[nodiscard]] static ErrorOr<SignedBigInteger> from_base(u16 N, StringView str);
-    [[nodiscard]] ErrorOr<String> to_base(u16 N) const;
+    static ErrorOr<SignedBigInteger> from_base(u16 N, StringView str);
+    [[nodiscard]] String to_base(u16 N) const;
 
     [[nodiscard]] i64 to_i64() const;
     [[nodiscard]] u64 to_u64() const;
@@ -66,7 +66,7 @@ public:
     [[nodiscard]] SignedBigInteger bitwise_and(SignedBigInteger const& other) const;
     [[nodiscard]] SignedBigInteger bitwise_xor(SignedBigInteger const& other) const;
     [[nodiscard]] SignedBigInteger bitwise_not() const;
-    [[nodiscard]] ErrorOr<SignedBigInteger> shift_left(size_t num_bits) const;
+    [[nodiscard]] SignedBigInteger shift_left(size_t num_bits) const;
     [[nodiscard]] SignedBigInteger shift_right(size_t num_bits) const;
     [[nodiscard]] SignedBigInteger multiplied_by(SignedBigInteger const& other) const;
     [[nodiscard]] SignedDivisionResult divided_by(SignedBigInteger const& divisor) const;

@@ -40,7 +40,7 @@ static String bigint_literal_to_decimal_string(BigIntLiteral const& literal)
         }
         return MUST(Crypto::SignedBigInteger::from_base(10, raw.substring(0, raw.length() - 1)));
     }();
-    return MUST(integer.to_base(10));
+    return integer.to_base(10);
 }
 
 static ScopedOperand choose_dst(Bytecode::Generator& generator, Optional<ScopedOperand> const& preferred_dst)

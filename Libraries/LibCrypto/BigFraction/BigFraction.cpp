@@ -157,14 +157,14 @@ double BigFraction::to_double() const
     // NOTE: the precision of the result will be 63 bits (more than 53 bits necessary for the mantissa of a double).
     if (top_bit_numerator < (top_bit_denominator + 64)) {
         shift_left_numerator = top_bit_denominator + 64 - top_bit_numerator;
-        numerator = MUST(numerator.shift_left(shift_left_numerator)); // copy
+        numerator = numerator.shift_left(shift_left_numerator); // copy
     }
     // NOTE: Do nothing if numerator already has more than 64 bits more than denominator.
 
     // 2. Divide [potentially shifted] numerator by the denominator.
     auto division_result = numerator.divided_by(denominator);
     if (!division_result.remainder.is_zero()) {
-        division_result.quotient = MUST(division_result.quotient.shift_left(1)).plus(1); // Extend the quotient with a "fake 1".
+        division_result.quotient = division_result.quotient.shift_left(1).plus(1); // Extend the quotient with a "fake 1".
         //  NOTE: Since the quotient has at least 63 bits, this will only affect the mantissa
         //        on rounding, and have the same effect on rounding as any fractional digits (from the remainder).
         shift_left_numerator++;
@@ -256,7 +256,7 @@ String BigFraction::to_string(unsigned rounding_threshold) const
     auto const rounded_fraction = rounded(rounding_threshold);
 
     // We take the unsigned value as we already manage the '-'
-    auto const full_value = MUST(rounded_fraction.m_numerator.unsigned_value().to_base(10)).to_byte_string();
+    auto const full_value = rounded_fraction.m_numerator.unsigned_value().to_base(10).to_byte_string();
     int split = full_value.length() - (number_of_digits(rounded_fraction.m_denominator) - 1);
 
     if (split < 0)

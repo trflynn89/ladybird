@@ -27,7 +27,7 @@ public:
 
     Crypto::SignedBigInteger const& big_integer() const { return m_big_integer; }
 
-    ErrorOr<String> to_string() const;
+    String to_string() const;
     Utf16String to_utf16_string() const;
 
 private:

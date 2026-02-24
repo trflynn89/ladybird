@@ -43,8 +43,8 @@ public:
     // Exports in big-endian (msb stored first), trimmed (no leading zeros) format
     [[nodiscard]] Bytes export_data(Bytes) const;
 
-    [[nodiscard]] static ErrorOr<UnsignedBigInteger> from_base(u16 N, StringView str);
-    [[nodiscard]] ErrorOr<String> to_base(u16 N) const;
+    static ErrorOr<UnsignedBigInteger> from_base(u16 N, StringView str);
+    [[nodiscard]] String to_base(u16 N) const;
 
     [[nodiscard]] size_t count_digits_in_base(u16 base) const;
 
@@ -78,7 +78,7 @@ public:
     [[nodiscard]] UnsignedBigInteger bitwise_and(UnsignedBigInteger const& other) const;
     [[nodiscard]] UnsignedBigInteger bitwise_xor(UnsignedBigInteger const& other) const;
     [[nodiscard]] ErrorOr<UnsignedBigInteger> bitwise_not_fill_to_one_based_index(size_t) const;
-    [[nodiscard]] ErrorOr<UnsignedBigInteger> shift_left(size_t num_bits) const;
+    [[nodiscard]] UnsignedBigInteger shift_left(size_t num_bits) const;
     [[nodiscard]] UnsignedBigInteger shift_right(size_t num_bits) const;
     [[nodiscard]] UnsignedBigInteger multiplied_by(UnsignedBigInteger const& other) const;
     [[nodiscard]] UnsignedDivisionResult divided_by(UnsignedBigInteger const& divisor) const;

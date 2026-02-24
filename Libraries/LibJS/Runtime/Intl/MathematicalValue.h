@@ -46,7 +46,7 @@ public:
     MathematicalValue(Value value)
         : m_value(value.is_number()
                   ? value_from_number(value.as_double())
-                  : ValueType(MUST(value.as_bigint().big_integer().to_base(10))))
+                  : ValueType(value.as_bigint().big_integer().to_base(10)))
     {
     }
 

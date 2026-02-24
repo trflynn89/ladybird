@@ -1537,7 +1537,7 @@ String temporal_duration_to_string(Duration const& duration, Precision precision
         auto division_result = seconds_duration.divided_by(NANOSECONDS_PER_SECOND);
 
         // a. Let secondsPart be abs(truncate(secondsDuration / 10**9)) formatted as a decimal number.
-        auto seconds_part = MUST(division_result.quotient.unsigned_value().to_base(10));
+        auto seconds_part = division_result.quotient.unsigned_value().to_base(10);
 
         // b. Let subSecondsPart be FormatFractionalSeconds(abs(remainder(secondsDuration, 10**9)), precision).
         auto sub_seconds_part = format_fractional_seconds(division_result.remainder.unsigned_value().to_u64(), precision);
