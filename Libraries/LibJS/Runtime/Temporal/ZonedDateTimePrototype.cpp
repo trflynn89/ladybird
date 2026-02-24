@@ -696,7 +696,7 @@ JS_DEFINE_NATIVE_FUNCTION(ZonedDateTimePrototype::round)
         VERIFY(this_nanoseconds < end_nanoseconds);
 
         // g. Let dayLengthNs be ℝ(endNs - startNs).
-        auto day_length_nanoseconds = end_nanoseconds.minus(start_nanoseconds);
+        auto day_length_nanoseconds = end_nanoseconds.subtracted_by(start_nanoseconds);
 
         // h. Let dayProgressNs be TimeDurationFromEpochNanosecondsDifference(thisNs, startNs).
         auto day_progress_nanoseconds = time_duration_from_epoch_nanoseconds_difference(this_nanoseconds, start_nanoseconds);

@@ -60,39 +60,76 @@ public:
 
     [[nodiscard]] size_t byte_length() const;
 
-    SignedBigInteger plus(SignedBigInteger const& other) const;
-    SignedBigInteger minus(SignedBigInteger const& other) const;
-    SignedBigInteger bitwise_or(SignedBigInteger const& other) const;
-    SignedBigInteger bitwise_and(SignedBigInteger const& other) const;
-    SignedBigInteger bitwise_xor(SignedBigInteger const& other) const;
-    SignedBigInteger bitwise_not() const;
-    SignedBigInteger shift_left(size_t num_bits) const;
-    SignedBigInteger shift_right(size_t num_bits) const;
-    SignedBigInteger multiplied_by(SignedBigInteger const& other) const;
-    SignedDivisionResult divided_by(SignedBigInteger const& divisor) const;
-    SignedBigInteger pow(u32 exponent) const;
-    ErrorOr<SignedBigInteger> mod_power_of_two(size_t power_of_two) const;
+    SignedBigInteger& add(i64);
+    SignedBigInteger added_to(i64) const;
 
-    SignedBigInteger plus(UnsignedBigInteger const& other) const;
-    SignedBigInteger minus(UnsignedBigInteger const& other) const;
-    SignedBigInteger multiplied_by(UnsignedBigInteger const& other) const;
-    SignedDivisionResult divided_by(UnsignedBigInteger const& divisor) const;
+    SignedBigInteger& add(SignedBigInteger const&);
+    SignedBigInteger added_to(SignedBigInteger const&) const;
+
+    SignedBigInteger& add(UnsignedBigInteger const&);
+    SignedBigInteger added_to(UnsignedBigInteger const&) const;
+
+    SignedBigInteger& subtract(i64);
+    SignedBigInteger subtracted_by(i64) const;
+
+    SignedBigInteger& subtract(SignedBigInteger const&);
+    SignedBigInteger subtracted_by(SignedBigInteger const&) const;
+
+    SignedBigInteger& subtract(UnsignedBigInteger const&);
+    SignedBigInteger subtracted_by(UnsignedBigInteger const&) const;
+
+    SignedBigInteger& multiply(i64);
+    SignedBigInteger multiplied_by(i64) const;
+
+    SignedBigInteger& multiply(SignedBigInteger const&);
+    SignedBigInteger multiplied_by(SignedBigInteger const&) const;
+
+    SignedBigInteger& multiply(UnsignedBigInteger const&);
+    SignedBigInteger multiplied_by(UnsignedBigInteger const&) const;
+
+    SignedDivisionResult divided_by(SignedBigInteger const&) const;
+    SignedDivisionResult divided_by(UnsignedBigInteger const&) const;
+
+    SignedBigInteger& shift_left(size_t num_bits);
+    SignedBigInteger shifted_left(size_t num_bits) const;
+
+    SignedBigInteger& shift_right(size_t num_bits);
+    SignedBigInteger shifted_right(size_t num_bits) const;
+
+    SignedBigInteger& pow_assign(u32 exponent);
+    SignedBigInteger pow(u32 exponent) const;
+
+    SignedBigInteger bitwise_or(SignedBigInteger const&) const;
+    SignedBigInteger bitwise_and(SignedBigInteger const&) const;
+    SignedBigInteger bitwise_xor(SignedBigInteger const&) const;
+    SignedBigInteger bitwise_not() const;
+
+    ErrorOr<SignedBigInteger> mod_power_of_two(size_t power_of_two) const;
 
     SignedBigInteger negated_value() const;
 
     [[nodiscard]] u32 hash() const;
 
-    [[nodiscard]] bool operator==(SignedBigInteger const& other) const;
-    [[nodiscard]] bool operator!=(SignedBigInteger const& other) const;
-    [[nodiscard]] bool operator<(SignedBigInteger const& other) const;
-    [[nodiscard]] bool operator<=(SignedBigInteger const& other) const;
-    [[nodiscard]] bool operator>(SignedBigInteger const& other) const;
-    [[nodiscard]] bool operator>=(SignedBigInteger const& other) const;
+    [[nodiscard]] bool operator==(i64) const;
+    [[nodiscard]] bool operator!=(i64) const;
+    [[nodiscard]] bool operator<(i64) const;
+    [[nodiscard]] bool operator<=(i64) const;
+    [[nodiscard]] bool operator>(i64) const;
+    [[nodiscard]] bool operator>=(i64) const;
 
-    [[nodiscard]] bool operator==(UnsignedBigInteger const& other) const;
-    [[nodiscard]] bool operator!=(UnsignedBigInteger const& other) const;
-    [[nodiscard]] bool operator<(UnsignedBigInteger const& other) const;
-    [[nodiscard]] bool operator>(UnsignedBigInteger const& other) const;
+    [[nodiscard]] bool operator==(SignedBigInteger const&) const;
+    [[nodiscard]] bool operator!=(SignedBigInteger const&) const;
+    [[nodiscard]] bool operator<(SignedBigInteger const&) const;
+    [[nodiscard]] bool operator<=(SignedBigInteger const&) const;
+    [[nodiscard]] bool operator>(SignedBigInteger const&) const;
+    [[nodiscard]] bool operator>=(SignedBigInteger const&) const;
+
+    [[nodiscard]] bool operator==(UnsignedBigInteger const&) const;
+    [[nodiscard]] bool operator!=(UnsignedBigInteger const&) const;
+    [[nodiscard]] bool operator<(UnsignedBigInteger const&) const;
+    [[nodiscard]] bool operator<=(UnsignedBigInteger const&) const;
+    [[nodiscard]] bool operator>(UnsignedBigInteger const&) const;
+    [[nodiscard]] bool operator>=(UnsignedBigInteger const&) const;
 
     [[nodiscard]] UnsignedBigInteger::CompareResult compare_to_double(double) const;
 
@@ -113,8 +150,7 @@ struct AK::Formatter<Crypto::SignedBigInteger> : AK::Formatter<Crypto::UnsignedB
     ErrorOr<void> format(FormatBuilder&, Crypto::SignedBigInteger const&);
 };
 
-inline Crypto::SignedBigInteger
-operator""_sbigint(char const* string, size_t length)
+inline Crypto::SignedBigInteger operator""_sbigint(char const* string, size_t length)
 {
     return MUST(Crypto::SignedBigInteger::from_base(10, { string, length }));
 }

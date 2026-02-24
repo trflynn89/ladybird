@@ -306,7 +306,7 @@ ErrorOr<bool> RSAPrivateKey::is_valid() const
             if (m_private_exponent >= m_modulus)
                 return false;
 
-            auto lambda = TRY(m_prime_1.minus(1)).lcm(TRY(m_prime_2.minus(1)));
+            auto lambda = TRY(m_prime_1.subtracted_by(1)).lcm(TRY(m_prime_2.subtracted_by(1)));
             auto lambda_bn = TRY(unsigned_big_integer_to_openssl_bignum(lambda));
 
             auto d = TRY(unsigned_big_integer_to_openssl_bignum(m_private_exponent));

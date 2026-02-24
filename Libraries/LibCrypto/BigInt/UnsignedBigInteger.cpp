@@ -264,19 +264,142 @@ size_t UnsignedBigInteger::one_based_index_of_highest_set_bit() const
     return mp_count_bits(&m_mp);
 }
 
-FLATTEN UnsignedBigInteger UnsignedBigInteger::plus(UnsignedBigInteger const& other) const
+FLATTEN UnsignedBigInteger& UnsignedBigInteger::add(u64 other)
 {
-    UnsignedBigInteger result;
-    MP_MUST(mp_add(&m_mp, &other.m_mp, &result.m_mp));
+    MP_MUST(mp_add_d(&m_mp, other, &m_mp));
+    return *this;
+}
+
+FLATTEN UnsignedBigInteger UnsignedBigInteger::added_to(u64 other) const
+{
+    auto result = *this;
+    result.add(other);
     return result;
 }
 
-FLATTEN ErrorOr<UnsignedBigInteger> UnsignedBigInteger::minus(UnsignedBigInteger const& other) const
+FLATTEN UnsignedBigInteger& UnsignedBigInteger::add(UnsignedBigInteger const& other)
 {
-    UnsignedBigInteger result;
-    MP_MUST(mp_sub(&m_mp, &other.m_mp, &result.m_mp));
-    if (mp_isneg(&result.m_mp))
+    MP_MUST(mp_add(&m_mp, &other.m_mp, &m_mp));
+    return *this;
+}
+
+FLATTEN UnsignedBigInteger UnsignedBigInteger::added_to(UnsignedBigInteger const& other) const
+{
+    auto result = *this;
+    result.add(other);
+    return result;
+}
+
+FLATTEN ErrorOr<UnsignedBigInteger*> UnsignedBigInteger::subtract(u64 other)
+{
+    MP_MUST(mp_sub_d(&m_mp, other, &m_mp));
+    if (mp_isneg(&m_mp))
         return Error::from_string_literal("Substraction produced a negative result");
+    return this;
+}
+
+FLATTEN ErrorOr<UnsignedBigInteger> UnsignedBigInteger::subtracted_by(u64 other) const
+{
+    auto result = *this;
+    TRY(result.subtract(other));
+    return result;
+}
+
+FLATTEN ErrorOr<UnsignedBigInteger*> UnsignedBigInteger::subtract(UnsignedBigInteger const& other)
+{
+    MP_MUST(mp_sub(&m_mp, &other.m_mp, &m_mp));
+    if (mp_isneg(&m_mp))
+        return Error::from_string_literal("Substraction produced a negative result");
+    return this;
+}
+
+FLATTEN ErrorOr<UnsignedBigInteger> UnsignedBigInteger::subtracted_by(UnsignedBigInteger const& other) const
+{
+    auto result = *this;
+    TRY(result.subtract(other));
+    return result;
+}
+
+FLATTEN UnsignedBigInteger& UnsignedBigInteger::multiply(u64 other)
+{
+    MP_MUST(mp_mul_d(&m_mp, other, &m_mp));
+    return *this;
+}
+
+FLATTEN UnsignedBigInteger UnsignedBigInteger::multiplied_by(u64 other) const
+{
+    auto result = *this;
+    result.multiply(other);
+    return result;
+}
+
+FLATTEN UnsignedBigInteger& UnsignedBigInteger::multiply(UnsignedBigInteger const& other)
+{
+    MP_MUST(mp_mul(&m_mp, &other.m_mp, &m_mp));
+    return *this;
+}
+
+FLATTEN UnsignedBigInteger UnsignedBigInteger::multiplied_by(UnsignedBigInteger const& other) const
+{
+    auto result = *this;
+    result.multiply(other);
+    return result;
+}
+
+FLATTEN UnsignedDivisionResult UnsignedBigInteger::divided_by(u64 other) const
+{
+    UnsignedBigInteger quotient;
+    u64 remainder { 0 };
+    MP_MUST(mp_div_d(&m_mp, other, &quotient.m_mp, &remainder));
+    return { move(quotient), UnsignedBigInteger { remainder } };
+}
+
+FLATTEN UnsignedDivisionResult UnsignedBigInteger::divided_by(UnsignedBigInteger const& divisor) const
+{
+    UnsignedBigInteger quotient;
+    UnsignedBigInteger remainder;
+    MP_MUST(mp_div(&m_mp, &divisor.m_mp, &quotient.m_mp, &remainder.m_mp));
+    return { move(quotient), move(remainder) };
+}
+
+FLATTEN UnsignedBigInteger& UnsignedBigInteger::shift_left(size_t num_bits)
+{
+    VERIFY(num_bits <= NumericLimits<int>::max());
+    MP_MUST(mp_mul_2d(&m_mp, num_bits, &m_mp));
+    return *this;
+}
+
+FLATTEN UnsignedBigInteger UnsignedBigInteger::shifted_left(size_t num_bits) const
+{
+    auto result = *this;
+    result.shift_left(num_bits);
+    return result;
+}
+
+FLATTEN UnsignedBigInteger& UnsignedBigInteger::shift_right(size_t num_bits)
+{
+    VERIFY(num_bits <= NumericLimits<int>::max());
+    MP_MUST(mp_div_2d(&m_mp, num_bits, &m_mp, nullptr));
+    return *this;
+}
+
+FLATTEN UnsignedBigInteger UnsignedBigInteger::shifted_right(size_t num_bits) const
+{
+    auto result = *this;
+    result.shift_right(num_bits);
+    return result;
+}
+
+FLATTEN UnsignedBigInteger& UnsignedBigInteger::pow_assign(u32 exponent)
+{
+    MP_MUST(mp_expt_n(&m_mp, exponent, &m_mp));
+    return *this;
+}
+
+FLATTEN UnsignedBigInteger UnsignedBigInteger::pow(u32 exponent) const
+{
+    auto result = *this;
+    result.pow_assign(exponent);
     return result;
 }
 
@@ -319,42 +442,6 @@ FLATTEN ErrorOr<UnsignedBigInteger> UnsignedBigInteger::bitwise_not_fill_to_one_
     return result;
 }
 
-FLATTEN UnsignedBigInteger UnsignedBigInteger::shift_left(size_t num_bits) const
-{
-    UnsignedBigInteger result;
-    MP_MUST(mp_mul_2d(&m_mp, num_bits, &result.m_mp));
-    return result;
-}
-
-FLATTEN UnsignedBigInteger UnsignedBigInteger::shift_right(size_t num_bits) const
-{
-    UnsignedBigInteger result;
-    MP_MUST(mp_div_2d(&m_mp, num_bits, &result.m_mp, nullptr));
-    return result;
-}
-
-FLATTEN UnsignedBigInteger UnsignedBigInteger::multiplied_by(UnsignedBigInteger const& other) const
-{
-    UnsignedBigInteger result;
-    MP_MUST(mp_mul(&m_mp, &other.m_mp, &result.m_mp));
-    return result;
-}
-
-FLATTEN UnsignedDivisionResult UnsignedBigInteger::divided_by(UnsignedBigInteger const& divisor) const
-{
-    UnsignedBigInteger quotient;
-    UnsignedBigInteger remainder;
-    MP_MUST(mp_div(&m_mp, &divisor.m_mp, &quotient.m_mp, &remainder.m_mp));
-    return UnsignedDivisionResult { quotient, remainder };
-}
-
-FLATTEN UnsignedBigInteger UnsignedBigInteger::pow(u32 exponent) const
-{
-    UnsignedBigInteger result;
-    MP_MUST(mp_expt_n(&m_mp, exponent, &result.m_mp));
-    return result;
-}
-
 FLATTEN UnsignedBigInteger UnsignedBigInteger::gcd(UnsignedBigInteger const& other) const
 {
     UnsignedBigInteger result;
@@ -376,6 +463,38 @@ u32 UnsignedBigInteger::hash() const
         auto result = export_data(buffer);
         return string_hash(reinterpret_cast<char const*>(result.data()), result.size());
     });
+}
+
+bool UnsignedBigInteger::operator==(u64 other) const
+{
+    return mp_cmp_d(&m_mp, other) == MP_EQ;
+}
+
+bool UnsignedBigInteger::operator!=(u64 other) const
+{
+    return mp_cmp_d(&m_mp, other) != MP_EQ;
+}
+
+bool UnsignedBigInteger::operator<(u64 other) const
+{
+    return mp_cmp_d(&m_mp, other) == MP_LT;
+}
+
+bool UnsignedBigInteger::operator<=(u64 other) const
+{
+    auto result = mp_cmp_d(&m_mp, other);
+    return result == MP_EQ || result == MP_LT;
+}
+
+bool UnsignedBigInteger::operator>(u64 other) const
+{
+    return mp_cmp_d(&m_mp, other) == MP_GT;
+}
+
+bool UnsignedBigInteger::operator>=(u64 other) const
+{
+    auto result = mp_cmp_d(&m_mp, other);
+    return result == MP_EQ || result == MP_GT;
 }
 
 bool UnsignedBigInteger::operator==(UnsignedBigInteger const& other) const

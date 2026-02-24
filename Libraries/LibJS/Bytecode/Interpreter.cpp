@@ -3115,7 +3115,7 @@ ThrowCompletionOr<void> Increment::execute_impl(VM& vm) const
     if (old_value.is_number())
         vm.set(dst(), Value(old_value.as_double() + 1));
     else
-        vm.set(dst(), BigInt::create(vm, old_value.as_bigint().big_integer().plus(Crypto::SignedBigInteger { 1 })));
+        vm.set(dst(), BigInt::create(vm, old_value.as_bigint().big_integer().added_to(Crypto::SignedBigInteger { 1 })));
     return {};
 }
 
@@ -3139,7 +3139,7 @@ ThrowCompletionOr<void> PostfixIncrement::execute_impl(VM& vm) const
     if (old_value.is_number())
         vm.set(m_src, Value(old_value.as_double() + 1));
     else
-        vm.set(m_src, BigInt::create(vm, old_value.as_bigint().big_integer().plus(Crypto::SignedBigInteger { 1 })));
+        vm.set(m_src, BigInt::create(vm, old_value.as_bigint().big_integer().added_to(Crypto::SignedBigInteger { 1 })));
     return {};
 }
 
@@ -3152,7 +3152,7 @@ ThrowCompletionOr<void> Decrement::execute_impl(VM& vm) const
     if (old_value.is_number())
         vm.set(dst(), Value(old_value.as_double() - 1));
     else
-        vm.set(dst(), BigInt::create(vm, old_value.as_bigint().big_integer().minus(Crypto::SignedBigInteger { 1 })));
+        vm.set(dst(), BigInt::create(vm, old_value.as_bigint().big_integer().subtracted_by(Crypto::SignedBigInteger { 1 })));
     return {};
 }
 
@@ -3166,7 +3166,7 @@ ThrowCompletionOr<void> PostfixDecrement::execute_impl(VM& vm) const
     if (old_value.is_number())
         vm.set(m_src, Value(old_value.as_double() - 1));
     else
-        vm.set(m_src, BigInt::create(vm, old_value.as_bigint().big_integer().minus(Crypto::SignedBigInteger { 1 })));
+        vm.set(m_src, BigInt::create(vm, old_value.as_bigint().big_integer().subtracted_by(Crypto::SignedBigInteger { 1 })));
     return {};
 }
 

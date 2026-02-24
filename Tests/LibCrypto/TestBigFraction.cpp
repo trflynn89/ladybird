@@ -13,7 +13,7 @@ static Crypto::UnsignedBigInteger bigint_fibonacci(size_t n)
     Crypto::UnsignedBigInteger num1(0);
     Crypto::UnsignedBigInteger num2(1);
     for (size_t i = 0; i < n; ++i) {
-        Crypto::UnsignedBigInteger t = num1.plus(num2);
+        Crypto::UnsignedBigInteger t = num1.added_to(num2);
         num2 = num1;
         num1 = t;
     }

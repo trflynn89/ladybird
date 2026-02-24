@@ -205,31 +205,188 @@ size_t SignedBigInteger::byte_length() const
     return mp_sbin_size(&m_mp);
 }
 
-FLATTEN SignedBigInteger SignedBigInteger::plus(SignedBigInteger const& other) const
+FLATTEN SignedBigInteger& SignedBigInteger::add(i64 other)
 {
-    SignedBigInteger result;
-    MP_MUST(mp_add(&m_mp, &other.m_mp, &result.m_mp));
+    if (other < 0)
+        MP_MUST(mp_sub_d(&m_mp, -other, &m_mp));
+    else
+        MP_MUST(mp_add_d(&m_mp, other, &m_mp));
+    return *this;
+}
+
+FLATTEN SignedBigInteger SignedBigInteger::added_to(i64 other) const
+{
+    auto result = *this;
+    result.add(other);
     return result;
 }
 
-FLATTEN SignedBigInteger SignedBigInteger::minus(SignedBigInteger const& other) const
+FLATTEN SignedBigInteger& SignedBigInteger::add(SignedBigInteger const& other)
 {
-    SignedBigInteger result;
-    MP_MUST(mp_sub(&m_mp, &other.m_mp, &result.m_mp));
+    MP_MUST(mp_add(&m_mp, &other.m_mp, &m_mp));
+    return *this;
+}
+
+FLATTEN SignedBigInteger SignedBigInteger::added_to(SignedBigInteger const& other) const
+{
+    auto result = *this;
+    result.add(other);
     return result;
 }
 
-FLATTEN SignedBigInteger SignedBigInteger::plus(UnsignedBigInteger const& other) const
+FLATTEN SignedBigInteger& SignedBigInteger::add(UnsignedBigInteger const& other)
 {
-    SignedBigInteger result;
-    MP_MUST(mp_add(&m_mp, &other.m_mp, &result.m_mp));
+    MP_MUST(mp_add(&m_mp, &other.m_mp, &m_mp));
+    return *this;
+}
+
+FLATTEN SignedBigInteger SignedBigInteger::added_to(UnsignedBigInteger const& other) const
+{
+    auto result = *this;
+    result.add(other);
     return result;
 }
 
-FLATTEN SignedBigInteger SignedBigInteger::minus(UnsignedBigInteger const& other) const
+FLATTEN SignedBigInteger& SignedBigInteger::subtract(i64 other)
 {
-    SignedBigInteger result;
-    MP_MUST(mp_sub(&m_mp, &other.m_mp, &result.m_mp));
+    if (other < 0)
+        MP_MUST(mp_add_d(&m_mp, -other, &m_mp));
+    else
+        MP_MUST(mp_sub_d(&m_mp, other, &m_mp));
+    return *this;
+}
+
+FLATTEN SignedBigInteger SignedBigInteger::subtracted_by(i64 other) const
+{
+    auto result = *this;
+    result.subtract(other);
+    return result;
+}
+
+FLATTEN SignedBigInteger& SignedBigInteger::subtract(SignedBigInteger const& other)
+{
+    MP_MUST(mp_sub(&m_mp, &other.m_mp, &m_mp));
+    return *this;
+}
+
+FLATTEN SignedBigInteger SignedBigInteger::subtracted_by(SignedBigInteger const& other) const
+{
+    auto result = *this;
+    result.subtract(other);
+    return result;
+}
+
+FLATTEN SignedBigInteger& SignedBigInteger::subtract(UnsignedBigInteger const& other)
+{
+    MP_MUST(mp_sub(&m_mp, &other.m_mp, &m_mp));
+    return *this;
+}
+
+FLATTEN SignedBigInteger SignedBigInteger::subtracted_by(UnsignedBigInteger const& other) const
+{
+    auto result = *this;
+    result.subtract(other);
+    return result;
+}
+
+FLATTEN SignedBigInteger& SignedBigInteger::multiply(i64 other)
+{
+    if (other < 0) {
+        other *= -1;
+        negate();
+    }
+
+    MP_MUST(mp_mul_d(&m_mp, other, &m_mp));
+    return *this;
+}
+
+FLATTEN SignedBigInteger SignedBigInteger::multiplied_by(i64 other) const
+{
+    auto result = *this;
+    result.multiply(other);
+    return result;
+}
+
+FLATTEN SignedBigInteger& SignedBigInteger::multiply(SignedBigInteger const& other)
+{
+    MP_MUST(mp_mul(&m_mp, &other.m_mp, &m_mp));
+    return *this;
+}
+
+FLATTEN SignedBigInteger SignedBigInteger::multiplied_by(SignedBigInteger const& other) const
+{
+    auto result = *this;
+    result.multiply(other);
+    return result;
+}
+
+FLATTEN SignedBigInteger& SignedBigInteger::multiply(UnsignedBigInteger const& other)
+{
+    MP_MUST(mp_mul(&m_mp, &other.m_mp, &m_mp));
+    return *this;
+}
+
+FLATTEN SignedBigInteger SignedBigInteger::multiplied_by(UnsignedBigInteger const& other) const
+{
+    auto result = *this;
+    result.multiply(other);
+    return result;
+}
+
+FLATTEN SignedDivisionResult SignedBigInteger::divided_by(SignedBigInteger const& divisor) const
+{
+    SignedBigInteger quotient;
+    SignedBigInteger remainder;
+    MP_MUST(mp_div(&m_mp, &divisor.m_mp, &quotient.m_mp, &remainder.m_mp));
+    return { move(quotient), move(remainder) };
+}
+
+FLATTEN SignedDivisionResult SignedBigInteger::divided_by(UnsignedBigInteger const& divisor) const
+{
+    SignedBigInteger quotient;
+    SignedBigInteger remainder;
+    MP_MUST(mp_div(&m_mp, &divisor.m_mp, &quotient.m_mp, &remainder.m_mp));
+    return { move(quotient), move(remainder) };
+}
+
+FLATTEN SignedBigInteger& SignedBigInteger::shift_left(size_t num_bits)
+{
+    VERIFY(num_bits <= NumericLimits<int>::max());
+    MP_MUST(mp_mul_2d(&m_mp, num_bits, &m_mp));
+    return *this;
+}
+
+FLATTEN SignedBigInteger SignedBigInteger::shifted_left(size_t num_bits) const
+{
+    auto result = *this;
+    result.shift_left(num_bits);
+    return result;
+}
+
+FLATTEN SignedBigInteger& SignedBigInteger::shift_right(size_t num_bits)
+{
+    VERIFY(num_bits <= NumericLimits<int>::max());
+    MP_MUST(mp_div_2d(&m_mp, num_bits, &m_mp, nullptr));
+    return *this;
+}
+
+FLATTEN SignedBigInteger SignedBigInteger::shifted_right(size_t num_bits) const
+{
+    auto result = *this;
+    result.shift_right(num_bits);
+    return result;
+}
+
+FLATTEN SignedBigInteger& SignedBigInteger::pow_assign(u32 exponent)
+{
+    MP_MUST(mp_expt_n(&m_mp, exponent, &m_mp));
+    return *this;
+}
+
+FLATTEN SignedBigInteger SignedBigInteger::pow(u32 exponent) const
+{
+    auto result = *this;
+    result.pow_assign(exponent);
     return result;
 }
 
@@ -238,21 +395,6 @@ FLATTEN SignedBigInteger SignedBigInteger::bitwise_not() const
     SignedBigInteger result;
     MP_MUST(mp_complement(&m_mp, &result.m_mp));
     return result;
-}
-
-FLATTEN SignedBigInteger SignedBigInteger::multiplied_by(UnsignedBigInteger const& other) const
-{
-    SignedBigInteger result;
-    MP_MUST(mp_mul(&m_mp, &other.m_mp, &result.m_mp));
-    return result;
-}
-
-FLATTEN SignedDivisionResult SignedBigInteger::divided_by(UnsignedBigInteger const& divisor) const
-{
-    SignedBigInteger quotient;
-    SignedBigInteger remainder;
-    MP_MUST(mp_div(&m_mp, &divisor.m_mp, &quotient.m_mp, &remainder.m_mp));
-    return SignedDivisionResult { quotient, remainder };
 }
 
 FLATTEN SignedBigInteger SignedBigInteger::bitwise_or(SignedBigInteger const& other) const
@@ -271,21 +413,7 @@ FLATTEN SignedBigInteger SignedBigInteger::bitwise_and(SignedBigInteger const& o
 
 FLATTEN SignedBigInteger SignedBigInteger::bitwise_xor(SignedBigInteger const& other) const
 {
-    return bitwise_or(other).minus(bitwise_and(other));
-}
-
-FLATTEN SignedBigInteger SignedBigInteger::shift_left(size_t num_bits) const
-{
-    SignedBigInteger result;
-    MP_MUST(mp_mul_2d(&m_mp, num_bits, &result.m_mp));
-    return result;
-}
-
-FLATTEN SignedBigInteger SignedBigInteger::shift_right(size_t num_bits) const
-{
-    SignedBigInteger result;
-    MP_MUST(mp_div_2d(&m_mp, num_bits, &result.m_mp, nullptr));
-    return result;
+    return bitwise_or(other).subtracted_by(bitwise_and(other));
 }
 
 FLATTEN ErrorOr<SignedBigInteger> SignedBigInteger::mod_power_of_two(size_t power_of_two) const
@@ -313,28 +441,6 @@ FLATTEN ErrorOr<SignedBigInteger> SignedBigInteger::mod_power_of_two(size_t powe
     return result;
 }
 
-FLATTEN SignedBigInteger SignedBigInteger::multiplied_by(SignedBigInteger const& other) const
-{
-    SignedBigInteger result;
-    MP_MUST(mp_mul(&m_mp, &other.m_mp, &result.m_mp));
-    return result;
-}
-
-FLATTEN SignedDivisionResult SignedBigInteger::divided_by(SignedBigInteger const& divisor) const
-{
-    SignedBigInteger quotient;
-    SignedBigInteger remainder;
-    MP_MUST(mp_div(&m_mp, &divisor.m_mp, &quotient.m_mp, &remainder.m_mp));
-    return SignedDivisionResult { quotient, remainder };
-}
-
-FLATTEN SignedBigInteger SignedBigInteger::pow(u32 exponent) const
-{
-    SignedBigInteger result;
-    MP_MUST(mp_expt_n(&m_mp, exponent, &result.m_mp));
-    return result;
-}
-
 FLATTEN SignedBigInteger SignedBigInteger::negated_value() const
 {
     auto result { *this };
@@ -349,6 +455,73 @@ u32 SignedBigInteger::hash() const
         auto result = export_data(buffer);
         return string_hash(reinterpret_cast<char const*>(result.data()), result.size());
     });
+}
+
+static mp_ord compare_against_signed_integer(mp_int const& lhs, int64_t rhs)
+{
+    bool lhs_is_negative = mp_isneg(&lhs);
+    bool rhs_is_negative = rhs < 0;
+
+    if (mp_iszero(&lhs)) {
+        if (rhs == 0)
+            return MP_EQ;
+        if (rhs_is_negative)
+            return MP_GT;
+        return MP_LT;
+    }
+
+    if (lhs_is_negative != rhs_is_negative)
+        return lhs_is_negative ? MP_LT : MP_GT;
+
+    if (!lhs_is_negative)
+        return mp_cmp_d(&lhs, static_cast<u64>(rhs));
+
+    if (lhs.used > 1)
+        return MP_LT;
+
+    auto lhs_magnitude = lhs.dp[0];
+
+    auto rhs_magnitude = rhs == NumericLimits<i64>::min()
+        ? static_cast<u64>(NumericLimits<i64>::max()) + 1
+        : static_cast<u64>(-rhs);
+
+    if (lhs_magnitude < rhs_magnitude)
+        return MP_GT;
+    if (lhs_magnitude > rhs_magnitude)
+        return MP_LT;
+    return MP_EQ;
+}
+
+bool SignedBigInteger::operator==(i64 other) const
+{
+    return compare_against_signed_integer(m_mp, other) == MP_EQ;
+}
+
+bool SignedBigInteger::operator!=(i64 other) const
+{
+    return compare_against_signed_integer(m_mp, other) != MP_EQ;
+}
+
+bool SignedBigInteger::operator<(i64 other) const
+{
+    return compare_against_signed_integer(m_mp, other) == MP_LT;
+}
+
+bool SignedBigInteger::operator<=(i64 other) const
+{
+    auto result = compare_against_signed_integer(m_mp, other);
+    return result == MP_EQ || result == MP_LT;
+}
+
+bool SignedBigInteger::operator>(i64 other) const
+{
+    return compare_against_signed_integer(m_mp, other) == MP_GT;
+}
+
+bool SignedBigInteger::operator>=(i64 other) const
+{
+    auto result = compare_against_signed_integer(m_mp, other);
+    return result == MP_EQ || result == MP_GT;
 }
 
 bool SignedBigInteger::operator==(SignedBigInteger const& other) const
@@ -398,9 +571,21 @@ bool SignedBigInteger::operator<(UnsignedBigInteger const& other) const
     return mp_cmp(&m_mp, &other.m_mp) == MP_LT;
 }
 
+bool SignedBigInteger::operator<=(UnsignedBigInteger const& other) const
+{
+    auto result = mp_cmp(&m_mp, &other.m_mp);
+    return result == MP_EQ || result == MP_LT;
+}
+
 bool SignedBigInteger::operator>(UnsignedBigInteger const& other) const
 {
     return mp_cmp(&m_mp, &other.m_mp) == MP_GT;
+}
+
+bool SignedBigInteger::operator>=(UnsignedBigInteger const& other) const
+{
+    auto result = mp_cmp(&m_mp, &other.m_mp);
+    return result == MP_EQ || result == MP_GT;
 }
 
 UnsignedBigInteger::CompareResult SignedBigInteger::compare_to_double(double value) const

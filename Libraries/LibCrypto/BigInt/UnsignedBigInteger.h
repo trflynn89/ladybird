@@ -72,28 +72,59 @@ public:
 
     [[nodiscard]] size_t one_based_index_of_highest_set_bit() const;
 
-    UnsignedBigInteger plus(UnsignedBigInteger const& other) const;
-    ErrorOr<UnsignedBigInteger> minus(UnsignedBigInteger const& other) const;
-    UnsignedBigInteger bitwise_or(UnsignedBigInteger const& other) const;
-    UnsignedBigInteger bitwise_and(UnsignedBigInteger const& other) const;
-    UnsignedBigInteger bitwise_xor(UnsignedBigInteger const& other) const;
-    ErrorOr<UnsignedBigInteger> bitwise_not_fill_to_one_based_index(size_t) const;
-    UnsignedBigInteger shift_left(size_t num_bits) const;
-    UnsignedBigInteger shift_right(size_t num_bits) const;
-    UnsignedBigInteger multiplied_by(UnsignedBigInteger const& other) const;
-    UnsignedDivisionResult divided_by(UnsignedBigInteger const& divisor) const;
+    UnsignedBigInteger& add(u64);
+    UnsignedBigInteger added_to(u64) const;
+
+    UnsignedBigInteger& add(UnsignedBigInteger const&);
+    UnsignedBigInteger added_to(UnsignedBigInteger const&) const;
+
+    ErrorOr<UnsignedBigInteger*> subtract(u64);
+    ErrorOr<UnsignedBigInteger> subtracted_by(u64) const;
+
+    ErrorOr<UnsignedBigInteger*> subtract(UnsignedBigInteger const&);
+    ErrorOr<UnsignedBigInteger> subtracted_by(UnsignedBigInteger const&) const;
+
+    UnsignedBigInteger& multiply(u64);
+    UnsignedBigInteger multiplied_by(u64) const;
+
+    UnsignedBigInteger& multiply(UnsignedBigInteger const&);
+    UnsignedBigInteger multiplied_by(UnsignedBigInteger const&) const;
+
+    UnsignedDivisionResult divided_by(u64) const;
+    UnsignedDivisionResult divided_by(UnsignedBigInteger const&) const;
+
+    UnsignedBigInteger& shift_left(size_t num_bits);
+    UnsignedBigInteger shifted_left(size_t num_bits) const;
+
+    UnsignedBigInteger& shift_right(size_t num_bits);
+    UnsignedBigInteger shifted_right(size_t num_bits) const;
+
+    UnsignedBigInteger& pow_assign(u32 exponent);
     UnsignedBigInteger pow(u32 exponent) const;
-    UnsignedBigInteger gcd(UnsignedBigInteger const& other) const;
-    UnsignedBigInteger lcm(UnsignedBigInteger const& other) const;
+
+    UnsignedBigInteger bitwise_or(UnsignedBigInteger const&) const;
+    UnsignedBigInteger bitwise_and(UnsignedBigInteger const&) const;
+    UnsignedBigInteger bitwise_xor(UnsignedBigInteger const&) const;
+    ErrorOr<UnsignedBigInteger> bitwise_not_fill_to_one_based_index(size_t) const;
+
+    UnsignedBigInteger gcd(UnsignedBigInteger const&) const;
+    UnsignedBigInteger lcm(UnsignedBigInteger const&) const;
 
     [[nodiscard]] u32 hash() const;
 
-    [[nodiscard]] bool operator==(UnsignedBigInteger const& other) const;
-    [[nodiscard]] bool operator!=(UnsignedBigInteger const& other) const;
-    [[nodiscard]] bool operator<(UnsignedBigInteger const& other) const;
-    [[nodiscard]] bool operator<=(UnsignedBigInteger const& other) const;
-    [[nodiscard]] bool operator>(UnsignedBigInteger const& other) const;
-    [[nodiscard]] bool operator>=(UnsignedBigInteger const& other) const;
+    [[nodiscard]] bool operator==(u64) const;
+    [[nodiscard]] bool operator!=(u64) const;
+    [[nodiscard]] bool operator<(u64) const;
+    [[nodiscard]] bool operator<=(u64) const;
+    [[nodiscard]] bool operator>(u64) const;
+    [[nodiscard]] bool operator>=(u64) const;
+
+    [[nodiscard]] bool operator==(UnsignedBigInteger const&) const;
+    [[nodiscard]] bool operator!=(UnsignedBigInteger const&) const;
+    [[nodiscard]] bool operator<(UnsignedBigInteger const&) const;
+    [[nodiscard]] bool operator<=(UnsignedBigInteger const&) const;
+    [[nodiscard]] bool operator>(UnsignedBigInteger const&) const;
+    [[nodiscard]] bool operator>=(UnsignedBigInteger const&) const;
 
     enum class CompareResult {
         DoubleEqualsBigInt,

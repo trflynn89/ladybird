@@ -100,7 +100,7 @@ ThrowCompletionOr<Crypto::SignedBigInteger> interpret_iso_date_time_offset(VM& v
     // 10. For each element candidate of possibleEpochNs, do
     for (auto& candidate : possible_epoch_nanoseconds) {
         // a. Let candidateOffset be utcEpochNanoseconds - candidate.
-        auto candidate_offset = utc_epoch_nanoseconds.minus(candidate);
+        auto candidate_offset = utc_epoch_nanoseconds.subtracted_by(candidate);
 
         // b. If candidateOffset = offsetNanoseconds, return candidate.
         if (candidate_offset.compare_to_double(offset_nanoseconds) == Crypto::UnsignedBigInteger::CompareResult::DoubleEqualsBigInt)
