@@ -1,11 +1,10 @@
 name: Lint Code
 
-on: [ push, pull_request ]
+on: [ push ]
 
 jobs:
   lint:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
-    if: github.repository == 'LadybirdBrowser/ladybird'
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6.0.2
