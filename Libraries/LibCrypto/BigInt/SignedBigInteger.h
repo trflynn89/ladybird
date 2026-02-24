@@ -14,7 +14,7 @@ namespace Crypto {
 
 struct SignedDivisionResult;
 
-class SignedBigInteger {
+class [[nodiscard]] SignedBigInteger {
 public:
     template<Signed T>
     SignedBigInteger(T value)
@@ -37,7 +37,7 @@ public:
     SignedBigInteger();
     ~SignedBigInteger();
 
-    [[nodiscard]] static SignedBigInteger import_data(ReadonlyBytes data) { return SignedBigInteger(data); }
+    static SignedBigInteger import_data(ReadonlyBytes data) { return SignedBigInteger(data); }
 
     [[nodiscard]] Bytes export_data(Bytes) const;
 
@@ -48,7 +48,7 @@ public:
     [[nodiscard]] u64 to_u64() const;
     [[nodiscard]] double to_double(UnsignedBigInteger::RoundingMode rounding_mode = UnsignedBigInteger::RoundingMode::IEEERoundAndTiesToEvenMantissa) const;
 
-    [[nodiscard]] UnsignedBigInteger unsigned_value() const;
+    UnsignedBigInteger unsigned_value() const;
     [[nodiscard]] bool is_positive() const { return !is_negative() && !is_zero(); }
     [[nodiscard]] bool is_negative() const;
     [[nodiscard]] bool is_zero() const;
@@ -60,25 +60,25 @@ public:
 
     [[nodiscard]] size_t byte_length() const;
 
-    [[nodiscard]] SignedBigInteger plus(SignedBigInteger const& other) const;
-    [[nodiscard]] SignedBigInteger minus(SignedBigInteger const& other) const;
-    [[nodiscard]] SignedBigInteger bitwise_or(SignedBigInteger const& other) const;
-    [[nodiscard]] SignedBigInteger bitwise_and(SignedBigInteger const& other) const;
-    [[nodiscard]] SignedBigInteger bitwise_xor(SignedBigInteger const& other) const;
-    [[nodiscard]] SignedBigInteger bitwise_not() const;
-    [[nodiscard]] SignedBigInteger shift_left(size_t num_bits) const;
-    [[nodiscard]] SignedBigInteger shift_right(size_t num_bits) const;
-    [[nodiscard]] SignedBigInteger multiplied_by(SignedBigInteger const& other) const;
-    [[nodiscard]] SignedDivisionResult divided_by(SignedBigInteger const& divisor) const;
-    [[nodiscard]] SignedBigInteger pow(u32 exponent) const;
-    [[nodiscard]] ErrorOr<SignedBigInteger> mod_power_of_two(size_t power_of_two) const;
+    SignedBigInteger plus(SignedBigInteger const& other) const;
+    SignedBigInteger minus(SignedBigInteger const& other) const;
+    SignedBigInteger bitwise_or(SignedBigInteger const& other) const;
+    SignedBigInteger bitwise_and(SignedBigInteger const& other) const;
+    SignedBigInteger bitwise_xor(SignedBigInteger const& other) const;
+    SignedBigInteger bitwise_not() const;
+    SignedBigInteger shift_left(size_t num_bits) const;
+    SignedBigInteger shift_right(size_t num_bits) const;
+    SignedBigInteger multiplied_by(SignedBigInteger const& other) const;
+    SignedDivisionResult divided_by(SignedBigInteger const& divisor) const;
+    SignedBigInteger pow(u32 exponent) const;
+    ErrorOr<SignedBigInteger> mod_power_of_two(size_t power_of_two) const;
 
-    [[nodiscard]] SignedBigInteger plus(UnsignedBigInteger const& other) const;
-    [[nodiscard]] SignedBigInteger minus(UnsignedBigInteger const& other) const;
-    [[nodiscard]] SignedBigInteger multiplied_by(UnsignedBigInteger const& other) const;
-    [[nodiscard]] SignedDivisionResult divided_by(UnsignedBigInteger const& divisor) const;
+    SignedBigInteger plus(UnsignedBigInteger const& other) const;
+    SignedBigInteger minus(UnsignedBigInteger const& other) const;
+    SignedBigInteger multiplied_by(UnsignedBigInteger const& other) const;
+    SignedDivisionResult divided_by(UnsignedBigInteger const& divisor) const;
 
-    [[nodiscard]] SignedBigInteger negated_value() const;
+    SignedBigInteger negated_value() const;
 
     [[nodiscard]] u32 hash() const;
 
@@ -101,7 +101,7 @@ private:
     mutable Optional<u32> m_hash {};
 };
 
-struct SignedDivisionResult {
+struct [[nodiscard]] SignedDivisionResult {
     Crypto::SignedBigInteger quotient;
     Crypto::SignedBigInteger remainder;
 };
