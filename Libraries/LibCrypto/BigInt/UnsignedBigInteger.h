@@ -16,7 +16,7 @@ namespace Crypto {
 
 struct UnsignedDivisionResult;
 
-class UnsignedBigInteger {
+class [[nodiscard]] UnsignedBigInteger {
 public:
     template<Integral T>
     UnsignedBigInteger(T value)
@@ -38,7 +38,7 @@ public:
     UnsignedBigInteger();
     ~UnsignedBigInteger();
 
-    [[nodiscard]] static UnsignedBigInteger import_data(ReadonlyBytes data) { return UnsignedBigInteger(data); }
+    static UnsignedBigInteger import_data(ReadonlyBytes data) { return UnsignedBigInteger(data); }
 
     // Exports in big-endian (msb stored first), trimmed (no leading zeros) format
     [[nodiscard]] Bytes export_data(Bytes) const;
@@ -70,21 +70,21 @@ public:
 
     [[nodiscard]] size_t byte_length() const;
 
-    size_t one_based_index_of_highest_set_bit() const;
+    [[nodiscard]] size_t one_based_index_of_highest_set_bit() const;
 
-    [[nodiscard]] UnsignedBigInteger plus(UnsignedBigInteger const& other) const;
-    [[nodiscard]] ErrorOr<UnsignedBigInteger> minus(UnsignedBigInteger const& other) const;
-    [[nodiscard]] UnsignedBigInteger bitwise_or(UnsignedBigInteger const& other) const;
-    [[nodiscard]] UnsignedBigInteger bitwise_and(UnsignedBigInteger const& other) const;
-    [[nodiscard]] UnsignedBigInteger bitwise_xor(UnsignedBigInteger const& other) const;
-    [[nodiscard]] ErrorOr<UnsignedBigInteger> bitwise_not_fill_to_one_based_index(size_t) const;
-    [[nodiscard]] UnsignedBigInteger shift_left(size_t num_bits) const;
-    [[nodiscard]] UnsignedBigInteger shift_right(size_t num_bits) const;
-    [[nodiscard]] UnsignedBigInteger multiplied_by(UnsignedBigInteger const& other) const;
-    [[nodiscard]] UnsignedDivisionResult divided_by(UnsignedBigInteger const& divisor) const;
-    [[nodiscard]] UnsignedBigInteger pow(u32 exponent) const;
-    [[nodiscard]] UnsignedBigInteger gcd(UnsignedBigInteger const& other) const;
-    [[nodiscard]] UnsignedBigInteger lcm(UnsignedBigInteger const& other) const;
+    UnsignedBigInteger plus(UnsignedBigInteger const& other) const;
+    ErrorOr<UnsignedBigInteger> minus(UnsignedBigInteger const& other) const;
+    UnsignedBigInteger bitwise_or(UnsignedBigInteger const& other) const;
+    UnsignedBigInteger bitwise_and(UnsignedBigInteger const& other) const;
+    UnsignedBigInteger bitwise_xor(UnsignedBigInteger const& other) const;
+    ErrorOr<UnsignedBigInteger> bitwise_not_fill_to_one_based_index(size_t) const;
+    UnsignedBigInteger shift_left(size_t num_bits) const;
+    UnsignedBigInteger shift_right(size_t num_bits) const;
+    UnsignedBigInteger multiplied_by(UnsignedBigInteger const& other) const;
+    UnsignedDivisionResult divided_by(UnsignedBigInteger const& divisor) const;
+    UnsignedBigInteger pow(u32 exponent) const;
+    UnsignedBigInteger gcd(UnsignedBigInteger const& other) const;
+    UnsignedBigInteger lcm(UnsignedBigInteger const& other) const;
 
     [[nodiscard]] u32 hash() const;
 
@@ -110,7 +110,7 @@ private:
     mutable Optional<u32> m_hash {};
 };
 
-struct UnsignedDivisionResult {
+struct [[nodiscard]] UnsignedDivisionResult {
     Crypto::UnsignedBigInteger quotient;
     Crypto::UnsignedBigInteger remainder;
 };
