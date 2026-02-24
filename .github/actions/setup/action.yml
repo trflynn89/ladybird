@@ -1,4 +1,4 @@
-name: 'Setup action'
+name: Setup action
 description: 'Sets up the dependencies for the CI VM'
 author: 'Andrew Kaster <akaster@serenityos.org>'
 inputs:
@@ -22,6 +22,10 @@ inputs:
     description: 'LLVM version to install'
     required: false
     default: '21'
+  type:
+    description: 'Whether the setup is for building or linting'
+    required: false
+    default: 'build'
 
 outputs:
   gcc_version:
@@ -39,13 +43,18 @@ runs:
         python-version: 3.12
         cache: 'pip'
 
-    - name: 'Install Python dependencies'
+    - name: Install Python dependencies
       shell: bash
       run: |
         python3 -m pip install --upgrade pip
-        pip install pyyaml requests six
 
-    - name: 'Install Dependencies'
+        if ${{ inputs.type == 'build' }} ; then
+          pip3 install pyyaml requests six
+        else
+          pip3 install ruff
+        fi
+
+    - name: Install apt repositories
       if: ${{ inputs.os == 'Linux' }}
       shell: bash
       run: |
@@ -64,6 +73,13 @@ runs:
         fi
 
         sudo apt-get update -y
+
+    - name: Install Dependencies
+      if: ${{ inputs.os == 'Linux' && inputs.type == 'build' }}
+      shell: bash
+      run: |
+        set -e
+
         sudo apt-get install -y \
             autoconf \
             autoconf-archive \
@@ -106,6 +122,22 @@ runs:
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-${{ inputs.gcc_version }} 100
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-${{ inputs.gcc_version }} 100
 
+    - name: Install Dependencies
+      if: ${{ inputs.os == 'Linux' && inputs.type == 'lint' }}
+      shell: bash
+      run: |
+        set -e
+
+        sudo apt-get install -y \
+            clang-format-${{ inputs.llvm_version }} \
+            generate-ninja \
+            optipng \
+            shellcheck
+
+        sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-${{ inputs.llvm_version }} 100
+
+        sudo npm install -g prettier@3.8.1
+
     - name: Ensure clang-cl is available
       if: ${{ inputs.os == 'Windows' && inputs.toolchain == 'ClangCL' }}
       shell: bash
@@ -120,13 +152,13 @@ runs:
         fi
         clang-cl --version
 
-    - name: 'Select latest Xcode'
+    - name: Select latest Xcode
       if: ${{ inputs.os == 'macOS' || inputs.os == 'Android' }}
       uses: maxim-lobanov/setup-xcode@v1
       with:
         xcode-version: 26.2
 
-    - name: 'Install Dependencies'
+    - name: Install Dependencies
       if: ${{ inputs.os == 'macOS' || inputs.os == 'Android' }}
       shell: bash
       run: |
@@ -148,11 +180,12 @@ runs:
             qt \
             unzip
 
-    - name: 'Install Rust toolchain'
+    - name: Install Rust toolchain
       if: ${{ inputs.os != 'Windows' }}
       uses: dtolnay/rust-toolchain@stable
 
-    - name: 'Install wasm-tools'
+    - name: Install wasm-tools
+      if: ${{ inputs.type == 'build' }}
       shell: bash
       run: |
         VERSION=1.243.0
@@ -182,18 +215,19 @@ runs:
 
         echo "${{ github.workspace }}/${NAME}" >> $GITHUB_PATH
 
-    - name: 'Set required environment variables'
+    - name: Set required environment variables
       if: ${{ inputs.os == 'Linux' && inputs.arch == 'arm64' }}
       uses: actions/github-script@v7
       with:
         script: |
           core.exportVariable('VCPKG_FORCE_SYSTEM_BINARIES', '1')
 
-    - name: 'Install vcpkg'
+    - name: Install vcpkg
+      if: ${{ inputs.type == 'build' }}
       shell: bash
       run: ./Toolchain/BuildVcpkg.py
 
-    - name: 'Export installed versions'
+    - name: Export installed versions
       id: 'export-versions'
       shell: bash
       run: |
