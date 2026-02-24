@@ -516,12 +516,12 @@ bool is_valid_duration(double years, double months, double weeks, double days, d
     //          sufficient bits in the quotient. String manipulation will also give an exact result, since the
     //          multiplication is by a power of 10.
     auto normalized_nanoseconds = TimeDuration { days }.multiplied_by(NANOSECONDS_PER_DAY);
-    normalized_nanoseconds = normalized_nanoseconds.plus(TimeDuration { hours }.multiplied_by(NANOSECONDS_PER_HOUR));
-    normalized_nanoseconds = normalized_nanoseconds.plus(TimeDuration { minutes }.multiplied_by(NANOSECONDS_PER_MINUTE));
-    normalized_nanoseconds = normalized_nanoseconds.plus(TimeDuration { seconds }.multiplied_by(NANOSECONDS_PER_SECOND));
-    normalized_nanoseconds = normalized_nanoseconds.plus(TimeDuration { milliseconds }.multiplied_by(NANOSECONDS_PER_MILLISECOND));
-    normalized_nanoseconds = normalized_nanoseconds.plus(TimeDuration { microseconds }.multiplied_by(NANOSECONDS_PER_MICROSECOND));
-    normalized_nanoseconds = normalized_nanoseconds.plus(TimeDuration { nanoseconds });
+    normalized_nanoseconds = normalized_nanoseconds.added_to(TimeDuration { hours }.multiplied_by(NANOSECONDS_PER_HOUR));
+    normalized_nanoseconds = normalized_nanoseconds.added_to(TimeDuration { minutes }.multiplied_by(NANOSECONDS_PER_MINUTE));
+    normalized_nanoseconds = normalized_nanoseconds.added_to(TimeDuration { seconds }.multiplied_by(NANOSECONDS_PER_SECOND));
+    normalized_nanoseconds = normalized_nanoseconds.added_to(TimeDuration { milliseconds }.multiplied_by(NANOSECONDS_PER_MILLISECOND));
+    normalized_nanoseconds = normalized_nanoseconds.added_to(TimeDuration { microseconds }.multiplied_by(NANOSECONDS_PER_MICROSECOND));
+    normalized_nanoseconds = normalized_nanoseconds.added_to(TimeDuration { nanoseconds });
 
     // 8. If abs(normalizedNanoseconds) ≥ 10**9 × 2**53, return false.
     if (normalized_nanoseconds.unsigned_value() > MAX_TIME_DURATION.unsigned_value())
@@ -683,19 +683,19 @@ GC::Ref<Duration> create_negated_temporal_duration(VM& vm, Duration const& durat
 TimeDuration time_duration_from_components(double hours, double minutes, double seconds, double milliseconds, double microseconds, double nanoseconds)
 {
     // 1. Set minutes to minutes + hours × 60.
-    auto total_minutes = TimeDuration { minutes }.plus(TimeDuration { hours }.multiplied_by(60_bigint));
+    auto total_minutes = TimeDuration { minutes }.added_to(TimeDuration { hours }.multiplied_by(60_bigint));
 
     // 2. Set seconds to seconds + minutes × 60.
-    auto total_seconds = TimeDuration { seconds }.plus(total_minutes.multiplied_by(60_bigint));
+    auto total_seconds = TimeDuration { seconds }.added_to(total_minutes.multiplied_by(60_bigint));
 
     // 3. Set milliseconds to milliseconds + seconds × 1000.
-    auto total_milliseconds = TimeDuration { milliseconds }.plus(total_seconds.multiplied_by(1000_bigint));
+    auto total_milliseconds = TimeDuration { milliseconds }.added_to(total_seconds.multiplied_by(1000_bigint));
 
     // 4. Set microseconds to microseconds + milliseconds × 1000.
-    auto total_microseconds = TimeDuration { microseconds }.plus(total_milliseconds.multiplied_by(1000_bigint));
+    auto total_microseconds = TimeDuration { microseconds }.added_to(total_milliseconds.multiplied_by(1000_bigint));
 
     // 5. Set nanoseconds to nanoseconds + microseconds × 1000.
-    auto total_nanoseconds = TimeDuration { nanoseconds }.plus(total_microseconds.multiplied_by(1000_bigint));
+    auto total_nanoseconds = TimeDuration { nanoseconds }.added_to(total_microseconds.multiplied_by(1000_bigint));
 
     // 6. Assert: abs(nanoseconds) ≤ maxTimeDuration.
     VERIFY(total_nanoseconds.unsigned_value() <= MAX_TIME_DURATION.unsigned_value());
@@ -708,7 +708,7 @@ TimeDuration time_duration_from_components(double hours, double minutes, double 
 ThrowCompletionOr<TimeDuration> add_time_duration(VM& vm, TimeDuration const& one, TimeDuration const& two)
 {
     // 1. Let result be one + two.
-    auto result = one.plus(two);
+    auto result = one.added_to(two);
 
     // 2. If abs(result) > maxTimeDuration, throw a RangeError exception.
     if (result.unsigned_value() > MAX_TIME_DURATION.unsigned_value())
@@ -722,7 +722,7 @@ ThrowCompletionOr<TimeDuration> add_time_duration(VM& vm, TimeDuration const& on
 ThrowCompletionOr<TimeDuration> add_24_hour_days_to_time_duration(VM& vm, TimeDuration const& time_duration, double days)
 {
     // 1. Let result be d + days × nsPerDay.
-    auto result = time_duration.plus(TimeDuration { days }.multiplied_by(NANOSECONDS_PER_DAY));
+    auto result = time_duration.added_to(TimeDuration { days }.multiplied_by(NANOSECONDS_PER_DAY));
 
     // 2. If abs(result) > maxTimeDuration, throw a RangeError exception.
     if (result.unsigned_value() > MAX_TIME_DURATION.unsigned_value())
@@ -736,7 +736,7 @@ ThrowCompletionOr<TimeDuration> add_24_hour_days_to_time_duration(VM& vm, TimeDu
 Crypto::SignedBigInteger add_time_duration_to_epoch_nanoseconds(TimeDuration const& duration, Crypto::SignedBigInteger const& epoch_nanoseconds)
 {
     // 1. Return epochNs + ℤ(d).
-    return epoch_nanoseconds.plus(duration);
+    return epoch_nanoseconds.added_to(duration);
 }
 
 // 7.5.25 CompareTimeDuration ( one, two ), https://tc39.es/proposal-temporal/#sec-temporal-comparetimeduration
@@ -758,7 +758,7 @@ i8 compare_time_duration(TimeDuration const& one, TimeDuration const& two)
 TimeDuration time_duration_from_epoch_nanoseconds_difference(Crypto::SignedBigInteger const& one, Crypto::SignedBigInteger const& two)
 {
     // 1. Let result be ℝ(one) - ℝ(two).
-    auto result = one.minus(two);
+    auto result = one.subtracted_by(two);
 
     // 2. Assert: abs(result) ≤ maxTimeDuration.
     VERIFY(result.unsigned_value() <= MAX_TIME_DURATION.unsigned_value());
@@ -1075,8 +1075,8 @@ ThrowCompletionOr<CalendarNudgeResult> nudge_to_calendar_unit(VM& vm, i8 sign, I
     VERIFY(start_epoch_ns != end_epoch_ns);
 
     // 14. Let progress be (destEpochNs - startEpochNs) / (endEpochNs - startEpochNs).
-    auto progress_numerator = dest_epoch_ns.minus(start_epoch_ns);
-    auto progress_denominator = end_epoch_ns.minus(start_epoch_ns);
+    auto progress_numerator = dest_epoch_ns.subtracted_by(start_epoch_ns);
+    auto progress_denominator = end_epoch_ns.subtracted_by(start_epoch_ns);
     auto progress_equals_one = progress_numerator == progress_denominator;
 
     // 15. Let total be r1 + progress × increment × sign.
@@ -1371,7 +1371,7 @@ ThrowCompletionOr<InternalDuration> bubble_relative_duration(VM& vm, i8 sign, In
             }
 
             // viii. Let beyondEnd be nudgedEpochNs - endEpochNs.
-            auto beyond_end = nudged_epoch_ns.minus(end_epoch_ns);
+            auto beyond_end = nudged_epoch_ns.subtracted_by(end_epoch_ns);
 
             // ix. If beyondEnd < 0, let beyondEndSign be -1; else if beyondEnd > 0, let beyondEndSign be 1; else let beyondEndSign be 0.
             auto beyond_end_sign = beyond_end.is_negative() ? -1 : (beyond_end.is_positive() ? 1 : 0);

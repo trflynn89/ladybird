@@ -84,7 +84,7 @@ JS_DEFINE_NATIVE_FUNCTION(BigIntConstructor::as_int_n)
     // 4. If mod ≥ 2^(bits-1), return ℤ(mod - 2^bits); ...
     if (auto top_bit_index = mod.unsigned_value().one_based_index_of_highest_set_bit(); top_bit_index >= bits) {
         // twos complement decode
-        auto decoded = TRY_OR_THROW_OOM(vm, mod.unsigned_value().bitwise_not_fill_to_one_based_index(bits)).plus(1);
+        auto decoded = TRY_OR_THROW_OOM(vm, mod.unsigned_value().bitwise_not_fill_to_one_based_index(bits)).added_to(1);
         return BigInt::create(vm, Crypto::SignedBigInteger { std::move(decoded), true });
     }
 

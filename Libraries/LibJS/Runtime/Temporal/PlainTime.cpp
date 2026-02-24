@@ -321,31 +321,31 @@ Time balance_time(double hour, double minute, double second, double millisecond,
 Time balance_time(double hour, double minute, double second, double millisecond, double microsecond, Crypto::SignedBigInteger const& nanosecond_value)
 {
     // 1. Set microsecond to microsecond + floor(nanosecond / 1000).
-    auto microsecond_value = Crypto::SignedBigInteger { microsecond }.plus(big_floor(nanosecond_value, NANOSECONDS_PER_MICROSECOND));
+    auto microsecond_value = Crypto::SignedBigInteger { microsecond }.added_to(big_floor(nanosecond_value, NANOSECONDS_PER_MICROSECOND));
 
     // 2. Set nanosecond to nanosecond modulo 1000.
     auto nanosecond = modulo(nanosecond_value, NANOSECONDS_PER_MICROSECOND).to_double();
 
     // 3. Set millisecond to millisecond + floor(microsecond / 1000).
-    auto millisecond_value = Crypto::SignedBigInteger { millisecond }.plus(big_floor(microsecond_value, MICROSECONDS_PER_MILLISECOND));
+    auto millisecond_value = Crypto::SignedBigInteger { millisecond }.added_to(big_floor(microsecond_value, MICROSECONDS_PER_MILLISECOND));
 
     // 4. Set microsecond to microsecond modulo 1000.
     microsecond = modulo(microsecond_value, MICROSECONDS_PER_MILLISECOND).to_double();
 
     // 5. Set second to second + floor(millisecond / 1000).
-    auto second_value = Crypto::SignedBigInteger { second }.plus(big_floor(millisecond_value, MILLISECONDS_PER_SECOND));
+    auto second_value = Crypto::SignedBigInteger { second }.added_to(big_floor(millisecond_value, MILLISECONDS_PER_SECOND));
 
     // 6. Set millisecond to millisecond modulo 1000.
     millisecond = modulo(millisecond_value, MILLISECONDS_PER_SECOND).to_double();
 
     // 7. Set minute to minute + floor(second / 60).
-    auto minute_value = Crypto::SignedBigInteger { minute }.plus(big_floor(second_value, SECONDS_PER_MINUTE));
+    auto minute_value = Crypto::SignedBigInteger { minute }.added_to(big_floor(second_value, SECONDS_PER_MINUTE));
 
     // 8. Set second to second modulo 60.
     second = modulo(second_value, SECONDS_PER_MINUTE).to_double();
 
     // 9. Set hour to hour + floor(minute / 60).
-    auto hour_value = Crypto::SignedBigInteger { hour }.plus(big_floor(minute_value, MINUTES_PER_HOUR));
+    auto hour_value = Crypto::SignedBigInteger { hour }.added_to(big_floor(minute_value, MINUTES_PER_HOUR));
 
     // 10. Set minute to minute modulo 60.
     minute = modulo(minute_value, MINUTES_PER_HOUR).to_double();
@@ -514,7 +514,7 @@ i8 compare_time_record(Time const& time1, Time const& time2)
 // 4.5.15 AddTime ( time, timeDuration ), https://tc39.es/proposal-temporal/#sec-temporal-addtime
 Time add_time(Time const& time, TimeDuration const& time_duration)
 {
-    auto nanoseconds = time_duration.plus(TimeDuration { static_cast<i64>(time.nanosecond) });
+    auto nanoseconds = time_duration.added_to(TimeDuration { static_cast<i64>(time.nanosecond) });
 
     // 1. Return BalanceTime(time.[[Hour]], time.[[Minute]], time.[[Second]], time.[[Millisecond]], time.[[Microsecond]], time.[[Nanosecond]] + timeDuration).
     return balance_time(time.hour, time.minute, time.second, time.millisecond, time.microsecond, nanoseconds);

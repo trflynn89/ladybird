@@ -922,7 +922,7 @@ Crypto::SignedBigInteger apply_unsigned_rounding_mode(Crypto::SignedDivisionResu
     auto const& d1 = x.remainder;
 
     // 7. Let d2 be r2 – x.
-    auto d2 = x.remainder.is_negative() ? x.remainder.plus(increment) : x.remainder.minus(increment);
+    auto d2 = x.remainder.is_negative() ? x.remainder.added_to(increment) : x.remainder.subtracted_by(increment);
     d2.negate();
 
     // 8. If d1 < d2, return r1.
@@ -948,7 +948,7 @@ Crypto::SignedBigInteger apply_unsigned_rounding_mode(Crypto::SignedDivisionResu
     VERIFY(unsigned_rounding_mode == UnsignedRoundingMode::HalfEven);
 
     // 14. Let cardinality be (r1 / (r2 – r1)) modulo 2.
-    auto cardinality = modulo(r1.divided_by(r2.minus(r1)).quotient, "2"_bigint);
+    auto cardinality = modulo(r1.divided_by(r2.subtracted_by(r1)).quotient, "2"_bigint);
 
     // 15. If cardinality = 0, return r1.
     if (cardinality.unsigned_value().is_zero())
@@ -1040,7 +1040,7 @@ Crypto::SignedBigInteger round_number_to_increment(Crypto::SignedBigInteger cons
     auto r1 = division_result.quotient;
 
     // 6. Let r2 be the smallest integer such that r2 > quotient.
-    auto r2 = division_result.quotient.plus(1_bigint);
+    auto r2 = division_result.quotient.added_to(1_bigint);
 
     // 7. Let rounded be ApplyUnsignedRoundingMode(quotient, r1, r2, unsignedRoundingMode).
     auto rounded = apply_unsigned_rounding_mode(division_result, move(r1), move(r2), unsigned_rounding_mode, increment);
@@ -1076,11 +1076,11 @@ Crypto::SignedBigInteger round_number_to_increment_as_if_positive(Crypto::Signed
     Crypto::SignedBigInteger r2;
 
     if (x.is_negative()) {
-        r1 = division_result.quotient.minus("1"_sbigint);
+        r1 = division_result.quotient.subtracted_by("1"_sbigint);
         r2 = division_result.quotient;
     } else {
         r1 = division_result.quotient;
-        r2 = division_result.quotient.plus("1"_sbigint);
+        r2 = division_result.quotient.added_to("1"_sbigint);
     }
 
     // 5. Let rounded be ApplyUnsignedRoundingMode(quotient, r1, r2, unsignedRoundingMode).

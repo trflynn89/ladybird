@@ -48,7 +48,7 @@ BigFraction BigFraction::operator+(BigFraction const& rhs) const
         return *this;
 
     auto result = *this;
-    result.m_numerator.set_to(m_numerator.multiplied_by(rhs.m_denominator).plus(rhs.m_numerator.multiplied_by(m_denominator)));
+    result.m_numerator.set_to(m_numerator.multiplied_by(rhs.m_denominator).added_to(rhs.m_numerator.multiplied_by(m_denominator)));
     result.m_denominator.set_to(m_denominator.multiplied_by(rhs.m_denominator));
 
     result.reduce();
@@ -123,7 +123,7 @@ BigFraction::BigFraction(double d)
     while (d >= NumericLimits<double>::epsilon() || current_pow >= 0) {
         m_numerator.set_to(m_numerator.multiplied_by(SignedBigInteger { 10 }));
         i8 digit = (u64)(d * AK::pow(0.1, (double)current_pow)) % 10;
-        m_numerator.set_to(m_numerator.plus(UnsignedBigInteger { digit }));
+        m_numerator.set_to(m_numerator.added_to(UnsignedBigInteger { digit }));
         d -= digit * AK::pow(10.0, (double)current_pow);
         if (current_pow < 0) {
             ++decimal_places;
@@ -157,14 +157,14 @@ double BigFraction::to_double() const
     // NOTE: the precision of the result will be 63 bits (more than 53 bits necessary for the mantissa of a double).
     if (top_bit_numerator < (top_bit_denominator + 64)) {
         shift_left_numerator = top_bit_denominator + 64 - top_bit_numerator;
-        numerator = numerator.shift_left(shift_left_numerator); // copy
+        numerator = numerator.shifted_left(shift_left_numerator); // copy
     }
     // NOTE: Do nothing if numerator already has more than 64 bits more than denominator.
 
     // 2. Divide [potentially shifted] numerator by the denominator.
     auto division_result = numerator.divided_by(denominator);
     if (!division_result.remainder.is_zero()) {
-        division_result.quotient = division_result.quotient.shift_left(1).plus(1); // Extend the quotient with a "fake 1".
+        division_result.quotient = division_result.quotient.shifted_left(1).added_to(1); // Extend the quotient with a "fake 1".
         //  NOTE: Since the quotient has at least 63 bits, this will only affect the mantissa
         //        on rounding, and have the same effect on rounding as any fractional digits (from the remainder).
         shift_left_numerator++;
@@ -208,9 +208,9 @@ BigFraction BigFraction::rounded(unsigned rounding_threshold) const
     auto const fractional_value = res.remainder.multiplied_by(needed_power.multiplied_by("10"_bigint)).divided_by(m_denominator).quotient;
 
     result.m_numerator.set_to(result.m_numerator.multiplied_by(needed_power));
-    result.m_numerator.set_to(result.m_numerator.plus(fractional_value.divided_by("10"_bigint).quotient));
+    result.m_numerator.set_to(result.m_numerator.added_to(fractional_value.divided_by("10"_bigint).quotient));
     if (get_last_digit(fractional_value) > "4"_bigint)
-        result.m_numerator.set_to(result.m_numerator.plus("1"_bigint));
+        result.m_numerator.set_to(result.m_numerator.added_to("1"_bigint));
 
     result.m_denominator.set_to(result.m_denominator.multiplied_by(needed_power));
 

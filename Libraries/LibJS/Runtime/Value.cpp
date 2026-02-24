@@ -1680,7 +1680,7 @@ ThrowCompletionOr<Value> left_shift(VM& vm, Value lhs, Value rhs)
             if (division_result.remainder.is_zero() || !big_integer.is_negative())
                 return BigInt::create(vm, division_result.quotient);
             // For negative round "down" to the next negative number
-            return BigInt::create(vm, division_result.quotient.minus(Crypto::SignedBigInteger { 1 }));
+            return BigInt::create(vm, division_result.quotient.subtracted_by(Crypto::SignedBigInteger { 1 }));
         }
         // 2. Return the BigInt value that represents ℝ(x) × 2^y.
         return Value(BigInt::create(vm, lhs_numeric.as_bigint().big_integer().multiplied_by(multiplier_divisor)));
@@ -1841,7 +1841,7 @@ ThrowCompletionOr<Value> add(VM& vm, Value lhs, Value rhs)
         // 6.1.6.2.7 BigInt::add ( x, y ), https://tc39.es/ecma262/#sec-numeric-types-bigint-add
         auto x = lhs_numeric.as_bigint().big_integer();
         auto y = rhs_numeric.as_bigint().big_integer();
-        return BigInt::create(vm, x.plus(y));
+        return BigInt::create(vm, x.added_to(y));
     }
 
     // 5. If Type(lnum) is different from Type(rnum), throw a TypeError exception.
@@ -1876,7 +1876,7 @@ ThrowCompletionOr<Value> sub(VM& vm, Value lhs, Value rhs)
         auto x = lhs_numeric.as_bigint().big_integer();
         auto y = rhs_numeric.as_bigint().big_integer();
         // 1. Return the BigInt value that represents the difference x minus y.
-        return BigInt::create(vm, x.minus(y));
+        return BigInt::create(vm, x.subtracted_by(y));
     }
 
     // 5. If Type(lnum) is different from Type(rnum), throw a TypeError exception.

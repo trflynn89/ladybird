@@ -138,9 +138,9 @@ static SignificandAndExponent compute_significand_and_exponent_with_precision(do
 
         // 2 ^ binary_exponent
         if (binary_exponent > 0)
-            numerator = numerator.shift_left(binary_exponent);
+            numerator = numerator.shifted_left(binary_exponent);
         else if (binary_exponent < 0)
-            denominator = denominator.shift_left(-binary_exponent);
+            denominator = denominator.shifted_left(-binary_exponent);
 
         // 10 ^ (precision - exponent - 1)
         if (auto scale = precision - exponent - 1; scale > 0)
@@ -151,8 +151,8 @@ static SignificandAndExponent compute_significand_and_exponent_with_precision(do
         auto [quotient, remainder] = numerator.divided_by(denominator);
 
         // Round half-up to distinguish between equally valid candidates.
-        if (remainder.shift_left(1) >= denominator)
-            quotient = quotient.plus(1);
+        if (remainder.shifted_left(1) >= denominator)
+            quotient = quotient.added_to(1);
 
         return quotient;
     };
@@ -195,7 +195,7 @@ static SignificandAndExponent compute_significand_and_exponent_with_precision(do
         auto alternate = compute_significand(exponent - 1);
 
         if (alternate.count_digits_in_base(10) == static_cast<size_t>(precision)) {
-            auto lhs = significand.multiplied_by(TEN_BIGINT).plus(alternate);
+            auto lhs = significand.multiplied_by(TEN_BIGINT).added_to(alternate);
             auto rhs = TWO_BIGINT.multiplied_by(binary_significand);
 
             // 10 ^ (exponent - precision)
@@ -206,9 +206,9 @@ static SignificandAndExponent compute_significand_and_exponent_with_precision(do
 
             // 2 ^ binary_exponent
             if (binary_exponent > 0)
-                rhs = rhs.shift_left(binary_exponent);
+                rhs = rhs.shifted_left(binary_exponent);
             else if (binary_exponent < 0)
-                lhs = lhs.shift_left(-binary_exponent);
+                lhs = lhs.shifted_left(-binary_exponent);
 
             if (lhs > rhs) {
                 significand = move(alternate);

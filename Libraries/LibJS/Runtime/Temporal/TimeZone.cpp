@@ -36,7 +36,7 @@ ISODateTime get_iso_parts_from_epoch(Crypto::SignedBigInteger const& epoch_nanos
     auto remainder_nanoseconds_value = remainder_nanoseconds.to_double();
 
     // 3. Let epochMilliseconds be 𝔽((epochNanoseconds - remainderNs) / 10**6).
-    auto epoch_milliseconds = epoch_nanoseconds.minus(remainder_nanoseconds).divided_by(NANOSECONDS_PER_MILLISECOND).quotient.to_double();
+    auto epoch_milliseconds = epoch_nanoseconds.subtracted_by(remainder_nanoseconds).divided_by(NANOSECONDS_PER_MILLISECOND).quotient.to_double();
 
     // 4. Let year be EpochTimeToEpochYear(epochMilliseconds).
     auto year = epoch_time_to_epoch_year(epoch_milliseconds);

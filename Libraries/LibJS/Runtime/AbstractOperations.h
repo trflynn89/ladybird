@@ -327,7 +327,7 @@ auto modulo(Crypto::BigInteger auto const& x, Crypto::BigInteger auto const& y)
     VERIFY(!y.is_zero());
     auto result = x.divided_by(y).remainder;
     if (result.is_negative())
-        result = result.plus(y);
+        result = result.added_to(y);
     return result;
 }
 

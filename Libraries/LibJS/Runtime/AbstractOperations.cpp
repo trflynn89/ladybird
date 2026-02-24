@@ -2052,7 +2052,7 @@ Crypto::SignedBigInteger big_floor(Crypto::SignedBigInteger const& numerator, Cr
     if (!result.quotient.is_negative() && result.remainder.is_positive())
         return result.quotient;
 
-    return result.quotient.minus(Crypto::SignedBigInteger { 1 });
+    return result.quotient.subtracted_by(Crypto::SignedBigInteger { 1 });
 }
 
 }

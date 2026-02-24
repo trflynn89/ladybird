@@ -358,8 +358,8 @@ Crypto::SignedBigInteger get_utc_epoch_nanoseconds(Temporal::ISODateTime const& 
 
     // 5. Return ℤ(ℝ(ms) × 10**6 + isoDateTime.[[Time]].[[Microsecond]] × 10**3 + isoDateTime.[[Time]].[[Nanosecond]]).
     auto result = Crypto::SignedBigInteger { ms }.multiplied_by(Temporal::NANOSECONDS_PER_MILLISECOND);
-    result = result.plus(Crypto::SignedBigInteger { static_cast<i32>(iso_date_time.time.microsecond) }.multiplied_by(Temporal::NANOSECONDS_PER_MICROSECOND));
-    result = result.plus(Crypto::SignedBigInteger { static_cast<i32>(iso_date_time.time.nanosecond) });
+    result = result.added_to(Crypto::SignedBigInteger { static_cast<i32>(iso_date_time.time.microsecond) }.multiplied_by(Temporal::NANOSECONDS_PER_MICROSECOND));
+    result = result.added_to(Crypto::SignedBigInteger { static_cast<i32>(iso_date_time.time.nanosecond) });
     return result;
 }
 
@@ -408,7 +408,7 @@ Vector<Crypto::SignedBigInteger> get_named_time_zone_epoch_nanoseconds(StringVie
     result.ensure_capacity(offsets.size());
 
     for (auto const& offset : offsets)
-        result.unchecked_append(local_nanoseconds.minus(Crypto::SignedBigInteger { offset.offset.to_nanoseconds() }));
+        result.unchecked_append(local_nanoseconds.subtracted_by(Crypto::SignedBigInteger { offset.offset.to_nanoseconds() }));
 
     return result;
 }
