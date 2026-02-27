@@ -9,6 +9,7 @@
 #include <LibWeb/CSS/CSSStyleProperties.h>
 #include <LibWeb/CSS/PropertyID.h>
 #include <LibWeb/DOM/DOMTokenList.h>
+#include <LibWeb/DOM/Document.h>
 #include <LibWeb/DOM/ElementFactory.h>
 #include <LibWeb/DOM/Event.h>
 #include <LibWeb/DOM/IDLEventListener.h>
@@ -120,6 +121,22 @@ static GC::Ref<DOM::Element> create_mute_icon(DOM::Document& document, StringVie
     return icon;
 }
 
+static GC::Ref<DOM::Element> create_fullscreen_icon(DOM::Document& document, StringView class_name)
+{
+    auto icon = create_svg_element(document, SVG::TagNames::svg, class_name);
+    icon->set_attribute_value(SVG::AttributeNames::viewBox, s_icon_view_box);
+
+    auto maximize_path = create_svg_element(document, SVG::TagNames::path, "fullscreen-maximize-path"sv);
+    maximize_path->set_attribute_value(SVG::AttributeNames::d, "M3 3h6v2H5v4H3Zm12 0h6v6h-2V5h-4Zm6 12v6h-6v-2h4v-4ZM3 15v6h6v-2H5v-4Z"_string);
+    MUST(icon->append_child(maximize_path));
+
+    auto minimize_path = create_svg_element(document, SVG::TagNames::path, "fullscreen-minimize-path"sv);
+    minimize_path->set_attribute_value(SVG::AttributeNames::d, "M9 3v6H3V7h4V3Zm6 0v6h6V7h-4V3ZM3 15h6v6H7v-4H3Zm12 0v6h2v-4h4v-2Z"_string);
+    MUST(icon->append_child(minimize_path));
+
+    return icon;
+}
+
 void MediaControls::create_shadow_tree()
 {
     auto& media_element = *m_media_element;
@@ -200,10 +217,20 @@ void MediaControls::create_shadow_tree()
     m_volume_fill = create_html_element(document, HTML::TagNames::div, "volume-fill"sv);
     MUST(m_volume_element->append_child(*m_volume_fill));
 
+    // Fullscreen button
+    if (is_video) {
+        m_fullscreen_button = create_html_element(document, HTML::TagNames::button, "control-button fullscreen-button"sv);
+        MUST(button_bar->append_child(*m_fullscreen_button));
+
+        m_fullscreen_icon = create_fullscreen_icon(document, "icon fullscreen-icon"sv);
+        MUST(m_fullscreen_button->append_child(*m_fullscreen_icon));
+    }
+
     // Initialize state
     update_play_pause_icon();
     update_timestamp();
     update_volume_and_mute_indicator();
+    update_fullscreen_icon();
     update_placeholder_visibility();
 
     show_controls();
@@ -324,6 +351,13 @@ void MediaControls::set_up_event_listeners()
         update_timestamp();
         return true;
     });
+
+    if (m_fullscreen_button) {
+        add_event_listener(realm, media_element.document(), HTML::EventNames::fullscreenchange, [this] {
+            update_fullscreen_icon();
+            return true;
+        });
+    }
 
     // Play/pause button
     add_event_listener(realm, *m_play_button, UIEvents::EventNames::click, [this] {
@@ -468,6 +502,14 @@ void MediaControls::set_up_event_listeners()
         return true;
     });
 
+    // Fullscreen button
+    if (m_fullscreen_button) {
+        add_event_listener(realm, *m_fullscreen_button, UIEvents::EventNames::click, [this] {
+            toggle_fullscreen();
+            return true;
+        });
+    }
+
     // Hover detection for video controls visibility
     if (is<HTMLVideoElement>(media_element)) {
         add_event_listener(realm, media_element, UIEvents::EventNames::mouseenter, [this] {
@@ -555,6 +597,12 @@ void MediaControls::toggle_mute()
 {
     m_media_element->set_muted(!m_media_element->muted());
     show_controls();
+}
+
+void MediaControls::toggle_fullscreen()
+{
+    VERIFY(m_media_element);
+    m_media_element->toggle_fullscreen();
 }
 
 void MediaControls::update_play_pause_icon()
@@ -655,6 +703,19 @@ void MediaControls::update_volume_and_mute_indicator()
         MUST(m_volume_area->class_list()->toggle("hidden"_string, !has_audio));
         m_had_audio = has_audio;
     }
+}
+
+void MediaControls::update_fullscreen_icon()
+{
+    if (!m_fullscreen_icon)
+        return;
+
+    static auto s_fullscreen_class = "fullscreen"_string;
+
+    VERIFY(m_media_element);
+
+    auto is_fullscreen_element = m_media_element->document().fullscreen_element() == m_media_element;
+    MUST(m_fullscreen_icon->class_list()->toggle(s_fullscreen_class, is_fullscreen_element));
 }
 
 void MediaControls::update_placeholder_visibility()

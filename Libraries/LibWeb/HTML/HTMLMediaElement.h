@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020, the SerenityOS developers.
- * Copyright (c) 2023, Tim Flynn <trflynn89@serenityos.org>
+ * Copyright (c) 2023-2026, Tim Flynn <trflynn89@ladybird.org>
  * Copyright (c) 2025-2026, Gregory Bertilson <gregory@ladybird.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
@@ -127,6 +127,8 @@ public:
 
     bool muted() const { return m_muted; }
     void set_muted(bool);
+
+    void toggle_fullscreen();
 
     void page_mute_state_changed(Badge<Page>);
 

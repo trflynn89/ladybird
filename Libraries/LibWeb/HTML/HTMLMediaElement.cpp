@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020, the SerenityOS developers.
- * Copyright (c) 2023-2024, Tim Flynn <trflynn89@serenityos.org>
+ * Copyright (c) 2023-2026, Tim Flynn <trflynn89@ladybird.org>
  * Copyright (c) 2025-2026, Gregory Bertilson <gregory@ladybird.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
@@ -474,6 +474,16 @@ void HTMLMediaElement::set_muted(bool muted)
     m_muted = muted;
     volume_or_muted_attribute_changed();
     set_needs_style_update(true);
+}
+
+void HTMLMediaElement::toggle_fullscreen()
+{
+    auto& document = this->document();
+
+    if (document.fullscreen_element() == this)
+        document.exit_fullscreen();
+    else
+        request_fullscreen();
 }
 
 // https://html.spec.whatwg.org/multipage/media.html#user-interface:dom-media-volume-3

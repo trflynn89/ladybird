@@ -47,11 +47,13 @@ private:
     void set_current_time(double);
     void set_volume(double);
     void toggle_mute();
+    void toggle_fullscreen();
 
     void update_play_pause_icon();
     void update_timeline();
     void update_timestamp();
     void update_volume_and_mute_indicator();
+    void update_fullscreen_icon();
     void update_placeholder_visibility();
 
     void show_controls();
@@ -69,6 +71,8 @@ private:
     GC::Weak<DOM::Element> m_volume_area;
     GC::Weak<DOM::Element> m_volume_element;
     GC::Weak<DOM::Element> m_volume_fill;
+    GC::Weak<DOM::Element> m_fullscreen_button;
+    GC::Weak<DOM::Element> m_fullscreen_icon;
     GC::Weak<DOM::Element> m_video_overlay;
     GC::Weak<DOM::Element> m_placeholder_circle;
 
