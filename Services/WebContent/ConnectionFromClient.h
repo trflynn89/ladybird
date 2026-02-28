@@ -140,6 +140,7 @@ private:
     virtual void toggle_media_play_state(u64 page_id) override;
     virtual void toggle_media_mute_state(u64 page_id) override;
     virtual void toggle_media_loop_state(u64 page_id) override;
+    virtual void toggle_media_fullscreen_state(u64 page_id) override;
     virtual void toggle_media_controls_state(u64 page_id) override;
 
     virtual void toggle_page_mute_state(u64 page_id) override;

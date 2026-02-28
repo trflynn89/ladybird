@@ -1333,6 +1333,12 @@ void ConnectionFromClient::toggle_media_loop_state(u64 page_id)
         page->page().toggle_media_loop_state();
 }
 
+void ConnectionFromClient::toggle_media_fullscreen_state(u64 page_id)
+{
+    if (auto page = this->page(page_id); page.has_value())
+        page->page().toggle_media_fullscreen_state();
+}
+
 void ConnectionFromClient::toggle_media_controls_state(u64 page_id)
 {
     if (auto page = this->page(page_id); page.has_value())

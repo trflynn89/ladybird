@@ -127,6 +127,7 @@ endpoint WebContentServer
     toggle_media_play_state(u64 page_id) =|
     toggle_media_mute_state(u64 page_id) =|
     toggle_media_loop_state(u64 page_id) =|
+    toggle_media_fullscreen_state(u64 page_id) =|
     toggle_media_controls_state(u64 page_id) =|
 
     toggle_page_mute_state(u64 page_id) =|
@@ -140,6 +141,6 @@ endpoint WebContentServer
     cookies_changed(u64 page_id, Vector<HTTP::Cookie::Cookie> cookies) =|
 
     request_close(u64 page_id) =|
-    
+
     exit_fullscreen(u64 page_id) =|
 }

@@ -167,6 +167,10 @@ static void initialize_native_control(WebView::Action& action, QAction& qaction,
     case WebView::ActionID::UnmuteMedia:
         qaction.setIcon(load_icon_from_uri("resource://icons/16x16/audio-volume-high.png"sv));
         break;
+    case WebView::ActionID::EnterFullscreen:
+    case WebView::ActionID::ExitFullscreen: // FIXME: Create a separate icon for exiting fullscreen.
+        qaction.setIcon(load_icon_from_uri("resource://icons/16x16/fullscreen.png"sv));
+        break;
 
     case WebView::ActionID::ZoomIn: {
         qaction.setIcon(load_icon_from_uri("resource://icons/16x16/zoom-in.png"sv));

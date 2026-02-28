@@ -58,6 +58,8 @@ enum class ActionID {
     ShowControls,
     HideControls,
     ToggleMediaLoopState,
+    EnterFullscreen,
+    ExitFullscreen,
 
     ZoomIn,
     ZoomOut,

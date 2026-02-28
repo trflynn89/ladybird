@@ -358,6 +358,8 @@ protected:
     RefPtr<Action> m_media_show_controls_action;
     RefPtr<Action> m_media_hide_controls_action;
     RefPtr<Action> m_media_loop_action;
+    RefPtr<Action> m_media_enter_fullscreen_action;
+    RefPtr<Action> m_media_exit_fullscreen_action;
 
     Queue<Web::InputEvent> m_pending_input_events;
 

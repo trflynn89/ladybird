@@ -987,6 +987,12 @@ void ViewImplementation::initialize_context_menus()
     m_media_loop_action = Action::create_checkable("Loop"sv, ActionID::ToggleMediaLoopState, [this]() {
         client().async_toggle_media_loop_state(page_id());
     });
+    m_media_enter_fullscreen_action = Action::create("Full Screen"sv, ActionID::EnterFullscreen, [this]() {
+        client().async_toggle_media_fullscreen_state(page_id());
+    });
+    m_media_exit_fullscreen_action = Action::create("Exit Full Screen"sv, ActionID::ExitFullscreen, [this]() {
+        client().async_toggle_media_fullscreen_state(page_id());
+    });
 
     m_page_context_menu = Menu::create("Page Context Menu"sv);
     m_page_context_menu->add_action(*m_navigate_back_action);
@@ -1025,6 +1031,8 @@ void ViewImplementation::initialize_context_menus()
     m_media_context_menu->add_action(*m_media_show_controls_action);
     m_media_context_menu->add_action(*m_media_hide_controls_action);
     m_media_context_menu->add_action(*m_media_loop_action);
+    m_media_context_menu->add_action(*m_media_enter_fullscreen_action);
+    m_media_context_menu->add_action(*m_media_exit_fullscreen_action);
     m_media_context_menu->add_separator();
     m_media_context_menu->add_action(*m_open_audio_action);
     m_media_context_menu->add_action(*m_open_video_action);
@@ -1107,6 +1115,9 @@ void ViewImplementation::did_request_media_context_menu(Badge<WebContentClient>,
     m_media_hide_controls_action->set_visible(menu.has_user_agent_controls);
 
     m_media_loop_action->set_checked(menu.is_looping);
+
+    m_media_enter_fullscreen_action->set_visible(menu.is_video && !menu.is_fullscreen);
+    m_media_exit_fullscreen_action->set_visible(menu.is_video && menu.is_fullscreen);
 
     if (m_media_context_menu->on_activation)
         m_media_context_menu->on_activation(to_widget_position(content_position));

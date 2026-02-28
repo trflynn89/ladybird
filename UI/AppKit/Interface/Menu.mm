@@ -213,6 +213,12 @@ static void initialize_native_control(WebView::Action& action, id control)
     case WebView::ActionID::ToggleMediaLoopState:
         set_control_image(control, @"arrow.clockwise");
         break;
+    case WebView::ActionID::EnterFullscreen:
+        set_control_image(control, @"arrow.up.left.and.arrow.down.right");
+        break;
+    case WebView::ActionID::ExitFullscreen:
+        set_control_image(control, @"arrow.down.right.and.arrow.up.left");
+        break;
 
     case WebView::ActionID::ZoomIn:
         set_control_image(control, @"plus.magnifyingglass");

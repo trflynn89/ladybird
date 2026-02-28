@@ -634,6 +634,16 @@ void Page::toggle_media_loop_state()
         media_element->set_attribute_value(HTML::AttributeNames::loop, String {});
 }
 
+void Page::toggle_media_fullscreen_state()
+{
+    auto media_element = media_context_menu_element();
+    if (!media_element)
+        return;
+
+    HTML::TemporaryExecutionContext execution_context { media_element->realm() };
+    media_element->toggle_fullscreen();
+}
+
 void Page::toggle_media_controls_state()
 {
     auto media_element = media_context_menu_element();
@@ -862,6 +872,7 @@ ErrorOr<void> IPC::encode(Encoder& encoder, Web::Page::MediaContextMenu const& m
     TRY(encoder.encode(menu.is_muted));
     TRY(encoder.encode(menu.has_user_agent_controls));
     TRY(encoder.encode(menu.is_looping));
+    TRY(encoder.encode(menu.is_fullscreen));
     return {};
 }
 
@@ -875,5 +886,6 @@ ErrorOr<Web::Page::MediaContextMenu> IPC::decode(Decoder& decoder)
         .is_muted = TRY(decoder.decode<bool>()),
         .has_user_agent_controls = TRY(decoder.decode<bool>()),
         .is_looping = TRY(decoder.decode<bool>()),
+        .is_fullscreen = TRY(decoder.decode<bool>()),
     };
 }

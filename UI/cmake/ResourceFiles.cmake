@@ -20,6 +20,7 @@ set(16x16_ICONS
     filetype-sound.png
     filetype-video.png
     find.png
+    fullscreen.png
     go-forward.png
     history.png
     layers.png

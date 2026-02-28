@@ -205,11 +205,13 @@ public:
         bool is_muted { false };
         bool has_user_agent_controls { false };
         bool is_looping { false };
+        bool is_fullscreen { false };
     };
     void did_request_media_context_menu(UniqueNodeID media_id, CSSPixelPoint, ByteString const& target, unsigned modifiers, MediaContextMenu const&);
     void toggle_media_play_state();
     void toggle_media_mute_state();
     void toggle_media_loop_state();
+    void toggle_media_fullscreen_state();
     void toggle_media_controls_state();
 
     HTML::MuteState page_mute_state() const { return m_mute_state; }
