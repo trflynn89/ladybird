@@ -508,6 +508,13 @@ void MediaControls::set_up_event_listeners()
             toggle_fullscreen();
             return true;
         });
+
+        if (m_video_overlay) {
+            add_event_listener(realm, *m_video_overlay, UIEvents::EventNames::dblclick, [this] {
+                toggle_fullscreen();
+                return true;
+            });
+        }
     }
 
     // Hover detection for video controls visibility
