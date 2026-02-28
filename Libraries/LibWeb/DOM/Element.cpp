@@ -1587,7 +1587,7 @@ void Element::removed_from(Node* old_parent, Node& old_root)
     }
 
     play_or_cancel_animations_after_display_property_change();
-    removing_steps_fullscreen();
+    exit_fullscreen_on_element_removal();
 }
 
 void Element::moved_from(GC::Ptr<Node> old_parent)
@@ -2432,81 +2432,6 @@ WebIDL::ExceptionOr<void> Element::insert_adjacent_html(String const& position, 
     return {};
 }
 
-// Used to signal what message should be shown when the promise for the algorithm rejects..
-enum class RequestFullscreenError : u8 {
-    False,
-    ElementReadyCheckFailed,
-    UnsupportedElement,
-    NoTransientUserActivation,
-    ElementNodeDocIsNotPendingDoc
-};
-
-static constexpr String to_string(RequestFullscreenError error)
-{
-    switch (error) {
-    // This should never be called with this value
-    case RequestFullscreenError::False:
-        return "false"_string;
-    case RequestFullscreenError::ElementReadyCheckFailed:
-        return "Element ready check failed"_string;
-    case RequestFullscreenError::UnsupportedElement:
-        return "Not supported element"_string;
-    case RequestFullscreenError::NoTransientUserActivation:
-        return "No transient user activation available to consume"_string;
-    case RequestFullscreenError::ElementNodeDocIsNotPendingDoc:
-        return "Element's node document is not pending doc"_string;
-    }
-    VERIFY_NOT_REACHED();
-}
-
-// step 5 of requestFullscreen:
-// 5. If any of conditions are false, set error to true
-static RequestFullscreenError fullscreen_has_error_check(Element const& element)
-{
-    // This’s namespace is the HTML namespace or this is an SVG svg or MathML math element. [SVG] [MATHML]
-    // FIXME: This likely wants to use is<MathML::MathMLMathElement> instead.
-    if (!(element.namespace_uri() == Namespace::HTML || element.is_svg_svg_element() || (is<MathML::MathMLElement>(element) && element.tag_name() == MathML::TagNames::math)))
-        return RequestFullscreenError::UnsupportedElement;
-
-    // This is not a dialog element
-    if (is<HTML::HTMLDialogElement>(element))
-        return RequestFullscreenError::UnsupportedElement;
-
-    // The fullscreen element ready check for this returns true.
-    if (!element.element_ready_check())
-        return RequestFullscreenError::ElementReadyCheckFailed;
-    // FIXME: Implement 'Fullscreen is supported.' check
-
-    // This’s relevant global object has transient activation or
-    // FIXME: the algorithm is triggered by a user generated orientation change.
-    auto* window = as<HTML::Window>(&HTML::relevant_global_object(element));
-    if (!window->has_transient_activation())
-        return RequestFullscreenError::NoTransientUserActivation;
-
-    return RequestFullscreenError::False;
-}
-
-// https://fullscreen.spec.whatwg.org/#fullscreen-element-ready-check
-bool Element::element_ready_check() const
-{
-    // A fullscreen element ready check for an element element returns true if all of the following are true, and false otherwise:
-
-    // element is connected.
-    if (!is_connected())
-        return false;
-
-    // element’s node document is allowed to use the "fullscreen" feature.
-    if (!m_document->is_allowed_to_use_feature(PolicyControlledFeature::Fullscreen))
-        return false;
-
-    // element namespace is not the HTML namespace or element’s popover visibility state is hidden.
-    if (namespace_uri() != Namespace::HTML)
-        return true;
-
-    auto const* html_element = as_if<HTML::HTMLElement>(this);
-    return html_element ? (html_element->popover_visibility_state() == HTML::HTMLElement::PopoverVisibilityState::Hidden) : false;
-}
-
 // https://fullscreen.spec.whatwg.org/#dom-element-requestfullscreen
 GC::Ref<WebIDL::Promise> Element::request_fullscreen()
 {
@@ -2526,7 +2451,7 @@ GC::Ref<WebIDL::Promise> Element::request_fullscreen()
 
     // 4. Let error be false.
     // 5. If any of conditions are false, set error to true
-    auto error = fullscreen_has_error_check(*this);
+    auto error = is_element_allowed_to_enter_fullscreen();
 
     // 6. If error is false, then consume user activation given pendingDoc’s relevant global object.
     if (error == RequestFullscreenError::False) {
@@ -2537,27 +2462,29 @@ GC::Ref<WebIDL::Promise> Element::request_fullscreen()
     // 7. Return promise, and run the remaining steps in parallel.
     Platform::EventLoopPlugin::the().deferred_invoke(GC::create_function(heap(), [&realm, error, pending_doc, requesting_element = GC::Ref { *this }, promise]() mutable {
         HTML::TemporaryExecutionContext context(realm, HTML::TemporaryExecutionContext::CallbacksEnabled::Yes);
-        // N.B: Fullscreen API is affected by site-isolation and will require additional work once site-isolation is implemented.
+        // NB: Fullscreen API is affected by site-isolation and will require additional work once site-isolation is implemented.
 
-        // 8. If error is false, then resize pendingDoc’s node navigable’s top-level traversable’s
-        // active document’s viewport’s dimensions FIXME: optionally taking into account options["navigationUI"]:
+        // 8. If error is false, then resize pendingDoc’s node navigable’s top-level traversable’s active document’s
+        //    viewport’s dimensions FIXME: optionally taking into account options["navigationUI"]:
         if (error == RequestFullscreenError::False)
             pending_doc->page().client().page_did_request_fullscreen_window();
 
         // 9. If any of the following conditions are false, then set error to true:
-        //      This’s node document is pendingDoc.
-        //      The fullscreen element ready check for this returns true.
+        //    * This’s node document is pendingDoc.
+        //    * The fullscreen element ready check for this returns true.
         if (pending_doc != requesting_element->owner_document())
             error = RequestFullscreenError::ElementNodeDocIsNotPendingDoc;
-        if (!requesting_element->element_ready_check())
+        if (!requesting_element->is_element_ready_for_fullscreen())
             error = RequestFullscreenError::ElementReadyCheckFailed;
 
         // 10. If error is true:
-        //      Append (fullscreenerror, this) to pendingDoc’s list of pending fullscreen events.
-        //      Reject promise with a TypeError exception and terminate these steps.
         if (error != RequestFullscreenError::False) {
+            // 1. Append (fullscreenerror, this) to pendingDoc’s list of pending fullscreen events.
             pending_doc->append_pending_fullscreen_change(PendingFullscreenEvent::Type::Error, requesting_element);
-            WebIDL::reject_promise(realm, promise, JS::TypeError::create(realm, to_string(error)));
+
+            // 2. Reject promise with a TypeError exception and terminate these steps.
+            WebIDL::reject_promise(realm, promise, JS::TypeError::create(realm, request_fullscreen_error_to_string(error)));
+
             return;
         }
 
@@ -2588,7 +2515,7 @@ GC::Ref<WebIDL::Promise> Element::request_fullscreen()
 
             // 2. If element is doc’s fullscreen element, continue.
             if (doc.fullscreen_element() == element) {
-                // Spec note: No need to notify observers when nothing has changed.
+                // Note: No need to notify observers when nothing has changed.
                 continue;
             }
 
@@ -2613,12 +2540,13 @@ GC::Ref<WebIDL::Promise> Element::request_fullscreen()
 }
 
 // https://fullscreen.spec.whatwg.org/#removing-steps
-void Element::removing_steps_fullscreen()
+void Element::exit_fullscreen_on_element_removal()
 {
     // 1. Let document be removedNode’s node document.
     auto& document = this->document();
 
-    // 2. Let nodes be removedNode’s shadow-including inclusive descendants that have their fullscreen flag set, in shadow-including tree order.
+    // 2. Let nodes be removedNode’s shadow-including inclusive descendants that have their fullscreen flag set, in
+    //    shadow-including tree order.
     // 3. For each node in nodes:
     for_each_shadow_including_inclusive_descendant([&](Node& node) {
         auto* element = as_if<Element>(node);
@@ -2628,13 +2556,12 @@ void Element::removing_steps_fullscreen()
         if (!element->is_fullscreen_element())
             return TraversalDecision::Continue;
 
-        if (document.fullscreen_element() == element) {
-            // 1. If node is document’s fullscreen element, exit fullscreen document.
+        // 1. If node is document’s fullscreen element, exit fullscreen document.
+        if (document.fullscreen_element() == element)
             document.exit_fullscreen();
-        } else {
-            // 2. Otherwise, unfullscreen node.
+        // 2. Otherwise, unfullscreen node.
+        else
             document.unfullscreen_element(*element);
-        }
 
         // 3. If document’s top layer contains node, remove from the top layer immediately given node
         if (element->in_top_layer())
@@ -2642,6 +2569,73 @@ void Element::removing_steps_fullscreen()
 
         return TraversalDecision::Continue;
     });
+}
+
+Utf16String Element::request_fullscreen_error_to_string(RequestFullscreenError error)
+{
+    switch (error) {
+    case RequestFullscreenError::False:
+        break;
+    case RequestFullscreenError::ElementReadyCheckFailed:
+        return "Element ready check failed"_utf16;
+    case RequestFullscreenError::UnsupportedElement:
+        return "Not supported element"_utf16;
+    case RequestFullscreenError::NoTransientUserActivation:
+        return "No transient user activation available to consume"_utf16;
+    case RequestFullscreenError::ElementNodeDocIsNotPendingDoc:
+        return "Element's node document is not pending doc"_utf16;
+    }
+    VERIFY_NOT_REACHED();
+}
+
+// https://fullscreen.spec.whatwg.org/#dom-element-requestfullscreen
+// 5. If any of conditions are false, set error to true
+Element::RequestFullscreenError Element::is_element_allowed_to_enter_fullscreen() const
+{
+    // * This’s namespace is the HTML namespace or this is an SVG svg or MathML math element. [SVG] [MATHML]
+    // FIXME: This likely wants to use is<MathML::MathMLMathElement> instead.
+    if (!(namespace_uri() == Namespace::HTML || is_svg_svg_element() || (is<MathML::MathMLElement>(*this) && tag_name() == MathML::TagNames::math)))
+        return RequestFullscreenError::UnsupportedElement;
+
+    // * This is not a dialog element
+    if (is<HTML::HTMLDialogElement>(*this))
+        return RequestFullscreenError::UnsupportedElement;
+
+    // * The fullscreen element ready check for this returns true.
+    if (!is_element_ready_for_fullscreen())
+        return RequestFullscreenError::ElementReadyCheckFailed;
+
+    // FIXME: * Fullscreen is supported.
+
+    // * This’s relevant global object has transient activation or the algorithm is triggered by a user generated
+    //   orientation change.
+    // FIXME: Handle user generated orientation changes.
+    auto* window = as<HTML::Window>(&HTML::relevant_global_object(*this));
+    if (!window->has_transient_activation())
+        return RequestFullscreenError::NoTransientUserActivation;
+
+    return RequestFullscreenError::False;
+}
+
+// https://fullscreen.spec.whatwg.org/#fullscreen-element-ready-check
+bool Element::is_element_ready_for_fullscreen() const
+{
+    // A fullscreen element ready check for an element element returns true if all of the following are true, and false otherwise:
+
+    // * element is connected.
+    if (!is_connected())
+        return false;
+
+    // * element’s node document is allowed to use the "fullscreen" feature.
+    if (!m_document->is_allowed_to_use_feature(PolicyControlledFeature::Fullscreen))
+        return false;
+
+    // * element namespace is not the HTML namespace or element’s popover visibility state is hidden.
+    if (namespace_uri() != Namespace::HTML)
+        return true;
+
+    auto const* html_element = as_if<HTML::HTMLElement>(this);
+    return html_element ? (html_element->popover_visibility_state() == HTML::HTMLElement::PopoverVisibilityState::Hidden) : false;
 }
 
 GC::Ptr<WebIDL::CallbackType> Element::onfullscreenchange()

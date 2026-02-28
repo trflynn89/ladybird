@@ -49,11 +49,9 @@ GC::Ptr<Element> ShadowRoot::fullscreen_element_for_bindings() const
         return nullptr;
 
     // 2. Let candidate be the result of retargeting fullscreen element against this.
-    // Note: ShadowRoot does not have it's own top layer. But the algorithm says to get the fullscreen
-    // element from the top layer, so it's grabbed from this' document.
-
-    auto* candidate = retarget(const_cast<ShadowRoot*>(this)->document().fullscreen_element().ptr(), const_cast<ShadowRoot*>(this));
-
+    // NB: ShadowRoot does not have it's own top layer. But the algorithm says to get the fullscreen element from the
+    //     top layer, so it's grabbed from this' document.
+    auto* candidate = retarget(document().fullscreen_element(), const_cast<ShadowRoot*>(this));
     if (!candidate)
         return nullptr;
 

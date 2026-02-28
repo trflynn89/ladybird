@@ -265,9 +265,7 @@ public:
 
     WebIDL::ExceptionOr<void> insert_adjacent_html(String const& position, TrustedTypes::TrustedHTMLOrString const&);
 
-    bool element_ready_check() const;
     GC::Ref<WebIDL::Promise> request_fullscreen();
-    void removing_steps_fullscreen();
 
     void set_fullscreen_flag(bool is_fullscreen) { m_fullscreen_flag = is_fullscreen; }
     bool is_fullscreen_element() const { return m_fullscreen_flag; }
@@ -586,6 +584,19 @@ private:
     FlyString make_html_uppercased_qualified_name() const;
 
     void invalidate_style_after_attribute_change(FlyString const& attribute_name, Optional<String> const& old_value, Optional<String> const& new_value);
+
+    enum class RequestFullscreenError : u8 {
+        False,
+        ElementReadyCheckFailed,
+        UnsupportedElement,
+        NoTransientUserActivation,
+        ElementNodeDocIsNotPendingDoc
+    };
+    static Utf16String request_fullscreen_error_to_string(RequestFullscreenError);
+
+    void exit_fullscreen_on_element_removal();
+    RequestFullscreenError is_element_allowed_to_enter_fullscreen() const;
+    bool is_element_ready_for_fullscreen() const;
 
     WebIDL::ExceptionOr<GC::Ptr<Node>> insert_adjacent(StringView where, GC::Ref<Node> node);
 
