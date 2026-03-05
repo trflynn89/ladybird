@@ -42,4 +42,22 @@ struct CalendarDate {
     bool in_leap_year { false };
 };
 
+constexpr inline auto HEBREW_ADAR_I_MONTH_CODE = "M05L"sv;
+constexpr inline auto HEBREW_ADAR_I_MONTH_NUMBER = 5u;
+
+CalendarDate calendar_date_from_iso(String const& calendar, ISODate);
+Optional<ISODate> iso_date_from_calendar(String const& calendar, i32 year, u8 month, u8 day);
+bool calendar_supports_era(String const& calendar);
+u8 calendar_months_in_year(String const& calendar, i32 arithmetic_year);
+u8 calendar_days_in_month(String const& calendar, i32 arithmetic_year, u8 ordinal_month);
+
+// For Chinese/Dangi: get the month number and leap flag for a given ordinal month in a year.
+// Returns (month_number, is_leap). E.g., for ordinal 5 in a year with leap month 4:
+// ordinals 1-4 → (1-4, false), ordinal 5 → (4, true), ordinals 6-13 → (5-12, false).
+struct OrdinalMonthInfo {
+    u8 month_number { 0 };
+    bool is_leap { false };
+};
+Optional<OrdinalMonthInfo> chinese_ordinal_month_info(String const& calendar, i32 arithmetic_year, u8 ordinal_month);
+
 }
