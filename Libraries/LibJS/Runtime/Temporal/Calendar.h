@@ -2,7 +2,7 @@
  * Copyright (c) 2021, Idan Horowitz <idan.horowitz@serenityos.org>
  * Copyright (c) 2021-2023, Linus Groh <linusg@serenityos.org>
  * Copyright (c) 2023-2024, Shannon Booth <shannon@serenityos.org>
- * Copyright (c) 2024-2025, Tim Flynn <trflynn89@ladybird.org>
+ * Copyright (c) 2024-2026, Tim Flynn <trflynn89@ladybird.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -15,6 +15,7 @@
 #include <LibJS/Forward.h>
 #include <LibJS/Runtime/Completion.h>
 #include <LibJS/Runtime/Temporal/AbstractOperations.h>
+#include <LibUnicode/Calendar.h>
 
 namespace JS::Temporal {
 
@@ -27,22 +28,10 @@ struct MonthCode {
 };
 
 // 12.3.1 Calendar Date Records, https://tc39.es/proposal-temporal/#sec-temporal-calendar-date-records
-struct CalendarDate {
-    Optional<String> era;
-    Optional<i32> era_year;
-    i32 year { 0 };
-    u8 month { 0 };
-    String month_code;
-    u8 day { 0 };
-    u8 day_of_week { 0 };
-    u16 day_of_year { 0 };
-    YearWeek week_of_year;
-    u8 days_in_week { 0 };
-    u8 days_in_month { 0 };
-    u16 days_in_year { 0 };
-    u8 months_in_year { 0 };
-    bool in_leap_year { false };
-};
+using CalendarDate = Unicode::CalendarDate;
+
+// 14.3 The Year-Week Record Specification Type, https://tc39.es/proposal-temporal/#sec-year-week-record-specification-type
+using YearWeek = Unicode::YearWeek;
 
 // https://tc39.es/proposal-temporal/#table-temporal-calendar-fields-record-fields
 enum class CalendarField {
