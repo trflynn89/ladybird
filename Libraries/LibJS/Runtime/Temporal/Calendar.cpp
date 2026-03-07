@@ -1215,277 +1215,225 @@ ThrowCompletionOr<ISODate> calendar_date_to_iso(VM& vm, String const& calendar, 
 // didn't occur during that ISO 8601 year. For example, Hebrew calendar leap month Adar I occurred in calendar years
 // 5730 and 5733 (respectively overlapping ISO 8601 February/March 1970 and February/March 1973), but did not occur between
 // them, so the reference year for days of that month is 1970.
+// Maximum number of days in the month described by monthCode in any year (for non-Chinese/Dangi calendars).
+static u8 max_days_in_month_code(String const& calendar, StringView month_code)
+{
+    u8 max_days = 0;
+
+    // Check several years to cover common and leap year patterns for all calendar types.
+    for (i32 iso_year = 1960; iso_year <= 1972; ++iso_year) {
+        auto cal_date = non_iso_calendar_iso_to_date(calendar, { iso_year, 7, 1 });
+        for (i32 cal_year = cal_date.year; cal_year <= cal_date.year + 1; ++cal_year) {
+            if (!year_contains_month_code(calendar, cal_year, month_code))
+                continue;
+            auto ordinal = month_code_to_ordinal(calendar, cal_year, month_code);
+            auto dim = calendar_days_in_month(calendar, cal_year, ordinal);
+            if (dim > max_days)
+                max_days = dim;
+        }
+    }
+
+    return max_days;
+}
+
+// Find the latest ISO date in a specific reference ISO year where
+// NonISOCalendarISOToDate returns a record with the given monthCode and day.
+static Optional<ISODate> find_latest_iso_date_in_reference_year(String const& calendar, i32 reference_year, StringView month_code, u8 day)
+{
+    auto jan1 = non_iso_calendar_iso_to_date(calendar, { reference_year, 1, 1 });
+    auto dec31 = non_iso_calendar_iso_to_date(calendar, { reference_year, 12, 31 });
+
+    Optional<ISODate> best;
+
+    for (i32 cal_year = jan1.year; cal_year <= dec31.year; ++cal_year) {
+        if (!year_contains_month_code(calendar, cal_year, month_code))
+            continue;
+        auto ordinal = month_code_to_ordinal(calendar, cal_year, month_code);
+        auto max_day = calendar_days_in_month(calendar, cal_year, ordinal);
+        if (day > max_day)
+            continue;
+        auto iso = Unicode::iso_date_from_calendar(calendar, cal_year, ordinal, day);
+        if (!iso.has_value() || iso->year != reference_year)
+            continue;
+        auto verify = non_iso_calendar_iso_to_date(calendar, create_iso_date_record(iso->year, iso->month, iso->day));
+        if (verify.month_code != month_code || verify.day != day)
+            continue;
+        if (!best.has_value() || iso->month > best->month || (iso->month == best->month && iso->day > best->day))
+            best = create_iso_date_record(iso->year, iso->month, iso->day);
+    }
+
+    return best;
+}
+
+// Find the reference ISO date for non-Chinese/Dangi calendars by searching for the latest
+// ISO date in [1900, 1972] where monthCode+day exists, or the earliest in [1973, 2035].
+static Optional<ISODate> find_non_chinese_reference_date(String const& calendar, StringView month_code, u8 day)
+{
+    // First pass: search 1972 down to 1900 for the latest match.
+    for (i32 iso_year = 1972; iso_year >= 1900; --iso_year) {
+        auto result = find_latest_iso_date_in_reference_year(calendar, iso_year, month_code, day);
+        if (result.has_value())
+            return result;
+    }
+
+    // Second pass: search 1973 to 2035 for the earliest match.
+    for (i32 iso_year = 1973; iso_year <= 2035; ++iso_year) {
+        auto jan1 = non_iso_calendar_iso_to_date(calendar, { iso_year, 1, 1 });
+        auto dec31 = non_iso_calendar_iso_to_date(calendar, { iso_year, 12, 31 });
+        for (i32 cal_year = jan1.year; cal_year <= dec31.year; ++cal_year) {
+            if (!year_contains_month_code(calendar, cal_year, month_code))
+                continue;
+            auto ordinal = month_code_to_ordinal(calendar, cal_year, month_code);
+            auto max_day = calendar_days_in_month(calendar, cal_year, ordinal);
+            if (day > max_day)
+                continue;
+            auto iso = Unicode::iso_date_from_calendar(calendar, cal_year, ordinal, day);
+            if (!iso.has_value() || iso->year < 1973 || iso->year > 2035)
+                continue;
+            auto verify = non_iso_calendar_iso_to_date(calendar, create_iso_date_record(iso->year, iso->month, iso->day));
+            if (verify.month_code != month_code || verify.day != day)
+                continue;
+            return create_iso_date_record(iso->year, iso->month, iso->day);
+        }
+    }
+
+    return {};
+}
+
 ThrowCompletionOr<ISODate> non_iso_month_day_to_iso_reference_date(VM& vm, String const& calendar, CalendarFields const& fields, Overflow overflow)
 {
     // 1. Assert: fields.[[Day]] is not UNSET.
-    // 2. If fields.[[Year]] is not UNSET, then
-    //     a. Assert: fields.[[Month]] is not UNSET.
-    //     b. If there exists no combination of inputs such that ! CalendarIntegersToISO(calendar, fields.[[Year]], ..., ...)
-    //        would return an ISO Date Record isoDate for which ISODateWithinLimits(isoDate) is true, throw a RangeError exception.
-    //     c. NOTE: The above step exists so as not to require calculating whether the month and day described in fields
-    //        exist in user-provided years arbitrarily far in the future or past.
-    //     d. Let monthsInYear be CalendarMonthsInYear(calendar, fields.[[Year]]).
-    //     e. If fields.[[Month]] > monthsInYear, then
-    //         i. If overflow is REJECT, throw a RangeError exception.
-    //         ii. Let month be monthsInYear.
-    //     f. Else,
-    //         i. Let month be fields.[[Month]].
-    //     g. If fields.[[MonthCode]] is UNSET, then
-    //         i. Let fieldsISODate be ! CalendarIntegersToISO(calendar, fields.[[Year]], month, 1).
-    //         ii. Let monthCode be NonISOCalendarISOToDate(calendar, fieldsISODate).[[MonthCode]].
-    //     h. Else,
-    //         i. Let monthCode be ? ConstrainMonthCode(calendar, fields.[[Year]], fields.[[MonthCode]], overflow).
-    //     i. Let daysInMonth be CalendarDaysInMonth(calendar, fields.[[Year]], month).
-    // 3. Else,
-    //     a. Assert: fields.[[MonthCode]] is not UNSET.
-    //     b. Let monthCode be fields.[[MonthCode]].
-    //     c. If calendar is "chinese" or "dangi", let daysInMonth be 30; else, let daysInMonth be the maximum number of
-    //        days in the month described by monthCode in any year.
-    // 4. If fields.[[Day]] > daysInMonth, then
-    //     a. If overflow is REJECT, throw a RangeError exception.
-    //     b. Let day be daysInMonth.
-    // 5. Else,
-    //     a. Let day be fields.[[Day]].
-    // 6. If calendar is "chinese" or "dangi", then
-    //     a. NOTE: This special case handles combinations of month and day that theoretically could occur but are not
-    //        known to have occurred historically and cannot be accurately calculated to occur in the future, even if it
-    //        may be possible to construct a PlainDate with such combinations due to inaccurate approximations. This is
-    //        explicitly mentioned here because as time goes on, these dates may become known to have occurred
-    //        historically, or may be more accurately calculated to occur in the future.
-    //     b. Let row be the row in Table 6 with a value in the "Month Code" column matching monthCode.
-    //     c. If the "Reference Year (Days 1-29)" column of row is "—", or day = 30 and the "Reference Year (Day 30)" column of row is "—", then
-    //         i. If overflow is REJECT, throw a RangeError exception.
-    //         ii. Set monthCode to CreateMonthCode(! ParseMonthCode(monthCode).[[MonthNumber]], false).
-    // 7. Let referenceYear be the ISO reference year for monthCode and day as described above. If calendar is "chinese"
-    //    or "dangi", the reference years in Table 6 are to be used.
-    // 8. Return the latest possible ISO Date Record isoDate such that isoDate.[[Year]] = referenceYear and
-    //    NonISOCalendarISOToDate(calendar, isoDate) returns a Calendar Date Record whose [[MonthCode]] and [[Day]]
-    //    field values respectively equal monthCode and day.
-
-    // 1. Assert: fields.[[Day]] is not UNSET.
     VERIFY(fields.day.has_value());
 
-    // 2. Assert: fields.[[MonthCode]] is not UNSET, or both fields.[[Month]] and fields.[[Year]] are not UNSET.
-    VERIFY(fields.month_code.has_value() || (fields.month.has_value() && fields.year.has_value()));
+    Optional<String> month_code;
+    u8 day;
+    u8 days_in_month;
 
-    auto month_code = fields.month_code;
-    auto day = static_cast<u8>(*fields.day);
-
+    // 2. If fields.[[Year]] is not UNSET, then
     if (fields.year.has_value()) {
-        if (month_code.has_value()) {
-            auto constrained = TRY(constrain_month_code(vm, calendar, *fields.year, *month_code, overflow));
-            month_code = String::from_utf8_without_validation(constrained.bytes());
-        }
+        // a. Assert: fields.[[Month]] is not UNSET.
+        VERIFY(fields.month.has_value());
 
-        // Constrain or reject month if out of range.
-        u8 ordinal;
-        if (fields.month.has_value() && !month_code.has_value()) {
-            auto months_in_year = calendar_months_in_year(calendar, *fields.year);
-            if (*fields.month > months_in_year) {
-                if (overflow == Overflow::Reject)
-                    return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidCalendarFieldName, "month"sv);
-                ordinal = months_in_year;
-            } else {
-                ordinal = static_cast<u8>(*fields.month);
-            }
-        } else if (fields.month.has_value()) {
-            ordinal = static_cast<u8>(*fields.month);
-        } else {
-            ordinal = month_code_to_ordinal(calendar, *fields.year, *month_code);
-        }
+        // b. If there exists no combination of inputs such that ! CalendarIntegersToISO(calendar, fields.[[Year]], ..., ...)
+        //    would return an ISO Date Record isoDate for which ISODateWithinLimits(isoDate) is true, throw a RangeError exception.
+        auto test_iso = Unicode::iso_date_from_calendar(calendar, *fields.year, 1, 1);
+        if (!test_iso.has_value() || !iso_date_within_limits(create_iso_date_record(test_iso->year, test_iso->month, test_iso->day)))
+            return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidISODate);
 
-        // Constrain day to the month's maximum in the given year.
-        auto days_in_month = calendar_days_in_month(calendar, *fields.year, ordinal);
-        if (day > days_in_month) {
+        // d. Let monthsInYear be CalendarMonthsInYear(calendar, fields.[[Year]]).
+        auto months_in_year = calendar_months_in_year(calendar, *fields.year);
+
+        // e. If fields.[[Month]] > monthsInYear, then
+        u8 month;
+        if (*fields.month > months_in_year) {
+            // i. If overflow is REJECT, throw a RangeError exception.
             if (overflow == Overflow::Reject)
-                return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidCalendarFieldName, "day"sv);
-            day = days_in_month;
+                return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidCalendarFieldName, "month"sv);
+            // ii. Let month be monthsInYear.
+            month = months_in_year;
+        }
+        // f. Else,
+        else {
+            // i. Let month be fields.[[Month]].
+            month = static_cast<u8>(*fields.month);
         }
 
-        if (!month_code.has_value()) {
-            // Derive month code from year + ordinal month. Use day=1 to avoid ICU resolving
-            // an out-of-range day to the next month.
-            auto iso = Unicode::iso_date_from_calendar(calendar, *fields.year, ordinal, 1);
-            if (!iso.has_value())
-                return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidISODate);
-            auto cal_date = Unicode::calendar_date_from_iso(calendar, *iso);
-            month_code = move(cal_date.month_code);
+        // g. If fields.[[MonthCode]] is UNSET, then
+        if (!fields.month_code.has_value()) {
+            // i. Let fieldsISODate be ! CalendarIntegersToISO(calendar, fields.[[Year]], month, 1).
+            auto fields_iso_date = MUST(calendar_integers_to_iso(vm, calendar, *fields.year, month, 1));
+
+            // ii. Let monthCode be NonISOCalendarISOToDate(calendar, fieldsISODate).[[MonthCode]].
+            month_code = non_iso_calendar_iso_to_date(calendar, fields_iso_date).month_code;
         }
+        // h. Else,
+        else {
+            // i. Let monthCode be ? ConstrainMonthCode(calendar, fields.[[Year]], fields.[[MonthCode]], overflow).
+            auto constrained = TRY(constrain_month_code(vm, calendar, *fields.year, *fields.month_code, overflow));
+            month_code = MUST(String::from_utf8(constrained));
+        }
+
+        // i. Let daysInMonth be CalendarDaysInMonth(calendar, fields.[[Year]], month).
+        days_in_month = calendar_days_in_month(calendar, *fields.year, month);
     }
-    // When no year is given, don't constrain day — the reference year search will find a year
-    // where this month code + day combination exists.
+    // 3. Else,
+    else {
+        // a. Assert: fields.[[MonthCode]] is not UNSET.
+        VERIFY(fields.month_code.has_value());
+
+        // b. Let monthCode be fields.[[MonthCode]].
+        month_code = *fields.month_code;
+
+        // c. If calendar is "chinese" or "dangi", let daysInMonth be 30; else, let daysInMonth be the maximum number
+        //    of days in the month described by monthCode in any year.
+        if (calendar.is_one_of("chinese"sv, "dangi"sv))
+            days_in_month = 30;
+        else
+            days_in_month = max_days_in_month_code(calendar, month_code->bytes_as_string_view());
+    }
 
     VERIFY(month_code.has_value());
 
-    // Find the reference year: the latest ISO year such that the date falls between
-    // January 1, 1900 and December 31, 1972, or if no such date exists, the earliest
-    // ISO year such that the date falls between January 1, 1973 and December 31, 2035.
+    // 4. If fields.[[Day]] > daysInMonth, then
+    if (*fields.day > days_in_month) {
+        // a. If overflow is REJECT, throw a RangeError exception.
+        if (overflow == Overflow::Reject)
+            return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidCalendarFieldName, "day"sv);
+        // b. Let day be daysInMonth.
+        day = days_in_month;
+    }
+    // 5. Else,
+    else {
+        // a. Let day be fields.[[Day]].
+        day = static_cast<u8>(*fields.day);
+    }
+
     auto month_code_view = month_code->bytes_as_string_view();
 
-    Optional<ISODate> best_result;
-
-    // For constrain mode: track max days across all years for the target month code
-    // and (for leap codes) the non-leap variant, to avoid extra loops later.
-    bool is_leap_code = month_code_view.length() == 4 && month_code_view[3] == 'L'
-        && calendar.is_one_of("chinese"sv, "dangi"sv);
-    auto non_leap_view = is_leap_code ? month_code_view.substring_view(0, 3) : StringView {};
-    u8 max_day_for_code = 0;
-    u8 max_day_for_non_leap = 0;
-
-    // Helper: try a single calendar year for a match, updating max_day tracking.
-    // Returns true if a match was found.
-    auto try_calendar_year = [&](i32 cal_year, i32 iso_min, i32 iso_max) -> bool {
-        bool code_exists = year_contains_month_code(calendar, cal_year, month_code_view);
-
-        if (code_exists) {
-            auto ordinal = month_code_to_ordinal(calendar, cal_year, month_code_view);
-            auto dim = calendar_days_in_month(calendar, cal_year, ordinal);
-            if (dim > max_day_for_code)
-                max_day_for_code = dim;
-
-            if (day <= dim) {
-                auto iso = Unicode::iso_date_from_calendar(calendar, cal_year, ordinal, day);
-                if (iso.has_value() && iso->year >= iso_min && iso->year <= iso_max) {
-                    auto verify = Unicode::calendar_date_from_iso(calendar, *iso);
-                    if (verify.month_code == month_code_view && verify.day == day) {
-                        best_result = create_iso_date_record(iso->year, iso->month, iso->day);
-                        return true;
-                    }
-                }
-            }
-        }
-
-        // Track non-leap variant max day alongside.
-        if (is_leap_code) {
-            auto nl_ordinal = month_code_to_ordinal(calendar, cal_year, non_leap_view);
-            auto nl_dim = calendar_days_in_month(calendar, cal_year, nl_ordinal);
-            if (nl_dim > max_day_for_non_leap)
-                max_day_for_non_leap = nl_dim;
-        }
-
-        return false;
-    };
-
-    // For Chinese/Dangi, iterate arithmetic (calendar) years directly — avoids expensive
-    // ISO→calendar boundary conversions. Arithmetic year ≈ ISO year for Chinese/Dangi.
-    // Pad the range by 1 year on each side to account for Chinese New Year offset.
+    // 6. If calendar is "chinese" or "dangi", then
     if (calendar.is_one_of("chinese"sv, "dangi"sv)) {
-        // First pass: Search calendar years covering ISO 1900-1972 (latest match wins).
-        for (i32 cal_year = 1972; cal_year >= 1899; --cal_year) {
-            if (try_calendar_year(cal_year, 1900, 1972))
-                break;
+        // b. Let row be the row in Table 6 with a value in the "Month Code" column matching monthCode.
+        auto row = find_value(CHINESE_AND_DANGI_ISO_REFERENCE_YEARS, [&](auto const& row) { return row.month_code == month_code_view; });
+        VERIFY(row.has_value());
+
+        // c. If the "Reference Year (Days 1-29)" column of row is "—", or day = 30 and the
+        //    "Reference Year (Day 30)" column of row is "—", then
+        if (!row->days_1_to_29.has_value() || (day == 30 && !row->day_30.has_value())) {
+            // i. If overflow is REJECT, throw a RangeError exception.
+            if (overflow == Overflow::Reject)
+                return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidCalendarFieldName, "monthCode"sv);
+
+            // ii. Set monthCode to CreateMonthCode(! ParseMonthCode(monthCode).[[MonthNumber]], false).
+            auto parsed = parse_month_code(month_code_view);
+            month_code = create_month_code(parsed.month_number, false);
+            month_code_view = month_code->bytes_as_string_view();
         }
 
-        if (!best_result.has_value()) {
-            // Second pass: Search calendar years covering ISO 1973-2035 (earliest match wins).
-            for (i32 cal_year = 1973; cal_year <= 2036; ++cal_year) {
-                if (try_calendar_year(cal_year, 1973, 2035))
-                    break;
-            }
-        }
-    } else {
-        // For non-Chinese/Dangi calendars, iterate ISO years and convert boundaries.
-        // First pass: 1972 down to 1900.
-        for (i32 iso_year = 1972; iso_year >= 1900; --iso_year) {
-            auto jan1 = Unicode::calendar_date_from_iso(calendar, { iso_year, 1, 1 });
-            auto dec31 = Unicode::calendar_date_from_iso(calendar, { iso_year, 12, 31 });
+        // 7. Let referenceYear be the ISO reference year for monthCode and day as described above. If calendar is
+        //    "chinese" or "dangi", the reference years in Table 6 are to be used.
+        auto reference_year = chinese_or_dangi_reference_year(calendar, month_code_view, day);
+        if (!reference_year.has_value())
+            return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidISODate);
 
-            for (i32 cal_year = jan1.year; cal_year <= dec31.year; ++cal_year) {
-                if (try_calendar_year(cal_year, 1900, 1972)) {
-                    // For backward pass, keep looking within this ISO year for a later date.
-                }
-            }
+        // 8. Return the latest possible ISO Date Record isoDate such that isoDate.[[Year]] = referenceYear and
+        //    NonISOCalendarISOToDate(calendar, isoDate) returns a Calendar Date Record whose [[MonthCode]] and
+        //    [[Day]] field values respectively equal monthCode and day.
+        auto result = find_latest_iso_date_in_reference_year(calendar, *reference_year, month_code_view, day);
+        if (!result.has_value())
+            return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidISODate);
 
-            if (best_result.has_value())
-                break;
-        }
-
-        if (!best_result.has_value()) {
-            // Second pass: 1973 to 2035.
-            for (i32 iso_year = 1973; iso_year <= 2035; ++iso_year) {
-                auto jan1 = Unicode::calendar_date_from_iso(calendar, { iso_year, 1, 1 });
-                auto dec31 = Unicode::calendar_date_from_iso(calendar, { iso_year, 12, 31 });
-
-                bool found = false;
-                for (i32 cal_year = jan1.year; cal_year <= dec31.year; ++cal_year) {
-                    if (try_calendar_year(cal_year, 1973, 2035)) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (found)
-                    break;
-            }
-        }
+        return *result;
     }
 
-    // Constrain if no exact match found.
-    if (!best_result.has_value() && overflow == Overflow::Constrain && !fields.year.has_value()) {
-        // For leap month codes, decide whether to switch to the non-leap variant.
-        if (is_leap_code && max_day_for_code < day) {
-            u8 leap_constrained = max_day_for_code;
-            u8 non_leap_constrained = day <= max_day_for_non_leap ? day : max_day_for_non_leap;
-
-            if (non_leap_constrained > leap_constrained) {
-                month_code = MUST(String::from_utf8(non_leap_view));
-                month_code_view = month_code->bytes_as_string_view();
-                max_day_for_code = max_day_for_non_leap;
-            }
-        }
-
-        // Constrain day if needed.
-        if (max_day_for_code > 0 && max_day_for_code < day)
-            day = max_day_for_code;
-
-        // Redo the search with constrained month code and/or day.
-        if (calendar.is_one_of("chinese"sv, "dangi"sv)) {
-            for (i32 cal_year = 1972; cal_year >= 1899; --cal_year) {
-                if (!year_contains_month_code(calendar, cal_year, month_code_view))
-                    continue;
-                auto ordinal = month_code_to_ordinal(calendar, cal_year, month_code_view);
-                auto dim = calendar_days_in_month(calendar, cal_year, ordinal);
-                if (day > dim)
-                    continue;
-                auto iso = Unicode::iso_date_from_calendar(calendar, cal_year, ordinal, day);
-                if (!iso.has_value() || iso->year < 1900 || iso->year > 1972)
-                    continue;
-                auto verify = Unicode::calendar_date_from_iso(calendar, *iso);
-                if (verify.month_code != month_code_view || verify.day != day)
-                    continue;
-                best_result = create_iso_date_record(iso->year, iso->month, iso->day);
-                break;
-            }
-        } else {
-            for (i32 iso_year = 1972; iso_year >= 1900; --iso_year) {
-                auto jan1 = Unicode::calendar_date_from_iso(calendar, { iso_year, 1, 1 });
-                auto dec31 = Unicode::calendar_date_from_iso(calendar, { iso_year, 12, 31 });
-                for (i32 cal_year = jan1.year; cal_year <= dec31.year; ++cal_year) {
-                    if (!year_contains_month_code(calendar, cal_year, month_code_view))
-                        continue;
-                    auto ordinal = month_code_to_ordinal(calendar, cal_year, month_code_view);
-                    auto dim = calendar_days_in_month(calendar, cal_year, ordinal);
-                    if (day > dim)
-                        continue;
-                    auto iso = Unicode::iso_date_from_calendar(calendar, cal_year, ordinal, day);
-                    if (!iso.has_value() || iso->year < 1900 || iso->year > 1972)
-                        continue;
-                    auto verify = Unicode::calendar_date_from_iso(calendar, *iso);
-                    if (verify.month_code != month_code_view || verify.day != day)
-                        continue;
-                    if (!best_result.has_value() || iso->year > best_result->year || (iso->year == best_result->year && (iso->month > best_result->month || (iso->month == best_result->month && iso->day > best_result->day)))) {
-                        best_result = create_iso_date_record(iso->year, iso->month, iso->day);
-                    }
-                }
-                if (best_result.has_value())
-                    break;
-            }
-        }
-    }
-
-    if (!best_result.has_value())
+    // 7. Let referenceYear be the ISO reference year for monthCode and day as described above.
+    // 8. Return the latest possible ISO Date Record isoDate such that isoDate.[[Year]] = referenceYear and
+    //    NonISOCalendarISOToDate(calendar, isoDate) returns a Calendar Date Record whose [[MonthCode]] and
+    //    [[Day]] field values respectively equal monthCode and day.
+    auto result = find_non_chinese_reference_date(calendar, month_code_view, day);
+    if (!result.has_value())
         return vm.throw_completion<RangeError>(ErrorType::TemporalInvalidISODate);
 
-    return *best_result;
+    return *result;
 }
 
 // 12.3.24 CalendarMonthDayToISOReferenceDate ( calendar, fields, overflow ), https://tc39.es/proposal-temporal/#sec-temporal-calendarmonthdaytoisoreferencedate
