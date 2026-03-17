@@ -979,6 +979,16 @@ impl Parser<'_> {
 
             // === Optional chaining ===
             TokenType::QuestionMarkPeriod => {
+                // https://tc39.es/ecma262/#prod-OptionalExpression
+                // Optional chaining directly on an unparenthesized `new` expression is invalid:
+                //   `new Foo?.bar`  // SyntaxError
+                // while parenthesized forms remain valid:
+                //   `(new Foo)?.bar`
+                if matches!(lhs.inner, ExpressionKind::New(_)) && !lhs_is_parenthesized {
+                    self.syntax_error("'new' cannot be used with optional chaining");
+                    self.consume();
+                    return (lhs, ForbiddenTokens::none());
+                }
                 let chain = self.parse_optional_chain(start, lhs);
                 (chain, ForbiddenTokens::none())
             }
