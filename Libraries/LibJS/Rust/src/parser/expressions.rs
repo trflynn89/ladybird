@@ -982,9 +982,13 @@ impl Parser<'_> {
                 // https://tc39.es/ecma262/#prod-OptionalExpression
                 // Optional chaining directly on an unparenthesized `new` expression is invalid:
                 //   `new Foo?.bar`  // SyntaxError
-                // while parenthesized forms remain valid:
+                // while parenthesized/new-call forms remain valid:
                 //   `(new Foo)?.bar`
-                if matches!(lhs.inner, ExpressionKind::New(_)) && !lhs_is_parenthesized {
+                //   `new Foo()?.bar`
+                if let ExpressionKind::New(ref new_expression) = lhs.inner
+                    && !lhs_is_parenthesized
+                    && !new_expression.is_inside_parens
+                {
                     self.syntax_error("'new' cannot be used with optional chaining");
                     self.consume();
                     return (lhs, ForbiddenTokens::none());
@@ -1221,7 +1225,7 @@ impl Parser<'_> {
                     callee: Box::new(callee),
                     arguments,
                     is_parenthesized: false,
-                    is_inside_parens: false,
+                    is_inside_parens: true,
                 }),
             )
         } else {
