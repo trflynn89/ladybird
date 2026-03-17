@@ -241,6 +241,10 @@ impl Parser<'_> {
                 None
             };
 
+            if kind == DeclarationKind::Const && init.is_none() && !is_for_loop {
+                self.syntax_error("Missing initializer in const declaration");
+            }
+
             declarators.push(VariableDeclarator {
                 range: self.range_from(start),
                 target,
