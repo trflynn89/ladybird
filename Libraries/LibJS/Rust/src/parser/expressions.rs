@@ -328,8 +328,12 @@ impl Parser<'_> {
                     self.consume();
                     return (self.expression(start, ExpressionKind::Error), true);
                 }
-                let expression = self.parse_expression_any();
+                let mut expression = self.parse_expression_any();
                 self.consume_token(TokenType::ParenClose);
+                if let ExpressionKind::New(ref mut new_expression) = expression.inner {
+                    // Mirrors C++ Parser: `(new Foo)` sets "inside grouping parens".
+                    new_expression.is_inside_parens = true;
+                }
                 self.last_primary_was_parenthesized = true;
                 (expression, true)
             }
@@ -986,7 +990,7 @@ impl Parser<'_> {
                 //   `(new Foo)?.bar`
                 //   `new Foo()?.bar`
                 if let ExpressionKind::New(ref new_expression) = lhs.inner
-                    && !lhs_is_parenthesized
+                    && !new_expression.is_parenthesized
                     && !new_expression.is_inside_parens
                 {
                     self.syntax_error("'new' cannot be used with optional chaining");
@@ -1224,8 +1228,9 @@ impl Parser<'_> {
                 ExpressionKind::New(CallExpressionData {
                     callee: Box::new(callee),
                     arguments,
-                    is_parenthesized: false,
-                    is_inside_parens: true,
+                    // Mirrors C++ InvocationStyle::Parenthesized for `new Foo(...)`.
+                    is_parenthesized: true,
+                    is_inside_parens: false,
                 }),
             )
         } else {
