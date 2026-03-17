@@ -534,10 +534,14 @@ impl Parser<'_> {
         let await_before = self.flags.await_expression_is_valid;
         let saved_static_init = self.flags.in_class_static_init_block;
         let saved_field_init = self.flags.in_class_field_initializer;
+        let saved_allow_super_call = self.flags.allow_super_constructor_call;
+        let saved_allow_super_lookup = self.flags.allow_super_property_lookup;
         self.flags.in_generator_function_context = is_generator;
         self.flags.await_expression_is_valid = is_async;
         self.flags.in_class_static_init_block = false;
         self.flags.in_class_field_initializer = false;
+        self.flags.allow_super_constructor_call = false;
+        self.flags.allow_super_property_lookup = false;
 
         // Save pattern_bound_names so that destructuring patterns in the
         // function body don't steal names from an outer binding context.
@@ -551,6 +555,8 @@ impl Parser<'_> {
 
         let (body, has_use_strict, mut insights) =
             self.parse_function_body(is_async, is_generator, parsed.is_simple);
+        self.flags.allow_super_constructor_call = saved_allow_super_call;
+        self.flags.allow_super_property_lookup = saved_allow_super_lookup;
 
         self.scope_collector.close_scope();
         self.pattern_bound_names = saved_pattern_bound_names;
