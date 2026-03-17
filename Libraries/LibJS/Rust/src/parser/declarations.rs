@@ -1256,7 +1256,7 @@ impl Parser<'_> {
         let mut has_seen_default = false;
         let mut has_seen_rest = false;
         let mut parameter_info: Vec<ParamInfo> = Vec::new();
-        let mut seen_parameter_names: HashSet<Utf16String> = HashSet::new();
+        let mut parameter_info_ranges: Vec<(usize, usize, bool)> = Vec::new();
 
         // C++ uses the position at the start of parse_formal_parameters for all
         // parameter identifiers (i.e., the position of the first parameter).
@@ -1264,12 +1264,13 @@ impl Parser<'_> {
 
         loop {
             let parameter_start = self.position();
+            let parameter_info_start = parameter_info.len();
             let rest = self.eat(TokenType::TripleDot);
             if rest {
                 has_seen_rest = true;
             }
 
-            let (binding, _is_pat) = if self.match_identifier()
+            let (binding, is_pat) = if self.match_identifier()
                 || self.match_token(TokenType::Await)
                 || self.match_token(TokenType::Yield)
             {
@@ -1290,30 +1291,6 @@ impl Parser<'_> {
                 let token = self.consume();
                 let value = Utf16String::from(self.token_value(&token));
                 self.check_identifier_name_for_assignment_validity(&value, false);
-                // https://tc39.es/ecma262/#sec-function-definitions-static-semantics-early-errors
-                // It is a Syntax Error if IsSimpleParameterList is false and
-                // BoundNames of FormalParameters contains any duplicate elements.
-                // In strict mode, duplicates are always an error.
-                // Arrow functions check duplicates post-confirmation (after =>).
-                // Inline duplicate checks would cause speculative arrow parsing
-                // to bail out, so skip them when is_arrow is true.
-                if !is_arrow && seen_parameter_names.contains(value.as_slice()) {
-                    if self.flags.strict_mode {
-                        let name_str = String::from_utf16_lossy(&value);
-                        self.syntax_error(&format!(
-                            "Duplicate parameter '{name_str}' not allowed in strict mode"
-                        ));
-                    } else if has_seen_default {
-                        let name_str = String::from_utf16_lossy(&value);
-                        self.syntax_error(&format!("Duplicate parameter '{name_str}' not allowed in function with default parameter"));
-                    } else if has_seen_rest {
-                        let name_str = String::from_utf16_lossy(&value);
-                        self.syntax_error(&format!(
-                            "Duplicate parameter '{name_str}' not allowed in function with rest parameter"
-                        ));
-                    }
-                }
-                seen_parameter_names.insert(value.clone());
                 let id = Rc::new(Identifier::new(
                     self.range_from(formal_parameters_start),
                     value.clone(),
@@ -1330,7 +1307,6 @@ impl Parser<'_> {
             {
                 let pat = self.parse_binding_pattern();
                 for (n, id) in std::mem::take(&mut self.pattern_bound_names) {
-                    seen_parameter_names.insert(n.clone());
                     parameter_info.push(ParamInfo {
                         name: n,
                         is_rest: rest,
@@ -1369,11 +1345,18 @@ impl Parser<'_> {
                 function_length += 1;
             }
 
+            let parameter_is_non_simple = rest || is_pat || default_value.is_some();
             parameters.push(FunctionParameter {
                 binding,
                 default_value,
                 is_rest: rest,
             });
+            let parameter_info_end = parameter_info.len();
+            parameter_info_ranges.push((
+                parameter_info_start,
+                parameter_info_end,
+                parameter_is_non_simple,
+            ));
 
             if rest || !self.match_token(TokenType::Comma) {
                 break;
@@ -1383,6 +1366,37 @@ impl Parser<'_> {
             if self.match_token(TokenType::ParenClose) {
                 break;
             }
+        }
+
+        // Validate duplicates after parsing so we can use borrowed name slices
+        // from `parameter_info` without cloning each entry into the HashSet.
+        let mut seen_parameter_names: HashSet<&[u16]> = HashSet::new();
+        let mut has_seen_non_simple = false;
+        for (start, end, parameter_is_non_simple) in parameter_info_ranges {
+            for info in &parameter_info[start..end] {
+                if info.name.is_empty() {
+                    continue;
+                }
+                let is_duplicate = seen_parameter_names.contains(info.name.as_slice());
+                // https://tc39.es/ecma262/#sec-function-definitions-static-semantics-early-errors
+                // Duplicate names are tolerated only for sloppy, non-arrow
+                // functions with a fully simple parameter list.
+                // - `!is_arrow`: arrows reject duplicates via
+                //   check_arrow_duplicate_parameters().
+                // - `self.flags.strict_mode`: strict functions always reject.
+                // - `has_seen_non_simple || parameter_is_non_simple`: once any
+                //   rest/default/destructuring parameter appears, duplicates are
+                //   no longer allowed (e.g. `function(a, a = 1)`).
+                if is_duplicate
+                    && !is_arrow
+                    && (self.flags.strict_mode || has_seen_non_simple || parameter_is_non_simple)
+                {
+                    let name_str = String::from_utf16_lossy(&info.name);
+                    self.syntax_error(&format!("Duplicate parameter '{name_str}' not allowed"));
+                }
+                seen_parameter_names.insert(info.name.as_slice());
+            }
+            has_seen_non_simple |= parameter_is_non_simple;
         }
 
         self.flags.in_formal_parameter_context = saved_formal_parameter_ctx;
