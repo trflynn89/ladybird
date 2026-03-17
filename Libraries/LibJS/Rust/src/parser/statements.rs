@@ -394,6 +394,7 @@ impl Parser<'_> {
         }
 
         let init_start = self.position();
+        let init_starts_with_async_keyword = self.match_token(TokenType::Async);
         let is_var_init = self.match_token(TokenType::Var);
         let is_using = self.match_for_using_declaration();
         let is_let = self.match_token(TokenType::Let)
@@ -474,6 +475,19 @@ impl Parser<'_> {
                     }
                 } else {
                     self.validate_for_in_of_lhs(&init);
+                    // https://tc39.es/ecma262/#sec-for-in-and-for-of-statements
+                    // `for (async of ...)` must be rejected when `async` is the
+                    // reserved keyword token. Escaped identifiers (e.g. `\u0061sync`)
+                    // are still valid here.
+                    if init_starts_with_async_keyword
+                        && let LocalForInit::Expression(ref expression) = init
+                        && let ExpressionKind::Identifier(ref ident) = expression.inner
+                        && ident.name == utf16!("async")
+                    {
+                        self.syntax_error(
+                            "for-of statement may not use 'async' as the left-hand side",
+                        );
+                    }
                     // https://tc39.es/ecma262/#sec-for-in-and-for-of-statements
                     if let LocalForInit::Expression(ref expression) = init
                         && let ExpressionKind::Member { ref object, .. } = expression.inner

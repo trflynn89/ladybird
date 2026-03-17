@@ -469,6 +469,13 @@ impl Parser<'_> {
                 ) {
                     return (arrow, false);
                 }
+                self.arrow_function_failed_positions
+                    .remove(&(start.offset as usize));
+                // `async => ...` is a regular arrow function with parameter name `async`
+                // (not an async arrow function).
+                if let Some(arrow) = self.try_parse_arrow_function_expression(false, false, None) {
+                    return (arrow, false);
+                }
                 let token = self.consume_and_check_identifier();
                 let value = self.token_value(&token).to_vec();
                 let id = self.make_identifier(start, value.clone());
