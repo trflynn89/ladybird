@@ -746,6 +746,9 @@ public:
 
     void make_active();
 
+    // https://html.spec.whatwg.org/multipage/interaction.html#set-the-initial-visibility-state
+    void set_initial_visibility_state(HTML::VisibilityState);
+
     void set_salvageable(bool value) { m_salvageable = value; }
 
     void make_unsalvageable(String reason);

@@ -1,0 +1,19 @@
+Harness status: OK
+
+Found 14 tests
+
+14 Pass
+Pass	document.hidden is defined and not null.
+Pass	document.visibilityState is defined and not null.
+Pass	Page Visibility API Child Document Test
+Pass	document.hidden is defined for frame with no style attribute.
+Pass	document.visibilityState is defined for frame with no style attribute.
+Pass	document.visibilityState for frame with no style attribute == visible
+Pass	Page Visibility API Child Document Test 1
+Pass	document.hidden is defined for frame with 'display:none' style.
+Pass	document.visibilityState is defined for frame with 'display:none' style.
+Pass	document.visibilityState for frame with 'display:none' style == visible
+Pass	Page Visibility API Child Document Test 2
+Pass	document.hidden is defined for frame with 'visibility:hidden' style.
+Pass	document.visibilityState is defined for frame with 'visibility:hidden' style.
+Pass	document.visibilityState for frame with 'visibility:hidden' style == visible

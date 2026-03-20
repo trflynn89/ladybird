@@ -111,9 +111,6 @@ void NavigableContainer::create_new_child_navigable()
     // 11. Let traversable be parentNavigable's traversable navigable.
     auto traversable = parent_navigable->traversable_navigable();
 
-    // AD-HOC: Let the initial about:blank document inherit the system visibility state from traversable.
-    document->update_the_visibility_state(traversable->system_visibility_state());
-
     // 12. Append the following session history traversal steps to traversable:
     traversable->append_session_history_traversal_steps(GC::create_function(heap(), [this, navigable, parent_navigable, history_entry, traversable](NonnullRefPtr<Core::Promise<Empty>> signal) mutable {
         if (navigable->has_been_destroyed() || parent_navigable->has_been_destroyed()) {

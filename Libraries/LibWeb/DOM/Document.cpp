@@ -5098,33 +5098,34 @@ void Document::make_active()
         page().client().page_did_change_active_document_in_top_level_browsing_context(*this);
     }
 
-    // 3. Set document's visibility state to document's node navigable's traversable navigable's system visibility state.
-    auto navigable = this->navigable();
-    if (navigable) {
-        m_visibility_state = navigable->traversable_navigable()->system_visibility_state();
-
-        // AD-HOC: Record the initial viewport and visual viewport state so that if the viewport changes before the
-        //         first rendering update (e.g. in our fullscreen tests), change events are still fired.
-        if (!m_last_viewport_size.has_value()) {
-            m_last_viewport_size = viewport_rect().size().to_type<int>();
-            auto& current_visual_viewport = *visual_viewport();
-            m_last_visual_viewport_state = VisualViewportState { current_visual_viewport.scale(), { current_visual_viewport.width(), current_visual_viewport.height() } };
-        }
-    }
-
-    // TODO: 4. Queue a new VisibilityStateEntry whose visibility state is document's visibility state and whose timestamp is zero.
-
-    // 5. Set window's relevant settings object's execution ready flag.
+    // 3. Set window's relevant settings object's execution ready flag.
     HTML::relevant_settings_object(window).execution_ready = true;
 
     if (m_needs_to_call_page_did_load) {
-        navigable->traversable_navigable()->page().client().page_did_finish_loading(url());
+        navigable()->traversable_navigable()->page().client().page_did_finish_loading(url());
         m_needs_to_call_page_did_load = false;
     }
 
     notify_each_document_observer([&](auto const& document_observer) {
         return document_observer.document_became_active();
     });
+}
+
+// https://html.spec.whatwg.org/multipage/interaction.html#set-the-initial-visibility-state
+void Document::set_initial_visibility_state(HTML::VisibilityState visibility_state)
+{
+    // 1. Set document's visibility state to visibility state.
+    m_visibility_state = visibility_state;
+
+    // TODO: 2. Queue a new VisibilityStateEntry whose visibility state is document's visibility state and whose timestamp is 0.
+
+    // AD-HOC: Record the initial viewport and visual viewport state so that if the viewport changes before the
+    //         first rendering update (e.g. in our fullscreen tests), change events are still fired.
+    if (!m_last_viewport_size.has_value()) {
+        m_last_viewport_size = viewport_rect().size().to_type<int>();
+        auto& current_visual_viewport = *visual_viewport();
+        m_last_visual_viewport_state = VisualViewportState { current_visual_viewport.scale(), { current_visual_viewport.width(), current_visual_viewport.height() } };
+    }
 }
 
 HTML::ListOfAvailableImages& Document::list_of_available_images()

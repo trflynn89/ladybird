@@ -408,6 +408,9 @@ void Navigable::initialize_navigable(GC::Ref<DocumentState> document_state, GC::
 
     // 5. Set navigable's parent to parent.
     m_parent = parent;
+
+    // 6. Set the initial visibility state of documentState's document to navigable's traversable navigable's system visibility state.
+    document->set_initial_visibility_state(traversable_navigable()->system_visibility_state());
 }
 
 // https://html.spec.whatwg.org/multipage/browsing-the-web.html#getting-the-target-history-entry
@@ -452,6 +455,9 @@ void Navigable::activate_history_entry(GC::Ptr<SessionHistoryEntry> entry, GC::R
 
     // 5. Make active newDocument.
     new_document->make_active();
+
+    // 6. Set the initial visibility state of newDocument to navigable's traversable navigable's system visibility state.
+    new_document->set_initial_visibility_state(traversable_navigable()->system_visibility_state());
 
     // AD-HOC: In the async state machine, documents created during populate may have completed
     //         their loading lifecycle before being activated (when they had no navigable).
