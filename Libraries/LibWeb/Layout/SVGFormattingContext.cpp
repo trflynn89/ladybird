@@ -189,7 +189,6 @@ void SVGFormattingContext::run(AvailableSpace const& available_space)
         // Overwrite the content width/height with the styled node width/height (from <svg width height ...>)
 
         // NOTE: If a height had not been provided by the svg element, it was set to the height of the container
-        //       (see BlockFormattingContext::layout_viewport)
         if (svg_box_state.node().computed_values().width().is_length())
             svg_box_state.set_content_width(svg_box_state.node().computed_values().width().length().to_px(svg_box_state.node()));
         if (svg_box_state.node().computed_values().height().is_length())

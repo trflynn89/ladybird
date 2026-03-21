@@ -109,11 +109,6 @@ void BlockFormattingContext::run(AvailableSpace const& available_space)
         (void)column_width;
     }
 
-    if (is<Viewport>(root())) {
-        layout_viewport(available_space);
-        return;
-    }
-
     if (auto const* fieldset_box = as_if<FieldSetBox>(root()); fieldset_box && fieldset_box->rendered_legend()) {
         layout_fieldset_with_rendered_legend(*fieldset_box, available_space);
         return;
@@ -1233,25 +1228,6 @@ void BlockFormattingContext::place_block_level_element_in_normal_flow_horizontal
     }
 
     box_state.set_content_x(x);
-}
-
-void BlockFormattingContext::layout_viewport(AvailableSpace const& available_space)
-{
-    // NOTE: If we are laying out a standalone SVG document, we give it some special treatment:
-    //       The root <svg> container gets the same size as the viewport,
-    //       and we call directly into the SVG layout code from here.
-    if (root().first_child() && root().first_child()->is_svg_svg_box()) {
-        auto const& svg_root = as<SVGSVGBox>(*root().first_child());
-        auto content_height = m_state.get(*svg_root.containing_block()).content_height();
-        m_state.get_mutable(svg_root).set_content_height(content_height);
-        auto svg_formatting_context = create_independent_formatting_context_if_needed(m_state, m_layout_mode, svg_root);
-        svg_formatting_context->run(available_space);
-    } else {
-        if (root().children_are_inline())
-            layout_inline_children(root(), available_space);
-        else
-            layout_block_level_children(root(), available_space);
-    }
 }
 
 void BlockFormattingContext::layout_floating_box(Box const& box, BlockContainer const& block_container, AvailableSpace const& available_space, CSSPixels y, LineBuilder* line_builder)

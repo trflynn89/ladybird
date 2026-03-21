@@ -102,8 +102,6 @@ private:
 
     void compute_width_for_block_level_replaced_element_in_normal_flow(Box const&, AvailableSpace const&);
 
-    void layout_viewport(AvailableSpace const&);
-
     void layout_block_level_children(BlockContainer const&, AvailableSpace const&);
     void layout_inline_children(BlockContainer const&, AvailableSpace const&);
     void layout_fieldset_with_rendered_legend(FieldSetBox const&, AvailableSpace const&);

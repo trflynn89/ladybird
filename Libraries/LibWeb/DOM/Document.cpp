@@ -1578,8 +1578,6 @@ void Document::update_layout(UpdateLayoutReason reason)
     layout_state.ensure_capacity(layout_index_counter);
 
     {
-        Layout::BlockFormattingContext root_formatting_context(layout_state, Layout::LayoutMode::Normal, *m_layout_root, nullptr);
-
         auto& viewport = static_cast<Layout::Viewport&>(*m_layout_root);
         auto& viewport_state = layout_state.get_mutable(viewport);
         viewport_state.set_content_width(viewport_rect.width());
@@ -1591,10 +1589,23 @@ void Document::update_layout(UpdateLayoutReason reason)
             icb_state.set_content_width(viewport_rect.width());
         }
 
-        root_formatting_context.run(
-            Layout::AvailableSpace(
-                Layout::AvailableSize::make_definite(viewport_rect.width()),
-                Layout::AvailableSize::make_definite(viewport_rect.height())));
+        auto available_space = Layout::AvailableSpace(
+            Layout::AvailableSize::make_definite(viewport_rect.width()),
+            Layout::AvailableSize::make_definite(viewport_rect.height()));
+
+        if (m_layout_root->first_child() && m_layout_root->first_child()->is_svg_svg_box()) {
+            // NOTE: If we are laying out a standalone SVG document, we give it some special treatment:
+            //       The root <svg> container gets the same size as the viewport,
+            //       and we call directly into the SVG layout code from here.
+            auto const& svg_root = as<Layout::SVGSVGBox>(*m_layout_root->first_child());
+            auto content_height = layout_state.get(*svg_root.containing_block()).content_height();
+            layout_state.get_mutable(svg_root).set_content_height(content_height);
+            Layout::SVGFormattingContext svg_formatting_context(layout_state, Layout::LayoutMode::Normal, svg_root, nullptr);
+            svg_formatting_context.run(available_space);
+        } else {
+            Layout::BlockFormattingContext root_formatting_context(layout_state, Layout::LayoutMode::Normal, *m_layout_root, nullptr);
+            root_formatting_context.run(available_space);
+        }
     }
 
     layout_state.commit(*m_layout_root);
