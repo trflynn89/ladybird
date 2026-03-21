@@ -60,18 +60,41 @@ CSSPixels BlockFormattingContext::automatic_content_height() const
 
 static bool margins_collapse_through(Box const& box, LayoutState& state)
 {
-    // FIXME: A box's own margins collapse if the 'min-height' property is zero, and it has neither top or bottom borders
-    // nor top or bottom padding, and it has a 'height' of either 0 or 'auto', and it does not contain a line box, and
-    // all of its in-flow children's margins (if any) collapse.
-    // https://www.w3.org/TR/CSS22/box.html#collapsing-margins
-    // FIXME: For the purpose of margin collapsing (CSS 2 §8.3.1 Collapsing margins), if the block axis is the
-    //        ratio-dependent axis, it is not considered to have a computed block-size of auto.
-    //        https://www.w3.org/TR/css-sizing-4/#aspect-ratio-margin-collapse
+    // https://drafts.csswg.org/css2/#adjoining-margins
+    // Two margins are adjoining if and only if:
+    // - both belong to in-flow block-level boxes that participate in the same block formatting context
+    //   NB: Yes, we're dealing with one and the same box here.
 
+    // - no line boxes, no clearance, no padding and no border separate them (Note that certain zero-height line boxes
+    //   (see 9.4.2) are ignored for this purpose.)
+    // NB: Border and padding are handled further down.
     if (box.computed_values().clear() != CSS::Clear::None)
         return false;
 
-    return state.get(box).border_box_height() == 0;
+    // - both belong to vertically-adjacent box edges, i.e. form one of the following pairs:
+    //   - top and bottom margins of a box that does not establish a new block formatting context and that has zero
+    //     computed 'min-height', zero or 'auto' computed 'height', and no in-flow children
+    if (FormattingContext::creates_block_formatting_context(box))
+        return false;
+
+    // NB: This should take care of the height and min-height constraints.
+    //     ( also see https://github.com/w3c/csswg-drafts/pull/13699#issuecomment-4103045370 for spec ambiguity )
+    if (state.get(box).border_box_height() != 0)
+        return false;
+
+    // https://drafts.csswg.org/css-sizing-4/#aspect-ratio-margin-collapse
+    // FIXME: For the purpose of margin collapsing (CSS 2 §8.3.1 Collapsing margins), if the block axis is the
+    //        ratio-dependent axis, it is not considered to have a computed block-size of auto.
+
+    // AD-HOC: The "and no in-flow children" above is wrong. (see https://github.com/w3c/csswg-drafts/pull/13699 )
+    for (auto const* child = box.first_child_of_type<Box>(); child; child = child->next_sibling_of_type<Box>()) {
+        if (child->is_out_of_flow())
+            continue;
+        if (!margins_collapse_through(*child, state))
+            return false;
+    }
+
+    return true;
 }
 
 void BlockFormattingContext::run(AvailableSpace const& available_space)
