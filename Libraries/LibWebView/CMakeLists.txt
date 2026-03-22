@@ -2,6 +2,7 @@ set(SOURCES
     Application.cpp
     Attribute.cpp
     Autocomplete.cpp
+    BookmarkStore.cpp
     BrowserProcess.cpp
     ConsoleOutput.cpp
     CookieJar.cpp
