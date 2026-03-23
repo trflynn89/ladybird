@@ -165,7 +165,7 @@ interface Document : Node {
     attribute EventHandler onvisibilitychange;
 
     // https://drafts.csswg.org/css-view-transitions-1/#additions-to-document-api
-    ViewTransition startViewTransition(optional ViewTransitionUpdateCallback updateCallback);
+    [Experimental] ViewTransition startViewTransition(optional ViewTransitionUpdateCallback updateCallback);
 
     // https://w3c.github.io/svgwg/svg2-draft/struct.html#InterfaceDocumentExtensions
     readonly attribute SVGSVGElement? rootElement;
