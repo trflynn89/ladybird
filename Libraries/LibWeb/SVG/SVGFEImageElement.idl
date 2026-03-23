@@ -3,7 +3,7 @@
 #import <SVG/SVGFilterPrimitiveStandardAttributes.idl>
 #import <SVG/SVGURIReference.idl>
 
-// https://www.w3.org/TR/filter-effects-1/#feImageElement
+// https://drafts.csswg.org/filter-effects-1/#feImageElement
 [Exposed=Window]
 interface SVGFEImageElement : SVGElement {
     [FIXME] readonly attribute SVGAnimatedPreserveAspectRatio preserveAspectRatio;

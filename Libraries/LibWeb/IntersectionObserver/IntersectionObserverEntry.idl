@@ -2,7 +2,7 @@
 #import <Geometry/DOMRect.idl>
 #import <HighResolutionTime/DOMHighResTimeStamp.idl>
 
-// https://www.w3.org/TR/intersection-observer/#intersectionobserverentry
+// https://w3c.github.io/IntersectionObserver/#intersectionobserverentry
 [Exposed=Window]
 interface IntersectionObserverEntry {
     // FIXME: constructor(IntersectionObserverEntryInit intersectionObserverEntryInit);

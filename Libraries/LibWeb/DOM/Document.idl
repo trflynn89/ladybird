@@ -138,7 +138,7 @@ interface Document : Node {
 
     [CEReactions] attribute DOMString designMode;
 
-    // https://www.w3.org/TR/web-animations-1/#extensions-to-the-document-interface
+    // https://drafts.csswg.org/web-animations-1/#extensions-to-the-document-interface
     readonly attribute DocumentTimeline timeline;
 
     // https://drafts.csswg.org/cssom-view/#extensions-to-the-document-interface
@@ -167,7 +167,7 @@ interface Document : Node {
     // https://drafts.csswg.org/css-view-transitions-1/#additions-to-document-api
     ViewTransition startViewTransition(optional ViewTransitionUpdateCallback updateCallback);
 
-    // https://www.w3.org/TR/SVG2/struct.html#InterfaceDocumentExtensions
+    // https://w3c.github.io/svgwg/svg2-draft/struct.html#InterfaceDocumentExtensions
     readonly attribute SVGSVGElement? rootElement;
     
     // https://w3c.github.io/pointerlock/#extensions-to-the-document-interface

@@ -2,7 +2,7 @@
 #import <Animations/AnimationTimeline.idl>
 #import <DOM/EventTarget.idl>
 
-// https://www.w3.org/TR/web-animations-1/#the-animation-interface
+// https://drafts.csswg.org/web-animations-1/#the-animation-interface
 [Exposed=Window]
 interface Animation : EventTarget {
     constructor(optional AnimationEffect? effect = null,
@@ -34,8 +34,8 @@ interface Animation : EventTarget {
     [FIXME, CEReactions] undefined commitStyles();
 };
 
-// https://www.w3.org/TR/web-animations-1/#the-animationplaystate-enumeration
+// https://drafts.csswg.org/web-animations-1/#the-animationplaystate-enumeration
 enum AnimationPlayState { "idle", "running", "paused", "finished" };
 
-// https://www.w3.org/TR/web-animations-1/#the-animationreplacestate-enumeration
+// https://drafts.csswg.org/web-animations-1/#the-animationreplacestate-enumeration
 enum AnimationReplaceState { "active", "removed", "persisted" };

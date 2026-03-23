@@ -4,7 +4,7 @@
 #import <SVG/SVGElement.idl>
 #import <SVG/SVGFilterPrimitiveStandardAttributes.idl>
 
-// https://www.w3.org/TR/filter-effects-1/#InterfaceSVGFEGaussianBlurElement
+// https://drafts.csswg.org/filter-effects-1/#InterfaceSVGFEGaussianBlurElement
 [Exposed=Window]
 interface SVGFEGaussianBlurElement : SVGElement {
 

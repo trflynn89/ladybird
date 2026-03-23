@@ -2,7 +2,7 @@
 #import <SVG/SVGAnimatedString.idl>
 #import <SVG/SVGFilterPrimitiveStandardAttributes.idl>
 
-// https://www.w3.org/TR/filter-effects-1/#InterfaceSVGFECompositeElement
+// https://drafts.csswg.org/filter-effects-1/#InterfaceSVGFECompositeElement
 [Exposed=Window]
 interface SVGFECompositeElement : SVGElement {
     // Composite Operators

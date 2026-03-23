@@ -8,7 +8,7 @@ dictionary PropertyDefinition {
     CSSOMString initialValue;
 };
 
-// https://www.w3.org/TR/cssom-1/#namespacedef-css
+// https://drafts.csswg.org/cssom-1/#namespacedef-css
 [Exposed=Window]
 namespace CSS {
     CSSOMString escape(CSSOMString ident);
@@ -16,7 +16,7 @@ namespace CSS {
     boolean supports(CSSOMString property, CSSOMString value);
     boolean supports(CSSOMString conditionText);
 
-    // https://www.w3.org/TR/css-properties-values-api-1/#dom-css-registerproperty
+    // https://drafts.css-houdini.org/css-properties-values-api-1/#dom-css-registerproperty
     undefined registerProperty(PropertyDefinition definition);
     
     // https://drafts.css-houdini.org/css-typed-om-1/#numeric-factory

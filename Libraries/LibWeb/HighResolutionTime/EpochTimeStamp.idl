@@ -1,2 +1,2 @@
-// https://www.w3.org/TR/hr-time-3/#the-epochtimestamp-typedef
+// https://w3c.github.io/hr-time/#sec-epochtimestamp
 typedef unsigned long long EpochTimeStamp;

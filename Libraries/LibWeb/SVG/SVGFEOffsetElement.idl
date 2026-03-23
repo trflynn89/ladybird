@@ -3,7 +3,7 @@
 #import <SVG/SVGElement.idl>
 #import <SVG/SVGFilterPrimitiveStandardAttributes.idl>
 
-// https://www.w3.org/TR/filter-effects-1/#InterfaceSVGFEOffsetElement
+// https://drafts.csswg.org/filter-effects-1/#InterfaceSVGFEOffsetElement
 [Exposed=Window]
 interface SVGFEOffsetElement : SVGElement {
     readonly attribute SVGAnimatedString in1;

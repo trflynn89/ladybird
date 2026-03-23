@@ -1,6 +1,6 @@
 #import <SVG/SVGNumber.idl>
 
-// https://www.w3.org/TR/SVG2/types.html#InterfaceSVGNumberList
+// https://w3c.github.io/svgwg/svg2-draft/types.html#InterfaceSVGNumberList
 [Exposed=Window]
 interface SVGNumberList {
 

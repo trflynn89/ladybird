@@ -1,6 +1,6 @@
 #import <SVG/SVGFilterPrimitiveStandardAttributes.idl>
 
-// https://www.w3.org/TR/filter-effects-1/#InterfaceSVGFEFloodElement
+// https://drafts.csswg.org/filter-effects-1/#InterfaceSVGFEFloodElement
 [Exposed=Window]
 interface SVGFEFloodElement : SVGElement {
 };

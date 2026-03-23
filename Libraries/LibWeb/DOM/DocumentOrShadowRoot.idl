@@ -10,6 +10,6 @@ interface mixin DocumentOrShadowRoot {
     [SameObject, ImplementedAs=style_sheets_for_bindings] readonly attribute StyleSheetList styleSheets;
     attribute any adoptedStyleSheets;
 
-    // https://www.w3.org/TR/web-animations-1/#extensions-to-the-documentorshadowroot-interface-mixin
+    // https://drafts.csswg.org/web-animations-1/#extensions-to-the-documentorshadowroot-interface-mixin
     sequence<Animation> getAnimations();
 };

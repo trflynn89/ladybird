@@ -7,7 +7,7 @@
 #import <UserTiming/PerformanceMark.idl>
 #import <UserTiming/PerformanceMeasure.idl>
 
-// https://www.w3.org/TR/performance-timeline/#dom-performanceentrylist
+// https://w3c.github.io/performance-timeline/#typedefdef-performanceentrylist
 typedef sequence<PerformanceEntry> PerformanceEntryList;
 
 // https://w3c.github.io/hr-time/#sec-performance
@@ -30,7 +30,7 @@ interface Performance : EventTarget {
     undefined setResourceTimingBufferSize(unsigned long maxSize);
     attribute EventHandler onresourcetimingbufferfull;
 
-    // https://www.w3.org/TR/performance-timeline/#extensions-to-the-performance-interface
+    // https://w3c.github.io/performance-timeline/#extensions-to-the-performance-interface
     // "Performance Timeline" extensions to the Performance interface
     PerformanceEntryList getEntries();
     PerformanceEntryList getEntriesByType(DOMString type);

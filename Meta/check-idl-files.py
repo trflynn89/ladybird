@@ -20,6 +20,7 @@ parser.add_argument("filenames", nargs="*")
 args = parser.parse_args()
 
 SINGLE_PAGE_HTML_SPEC_LINK = re.compile("//.*https://html\\.spec\\.whatwg\\.org/#")
+PUBLISHED_W3C_SPEC_LINK = re.compile("//.*https://www\\.w3\\.org/TR/")
 
 
 def should_check_file(filename):
@@ -45,6 +46,8 @@ def run():
     files_without_four_leading_spaces = set()
     """Also lint for them not containing any links to the single-page HTML spec."""
     files_with_single_page_html_spec_link = set()
+    """Also lint for them not containing any links to non-editor's draft W3C specs."""
+    files_with_published_w3c_spec_link = set()
     did_fail = False
     for filename in find_files_here_or_argv():
         lines = []
@@ -52,6 +55,10 @@ def run():
             for line_number, line in enumerate(f, start=1):
                 if SINGLE_PAGE_HTML_SPEC_LINK.search(line):
                     files_with_single_page_html_spec_link.add(filename)
+                    did_fail = True
+                if PUBLISHED_W3C_SPEC_LINK.search(line):
+                    files_with_published_w3c_spec_link.add(filename)
+                    did_fail = True
                 if lines_to_skip.match(line):
                     lines.append(line)
                     continue
@@ -77,8 +84,14 @@ def run():
 
     if files_with_single_page_html_spec_link:
         print(
-            "\nWebIDL files that have links to the single-page HTML spec:",
-            " ".join(files_with_single_page_html_spec_link),
+            "\nWebIDL files that link to the single-page HTML spec:\n"
+            + "\n".join(files_with_single_page_html_spec_link)
+        )
+
+    if files_with_published_w3c_spec_link:
+        print(
+            "\nWebIDL files that link to a published (not editor's draft) W3C spec:\n"
+            + "\n".join(files_with_published_w3c_spec_link)
         )
 
     if did_fail:

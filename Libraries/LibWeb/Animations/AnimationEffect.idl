@@ -1,6 +1,6 @@
 #import <CSS/CSSNumericValue.idl>
 
-// https://www.w3.org/TR/web-animations-1/#the-effecttiming-dictionaries
+// https://drafts.csswg.org/web-animations-1/#the-effecttiming-dictionaries
 // https://drafts.csswg.org/web-animations-2/#the-effecttiming-dictionaries
 dictionary EffectTiming {
     double delay = 0;
@@ -14,7 +14,7 @@ dictionary EffectTiming {
     DOMString easing = "linear";
 };
 
-// https://www.w3.org/TR/web-animations-1/#dictdef-optionaleffecttiming
+// https://drafts.csswg.org/web-animations-1/#dictdef-optionaleffecttiming
 // https://drafts.csswg.org/web-animations-2/#ref-for-dictdef-optionaleffecttiming
 dictionary OptionalEffectTiming {
     double delay;
@@ -28,13 +28,13 @@ dictionary OptionalEffectTiming {
     DOMString easing;
 };
 
-// https://www.w3.org/TR/web-animations-1/#the-fillmode-enumeration
+// https://drafts.csswg.org/web-animations-1/#the-fillmode-enumeration
 enum FillMode { "none", "forwards", "backwards", "both", "auto" };
 
-// https://www.w3.org/TR/web-animations-1/#the-playbackdirection-enumeration
+// https://drafts.csswg.org/web-animations-1/#the-playbackdirection-enumeration
 enum PlaybackDirection { "normal", "reverse", "alternate", "alternate-reverse" };
 
-// https://www.w3.org/TR/web-animations-1/#the-computedeffecttiming-dictionary
+// https://drafts.csswg.org/web-animations-1/#the-computedeffecttiming-dictionary
 dictionary ComputedEffectTiming : EffectTiming {
     [GenerateAsRequired] CSSNumberish endTime;
     [GenerateAsRequired] CSSNumberish activeDuration;
@@ -43,7 +43,7 @@ dictionary ComputedEffectTiming : EffectTiming {
     unrestricted double? currentIteration;
 };
 
-// https://www.w3.org/TR/web-animations-1/#the-animationeffect-interface
+// https://drafts.csswg.org/web-animations-1/#the-animationeffect-interface
 [Exposed=Window]
 interface AnimationEffect {
     EffectTiming getTiming();

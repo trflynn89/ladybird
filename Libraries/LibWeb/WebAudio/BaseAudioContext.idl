@@ -11,7 +11,7 @@
 #import <WebAudio/PannerNode.idl>
 #import <WebIDL/DOMException.idl>
 
-// https://www.w3.org/TR/webaudio/#enumdef-audiocontextstate
+// https://webaudio.github.io/web-audio-api/#enumdef-audiocontextstate
 enum AudioContextState { "suspended", "running", "closed" };
 
 callback DecodeErrorCallback = undefined (DOMException error);

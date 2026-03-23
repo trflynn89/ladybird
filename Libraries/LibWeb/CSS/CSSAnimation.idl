@@ -1,6 +1,6 @@
 #import <Animations/Animation.idl>
 
-// https://www.w3.org/TR/css-animations-2/#cssanimation
+// https://drafts.csswg.org/css-animations-2/#cssanimation
 [Exposed=Window]
 interface CSSAnimation : Animation {
     readonly attribute CSSOMString animationName;

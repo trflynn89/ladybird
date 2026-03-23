@@ -1,6 +1,6 @@
 #import <UIEvents/MouseEvent.idl>
 
-// https://www.w3.org/TR/uievents/#idl-wheelevent
+// https://w3c.github.io/pointerevents/#idl-wheelevent
 [Exposed=Window]
 interface WheelEvent : MouseEvent {
     constructor(DOMString type, optional WheelEventInit eventInitDict = {});
@@ -16,7 +16,7 @@ interface WheelEvent : MouseEvent {
     readonly attribute unsigned long deltaMode;
 };
 
-// https://www.w3.org/TR/uievents/#idl-wheeleventinit
+// https://w3c.github.io/pointerevents/#idl-wheeleventinit
 dictionary WheelEventInit : MouseEventInit {
     double deltaX = 0;
     double deltaY = 0;

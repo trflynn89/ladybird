@@ -1,6 +1,6 @@
 #import <CSS/CSSStyleSheet.idl>
 
-// https://www.w3.org/TR/cssom/#the-cssrule-interface
+// https://drafts.csswg.org/cssom/#the-cssrule-interface
 [Exposed=Window]
 interface CSSRule {
 

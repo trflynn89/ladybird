@@ -1,6 +1,6 @@
 #import <UIEvents/UIEvent.idl>
 
-// https://www.w3.org/TR/uievents/#idl-focusevent
+// https://w3c.github.io/uievents/#idl-focusevent
 [Exposed=Window]
 interface FocusEvent : UIEvent {
 
@@ -9,7 +9,7 @@ interface FocusEvent : UIEvent {
 
 };
 
-// https://www.w3.org/TR/uievents/#idl-focuseventinit
+// https://w3c.github.io/uievents/#idl-focuseventinit
 dictionary FocusEventInit : UIEventInit {
 
     EventTarget? relatedTarget = null;
