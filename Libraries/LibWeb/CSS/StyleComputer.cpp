@@ -488,10 +488,15 @@ void StyleComputer::cascade_declarations(
             if (important != property.important)
                 continue;
 
-            if (abstract_element.pseudo_element().has_value() && !pseudo_element_supports_property(*abstract_element.pseudo_element(), property.property_id))
+            if (abstract_element.pseudo_element().has_value()
+                && !pseudo_element_supports_property(*abstract_element.pseudo_element(), property.property_id)
+                && !property.value->is_unresolved())
                 continue;
 
             auto property_value = property.value;
+
+            if (property_value->is_pending_substitution())
+                continue;
 
             if (property_value->is_unresolved())
                 property_value = Parser::Parser::resolve_unresolved_style_value(Parser::ParsingParams { abstract_element.document() }, abstract_element, PropertyNameAndID::from_id(property.property_id), property_value->as_unresolved());
@@ -517,6 +522,9 @@ void StyleComputer::cascade_declarations(
             }
 
             for_each_property_expanding_shorthands(property.property_id, property_value, [&](PropertyID longhand_id, StyleValue const& longhand_value) {
+                if (abstract_element.pseudo_element().has_value() && !pseudo_element_supports_property(*abstract_element.pseudo_element(), longhand_id))
+                    return;
+
                 // If we're a PSV that's already been seen, that should mean that our shorthand already got
                 // resolved and gave us a value, so we don't want to overwrite it with a PSV.
                 if (seen_properties.get(to_underlying(longhand_id)) && property_value->is_pending_substitution())

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<style>
+    :root {
+        --selection-bg: lightblue;
+    }
+    ::selection {
+        background: var(--selection-bg);
+    }
+</style>
+<p id="target">Select me</p>
+<script src="../include.js"></script>
+<script>
+    test(() => {
+        const target = document.getElementById("target");
+        const style = getComputedStyle(target, "::selection");
+        println(style.backgroundColor);
+    });
+</script>
