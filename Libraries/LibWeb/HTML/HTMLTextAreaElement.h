@@ -164,8 +164,6 @@ private:
 
     void handle_maxlength_attribute();
 
-    void queue_firing_input_event();
-
     void update_placeholder_visibility();
 
     GC::Ptr<DOM::Element> m_placeholder_element;
@@ -173,10 +171,6 @@ private:
 
     GC::Ptr<DOM::Element> m_inner_text_element;
     GC::Ptr<DOM::Text> m_text_node;
-
-    RefPtr<Core::Timer> m_input_event_timer;
-    FlyString m_pending_input_event_type;
-    Optional<Utf16String> m_pending_input_event_data;
 
     // https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#concept-fe-dirty
     bool m_dirty_value { false };

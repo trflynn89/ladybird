@@ -33,9 +33,6 @@ GC_DEFINE_ALLOCATOR(HTMLTextAreaElement);
 
 HTMLTextAreaElement::HTMLTextAreaElement(DOM::Document& document, DOM::QualifiedName qualified_name)
     : HTMLElement(document, move(qualified_name))
-    , m_input_event_timer(Core::Timer::create_single_shot(0, GC::weak_callback(*this, [](auto& self) {
-        self.queue_firing_input_event();
-    })))
 {
 }
 
@@ -130,7 +127,13 @@ void HTMLTextAreaElement::clear_algorithm()
 
     // Unlike their associated reset algorithms, changes made to form controls as part of these algorithms do count as
     // changes caused by the user (and thus, e.g. do cause input events to fire).
-    queue_firing_input_event();
+    queue_an_element_task(HTML::Task::Source::UserInteraction, [this]() {
+        UIEvents::InputEventInit input_event_init;
+        input_event_init.bubbles = true;
+        input_event_init.composed = true;
+        auto input_event = UIEvents::InputEvent::create_from_platform_event(realm(), HTML::EventNames::input, input_event_init);
+        dispatch_event(input_event);
+    });
 }
 
 // https://html.spec.whatwg.org/multipage/forms.html#the-textarea-element:concept-node-clone-ext
@@ -425,12 +428,16 @@ void HTMLTextAreaElement::did_edit_text_node(FlyString const& input_type, Option
 
     // Any time the user causes the element's raw value to change, the user agent must queue an element task on the user
     // interaction task source given the textarea element to fire an event named input at the textarea element, with the
-    // bubbles and composed attributes initialized to true. User agents may wait for a suitable break in the user's
-    // interaction before queuing the task; for example, a user agent could wait for the user to have not hit a key for
-    // 100ms, so as to only fire the event when the user pauses, instead of continuously for each keystroke.
-    m_pending_input_event_type = input_type;
-    m_pending_input_event_data = data;
-    m_input_event_timer->restart(100);
+    // bubbles and composed attributes initialized to true.
+    queue_an_element_task(HTML::Task::Source::UserInteraction, [this, input_type, data]() {
+        UIEvents::InputEventInit input_event_init;
+        input_event_init.bubbles = true;
+        input_event_init.composed = true;
+        input_event_init.input_type = input_type;
+        input_event_init.data = data;
+        auto input_event = UIEvents::InputEvent::create_from_platform_event(realm(), HTML::EventNames::input, input_event_init);
+        dispatch_event(input_event);
+    });
 
     // A textarea element's dirty value flag must be set to true whenever the user interacts with the control in a way that changes the raw value.
     m_dirty_value = true;
@@ -442,20 +449,6 @@ EventResult HTMLTextAreaElement::handle_return_key(FlyString const& input_type)
 {
     handle_insert(input_type, Utf16String::from_code_point(0x0A)); // Avoid the platform codepoint
     return EventResult::Handled;
-}
-
-void HTMLTextAreaElement::queue_firing_input_event()
-{
-    queue_an_element_task(HTML::Task::Source::UserInteraction, [this]() {
-        // https://w3c.github.io/uievents/#event-type-input
-        UIEvents::InputEventInit input_event_init;
-        input_event_init.bubbles = true;
-        input_event_init.composed = true;
-        input_event_init.input_type = m_pending_input_event_type;
-        input_event_init.data = m_pending_input_event_data;
-        auto input_event = UIEvents::InputEvent::create_from_platform_event(realm(), HTML::EventNames::input, input_event_init);
-        dispatch_event(input_event);
-    });
 }
 
 bool HTMLTextAreaElement::is_focusable() const
