@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<script>
+test(() => {
+    const doc = document.implementation.createHTMLDocument("");
+
+    // Setting font on a canvas belonging to a detached document should not crash.
+    const canvas1 = doc.createElement("canvas");
+    const ctx1 = canvas1.getContext("2d");
+    ctx1.font = "bold 24px serif";
+    println("set_font: PASS");
+
+    // Calling fillText/strokeText/measureText with default font (lazy init) should not crash.
+    const canvas2 = doc.createElement("canvas");
+    const ctx2 = canvas2.getContext("2d");
+    ctx2.fillText("hello", 0, 0);
+    println("fillText: PASS");
+    ctx2.strokeText("hello", 0, 0);
+    println("strokeText: PASS");
+    const metrics = ctx2.measureText("hello");
+    println("measureText: PASS");
+});
+</script>
