@@ -109,6 +109,12 @@ bool FormattingContext::creates_block_formatting_context(Box const& box)
     if (box.has_layout_containment() || box.has_paint_containment())
         return true;
 
+    // https://drafts.csswg.org/css-conditional-5/#valdef-container-type-size
+    // Applies style containment and size containment to the principal box, and establishes an independent formatting
+    // context.
+    if (box.computed_values().container_type().is_size_container || box.computed_values().container_type().is_inline_size_container)
+        return true;
+
     if (box.parent()) {
         auto parent_display = box.parent()->display();
 
