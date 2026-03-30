@@ -1,0 +1,3 @@
+var(linear) at 0.5: 100px
+var(undefined, linear) at 0.5: 100px
+var(undefined) at 0.5: 100px

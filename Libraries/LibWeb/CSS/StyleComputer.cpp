@@ -594,6 +594,25 @@ static void cascade_custom_properties(DOM::AbstractElement abstract_element, Vec
     custom_properties.update(important_custom_properties);
 }
 
+static Optional<CSS::EasingFunction> resolve_keyframe_easing(CSS::StyleValue const& style_value, DOM::AbstractElement abstract_element)
+{
+    RefPtr<CSS::StyleValue const> resolved = style_value;
+    if (resolved->is_unresolved())
+        resolved = Parser::Parser::resolve_unresolved_style_value(Parser::ParsingParams { abstract_element.document() }, abstract_element, CSS::PropertyNameAndID::from_id(CSS::PropertyID::AnimationTimingFunction), resolved->as_unresolved());
+    if (!resolved || resolved->is_guaranteed_invalid())
+        return {};
+    if (resolved->is_value_list()) {
+        auto const& list = resolved->as_value_list();
+        if (list.size() > 0)
+            resolved = list.value_at(0, false);
+        else
+            return {};
+    }
+    if (resolved->is_easing() || resolved->is_keyword())
+        return CSS::EasingFunction::from_style_value(*resolved);
+    return {};
+}
+
 void StyleComputer::collect_animation_into(DOM::AbstractElement abstract_element, GC::Ref<Animations::KeyframeEffect> effect, ComputedProperties& computed_properties) const
 {
     auto animation = effect->associated_animation();
@@ -653,8 +672,14 @@ void StyleComputer::collect_animation_into(DOM::AbstractElement abstract_element
     // Apply the per-keyframe easing to the interval progress. The easing on a keyframe applies to the
     // interval from that keyframe to the next. If the keyframe doesn't specify an easing, use the
     // animation's default easing (from the animation-timing-function property).
-    if (keyframe_values.easing.has_value()) {
-        progress_in_keyframe = keyframe_values.easing->evaluate_at(progress_in_keyframe, false);
+    auto resolved_easing = keyframe_values.easing.visit(
+        [](Empty) -> Optional<CSS::EasingFunction> { return {}; },
+        [](CSS::EasingFunction const& easing) -> Optional<CSS::EasingFunction> { return easing; },
+        [&](NonnullRefPtr<CSS::StyleValue const> const& value) -> Optional<CSS::EasingFunction> {
+            return resolve_keyframe_easing(*value, abstract_element);
+        });
+    if (resolved_easing.has_value()) {
+        progress_in_keyframe = resolved_easing->evaluate_at(progress_in_keyframe, false);
     } else if (animation->is_css_animation()) {
         progress_in_keyframe = static_cast<CSSAnimation const&>(*animation).default_easing().evaluate_at(progress_in_keyframe, false);
     }

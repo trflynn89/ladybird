@@ -304,13 +304,18 @@ void StyleScope::make_rule_cache_for_cascade_origin(CascadeOrigin cascade_origin
                     if (it.property_id == PropertyID::AnimationTimingFunction) {
                         // animation-timing-function is a list property, but inside @keyframes only
                         // a single value is meaningful.
-                        if (it.value->is_value_list()) {
-                            auto const& list = it.value->as_value_list();
+                        NonnullRefPtr<StyleValue const> easing_value = it.value;
+                        if (easing_value->is_value_list()) {
+                            auto const& list = easing_value->as_value_list();
                             if (list.size() > 0)
-                                resolved_keyframe.easing = EasingFunction::from_style_value(list.value_at(0, false));
-                        } else {
-                            resolved_keyframe.easing = EasingFunction::from_style_value(*it.value);
+                                easing_value = list.value_at(0, false);
+                            else
+                                continue;
                         }
+                        if (easing_value->is_easing() || easing_value->is_keyword())
+                            resolved_keyframe.easing = EasingFunction::from_style_value(*easing_value);
+                        else
+                            resolved_keyframe.easing = easing_value;
                         continue;
                     }
                     if (it.property_id == PropertyID::AnimationComposition) {
@@ -336,10 +341,10 @@ void StyleScope::make_rule_cache_for_cascade_origin(CascadeOrigin cascade_origin
                 if (auto* existing_keyframe = keyframe_set->keyframes_by_key.find(key)) {
                     for (auto& [property_id, value] : resolved_keyframe.properties)
                         existing_keyframe->properties.set(property_id, move(value));
-                    if (resolved_keyframe.easing.has_value())
-                        existing_keyframe->easing = move(resolved_keyframe.easing);
                     if (resolved_keyframe.composite != Bindings::CompositeOperationOrAuto::Auto)
                         existing_keyframe->composite = resolved_keyframe.composite;
+                    if (!resolved_keyframe.easing.has<Empty>())
+                        existing_keyframe->easing = move(resolved_keyframe.easing);
                 } else {
                     keyframe_set->keyframes_by_key.insert(key, resolved_keyframe);
                 }

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<style>
+@keyframes move-var-easing {
+    0% { left: 0px; animation-timing-function: var(--kf-easing); }
+    100% { left: 200px; }
+}
+@keyframes move-var-easing-fallback {
+    0% { left: 0px; animation-timing-function: var(--undefined-var, linear); }
+    100% { left: 200px; }
+}
+@keyframes move-var-easing-no-fallback {
+    0% { left: 0px; animation-timing-function: var(--undefined-var); }
+    100% { left: 200px; }
+}
+</style>
+<div id="target-resolved" style="position: absolute;"></div>
+<div id="target-fallback" style="position: absolute;"></div>
+<div id="target-invalid" style="position: absolute;"></div>
+<script src="../include.js"></script>
+<script>
+    test(() => {
+        // var() that resolves to a valid easing should be applied.
+        const resolvedEl = document.getElementById("target-resolved");
+        resolvedEl.style.setProperty("--kf-easing", "linear");
+        resolvedEl.style.animation = "move-var-easing 1s ease forwards";
+        const resolvedAnim = resolvedEl.getAnimations()[0];
+        resolvedAnim.pause();
+
+        resolvedAnim.currentTime = 500;
+        println("var(linear) at 0.5: " + getComputedStyle(resolvedEl).left);
+
+        // var() with a fallback value should use the fallback when the variable is undefined.
+        const fallbackEl = document.getElementById("target-fallback");
+        fallbackEl.style.animation = "move-var-easing-fallback 1s ease forwards";
+        const fallbackAnim = fallbackEl.getAnimations()[0];
+        fallbackAnim.pause();
+
+        fallbackAnim.currentTime = 500;
+        println("var(undefined, linear) at 0.5: " + getComputedStyle(fallbackEl).left);
+
+        // var() with no fallback and undefined variable should fall back to the animation's default easing.
+        const invalidEl = document.getElementById("target-invalid");
+        invalidEl.style.animation = "move-var-easing-no-fallback 1s linear forwards";
+        const invalidAnim = invalidEl.getAnimations()[0];
+        invalidAnim.pause();
+
+        invalidAnim.currentTime = 500;
+        println("var(undefined) at 0.5: " + getComputedStyle(invalidEl).left);
+    });
+</script>
