@@ -80,18 +80,18 @@ static ErrorOr<ByteBuffer> decode_base64_impl(StringView input, LastChunkHandlin
     return output;
 }
 
-static ErrorOr<String> encode_base64_impl(StringView input, simdutf::base64_options options)
+static ErrorOr<String> encode_base64_impl(ReadonlyBytes input, simdutf::base64_options options)
 {
     if (input.is_empty())
         return String {};
 
     u8* buffer = nullptr;
     auto output = TRY(AK::Detail::StringData::create_uninitialized(
-        simdutf::base64_length_from_binary(input.length(), options), buffer));
+        simdutf::base64_length_from_binary(input.size(), options), buffer));
 
     simdutf::binary_to_base64(
-        input.characters_without_null_termination(),
-        input.length(),
+        reinterpret_cast<char const*>(input.data()),
+        input.size(),
         reinterpret_cast<char*>(buffer),
         options);
 
