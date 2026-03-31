@@ -1,0 +1,6 @@
+Harness status: OK
+
+Found 1 tests
+
+1 Pass
+Pass	@keyframes allows all non-animation properties and animation-timing-function

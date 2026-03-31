@@ -1573,7 +1573,7 @@ Vector<Descriptor> Parser::parse_as_descriptor_declaration_block(AtRuleID at_rul
     return parsed_declarations;
 }
 
-bool Parser::is_valid_in_the_current_context(Declaration const&) const
+bool Parser::is_valid_in_the_current_context(Declaration const& declaration) const
 {
     // TODO: Determine if this *particular* declaration is valid here, not just declarations in general.
 
@@ -1587,9 +1587,32 @@ bool Parser::is_valid_in_the_current_context(Declaration const&) const
         return false;
 
     case RuleContext::Style:
-    case RuleContext::Keyframe:
-        // Style and keyframe rules contain property declarations
+        // Style rules contain property declarations
         return true;
+
+    case RuleContext::Keyframe: {
+        // https://drafts.csswg.org/css-animations-1/#keyframes
+        // The <declaration-list> inside of <keyframe-block> accepts any CSS property except those defined in this
+        // specification, but does accept the animation-timing-function property and interprets it specially
+        // NB: animation-composition is defined in CSS Animations Level 2, so it is not excluded by this rule.
+        auto property = PropertyNameAndID::from_name(declaration.name);
+        if (!property.has_value())
+            return true;
+        switch (property->id()) {
+        case PropertyID::Animation:
+        case PropertyID::AnimationDelay:
+        case PropertyID::AnimationDirection:
+        case PropertyID::AnimationDuration:
+        case PropertyID::AnimationFillMode:
+        case PropertyID::AnimationIterationCount:
+        case PropertyID::AnimationName:
+        case PropertyID::AnimationPlayState:
+        case PropertyID::AnimationTimeline:
+            return false;
+        default:
+            return true;
+        }
+    }
 
     case RuleContext::AtContainer:
     case RuleContext::AtLayer:
