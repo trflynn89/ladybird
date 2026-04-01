@@ -7,12 +7,15 @@
 #pragma once
 
 #include <LibGfx/Font/Typeface.h>
+#include <LibGfx/FontCascadeList.h>
 #include <LibURL/URL.h>
 #include <LibWeb/Bindings/FontFacePrototype.h>
 #include <LibWeb/Bindings/PlatformObject.h>
 #include <LibWeb/CSS/ParsedFontFace.h>
 
 namespace Web::CSS {
+
+class FontLoader;
 
 struct FontFaceDescriptors {
     String style = "normal"_string;
@@ -88,6 +91,14 @@ public:
 
     ParsedFontFace parsed_font_face() const;
 
+    RefPtr<Gfx::Typeface const> typeface() const { return m_parsed_font; }
+
+    FontWeightRange declared_weight_range() const { return m_cached_weight_range; }
+    int declared_slope() const { return m_cached_slope; }
+    bool should_be_registered_with_font_computer() const { return is_css_connected() || status() == Bindings::FontFaceLoadStatus::Loaded; }
+
+    RefPtr<Gfx::FontCascadeList const> font_with_point_size(float point_size, Gfx::FontVariationSettings const&, Gfx::ShapeFeatures const&) const;
+
     Bindings::FontFaceLoadStatus status() const { return m_status; }
 
     GC::Ref<WebIDL::Promise> load();
@@ -105,6 +116,8 @@ private:
     virtual void visit_edges(Visitor&) override;
     void reject_status_promise(JS::Value reason);
 
+    Optional<FontComputer&> font_computer() const;
+
     // FIXME: Should we be storing StyleValues instead?
     String m_family;
     String m_style;
@@ -121,6 +134,7 @@ private:
 
     FontWeightRange m_cached_weight_range { 400, 400 };
     int m_cached_slope { 0 };
+    GC::Ptr<FontLoader> m_font_loader;
 
     // https://drafts.csswg.org/css-font-loading/#dom-fontface-status
     Bindings::FontFaceLoadStatus m_status { Bindings::FontFaceLoadStatus::Unloaded };

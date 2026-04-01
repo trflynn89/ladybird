@@ -1,0 +1,3 @@
+face.status: loaded
+font matched: true
+font unmatched after delete: true

@@ -12,6 +12,7 @@
 #include <LibWeb/Bindings/ExceptionOrUtils.h>
 #include <LibWeb/Bindings/FontFaceSetPrototype.h>
 #include <LibWeb/Bindings/Intrinsics.h>
+#include <LibWeb/CSS/FontComputer.h>
 #include <LibWeb/CSS/FontFace.h>
 #include <LibWeb/CSS/FontFaceSet.h>
 #include <LibWeb/CSS/FontFaceSetLoadEvent.h>
@@ -21,7 +22,9 @@
 #include <LibWeb/CSS/StyleValues/StyleValueList.h>
 #include <LibWeb/DOM/Document.h>
 #include <LibWeb/HTML/EventNames.h>
+#include <LibWeb/HTML/Scripting/Environments.h>
 #include <LibWeb/HTML/Scripting/TemporaryExecutionContext.h>
+#include <LibWeb/HTML/Window.h>
 #include <LibWeb/Platform/EventLoopPlugin.h>
 #include <LibWeb/WebIDL/Promise.h>
 
@@ -84,6 +87,12 @@ void FontFaceSet::add_css_connected_font(GC::Ref<FontFace> face)
     m_set_entries->set_add(face);
     face->add_to_set(*this);
 
+    if (face->should_be_registered_with_font_computer()) {
+        auto& global = HTML::relevant_global_object(*this);
+        if (auto* window = as_if<HTML::Window>(global))
+            window->associated_document().font_computer().register_font_face(face);
+    }
+
     // 4. If font’s status attribute is "loading"
     if (face->status() == Bindings::FontFaceLoadStatus::Loading) {
 
@@ -102,6 +111,12 @@ bool FontFaceSet::delete_(GC::Root<FontFace> face)
     // 1. If font is CSS-connected, return false and exit this algorithm immediately.
     if (face->is_css_connected()) {
         return false;
+    }
+
+    if (face->should_be_registered_with_font_computer()) {
+        auto& global = HTML::relevant_global_object(*this);
+        if (auto* window = as_if<HTML::Window>(global))
+            window->associated_document().font_computer().unregister_font_face(*face);
     }
 
     // 2. Let deleted be the result of removing font from the FontFaceSet’s set entries.
@@ -126,10 +141,13 @@ void FontFaceSet::clear()
 {
     // 1. Remove all non-CSS-connected items from the FontFaceSet's set entries,
     //    its [[LoadedFonts]] list, and its [[FailedFonts]] list.
+    auto* window = as_if<HTML::Window>(HTML::relevant_global_object(*this));
     Vector<JS::Value> to_remove;
     for (auto font_face_value : *m_set_entries) {
         auto& font_face = as<FontFace>(font_face_value.key.as_object());
         if (!font_face.is_css_connected()) {
+            if (window && font_face.should_be_registered_with_font_computer())
+                window->associated_document().font_computer().unregister_font_face(font_face);
             to_remove.append(font_face_value.key);
             font_face.remove_from_set(*this);
         }

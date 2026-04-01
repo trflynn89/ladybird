@@ -213,6 +213,9 @@ GC::Ref<FontFace> FontFace::construct_impl(JS::Realm& realm, String family, Font
                 font->m_status = Bindings::FontFaceLoadStatus::Loaded;
                 WebIDL::resolve_promise(font->realm(), font->m_font_status_promise, font);
 
+                if (auto font_computer = font->font_computer(); font_computer.has_value())
+                    font_computer->register_font_face(*font);
+
                 // For each FontFaceSet font face is in:
                 for (auto& font_face_set : font->m_containing_sets) {
                     // 1. Add font face to the FontFaceSet’s [[LoadedFonts]] list.
@@ -343,6 +346,7 @@ void FontFace::visit_edges(JS::Cell::Visitor& visitor)
 
     visitor.visit(m_font_status_promise);
     visitor.visit(m_css_font_face_rule);
+    visitor.visit(m_font_loader);
     for (auto const& font_face_set : m_containing_sets)
         visitor.visit(font_face_set);
 }
@@ -361,9 +365,33 @@ void FontFace::reject_status_promise(JS::Value reason)
     }
 }
 
+Optional<FontComputer&> FontFace::font_computer() const
+{
+    for (auto& font_face_set : m_containing_sets) {
+        auto& global = HTML::relevant_global_object(font_face_set);
+        if (auto* window = as_if<HTML::Window>(global))
+            return window->associated_document().font_computer();
+    }
+    return {};
+}
+
 void FontFace::disconnect_from_css_rule()
 {
     m_css_font_face_rule = nullptr;
+}
+
+RefPtr<Gfx::FontCascadeList const> FontFace::font_with_point_size(float point_size, Gfx::FontVariationSettings const& variations, Gfx::ShapeFeatures const& shape_features) const
+{
+    auto font_list = Gfx::FontCascadeList::create();
+    if (m_font_loader) {
+        if (auto font = m_font_loader->font_with_point_size(point_size, variations, shape_features))
+            font_list->add(*font, m_font_loader->unicode_ranges());
+    } else if (m_parsed_font) {
+        font_list->add(m_parsed_font->font(point_size, variations, shape_features), m_unicode_ranges);
+    }
+    if (font_list->is_empty())
+        return {};
+    return font_list;
 }
 
 // https://drafts.csswg.org/css-font-loading/#dom-fontface-family
@@ -380,7 +408,17 @@ WebIDL::ExceptionOr<void> FontFace::set_family(String const& string)
     if (m_css_font_face_rule)
         TRY(m_css_font_face_rule->descriptors()->set_font_family(string));
 
+    if (should_be_registered_with_font_computer()) {
+        if (auto font_computer = this->font_computer(); font_computer.has_value())
+            font_computer->unregister_font_face(*this);
+    }
+
     set_family_impl(property.release_nonnull());
+
+    if (should_be_registered_with_font_computer()) {
+        if (auto font_computer = this->font_computer(); font_computer.has_value())
+            font_computer->register_font_face(*this);
+    }
 
     return {};
 }
@@ -404,7 +442,17 @@ WebIDL::ExceptionOr<void> FontFace::set_style(String const& string)
     if (m_css_font_face_rule)
         TRY(m_css_font_face_rule->descriptors()->set_font_style(string));
 
+    if (should_be_registered_with_font_computer()) {
+        if (auto font_computer = this->font_computer(); font_computer.has_value())
+            font_computer->unregister_font_face(*this);
+    }
+
     set_style_impl(property.release_nonnull());
+
+    if (should_be_registered_with_font_computer()) {
+        if (auto font_computer = this->font_computer(); font_computer.has_value())
+            font_computer->register_font_face(*this);
+    }
 
     return {};
 }
@@ -429,7 +477,17 @@ WebIDL::ExceptionOr<void> FontFace::set_weight(String const& string)
     if (m_css_font_face_rule)
         TRY(m_css_font_face_rule->descriptors()->set_font_weight(string));
 
+    if (should_be_registered_with_font_computer()) {
+        if (auto font_computer = this->font_computer(); font_computer.has_value())
+            font_computer->unregister_font_face(*this);
+    }
+
     set_weight_impl(property.release_nonnull());
+
+    if (should_be_registered_with_font_computer()) {
+        if (auto font_computer = this->font_computer(); font_computer.has_value())
+            font_computer->register_font_face(*this);
+    }
 
     return {};
 }
@@ -457,6 +515,11 @@ WebIDL::ExceptionOr<void> FontFace::set_stretch(String const& string)
 
     set_stretch_impl(property.release_nonnull());
 
+    if (should_be_registered_with_font_computer()) {
+        if (auto font_computer = this->font_computer(); font_computer.has_value())
+            font_computer->did_load_font(FlyString(m_family));
+    }
+
     return {};
 }
 
@@ -480,6 +543,11 @@ WebIDL::ExceptionOr<void> FontFace::set_unicode_range(String const& string)
         TRY(m_css_font_face_rule->descriptors()->set_unicode_range(string));
 
     set_unicode_range_impl(property.release_nonnull());
+
+    if (should_be_registered_with_font_computer()) {
+        if (auto font_computer = this->font_computer(); font_computer.has_value())
+            font_computer->did_load_font(FlyString(m_family));
+    }
 
     return {};
 }
@@ -693,6 +761,9 @@ GC::Ref<WebIDL::Promise> FontFace::load()
                     if (m_css_font_face_rule)
                         m_css_font_face_rule->set_loading_state(CSSStyleSheet::LoadingState::Loaded);
 
+                    if (auto font_computer = this->font_computer(); font_computer.has_value())
+                        font_computer->register_font_face(*this);
+
                     // For each FontFaceSet font face is in:
                     for (auto& font_face_set : m_containing_sets) {
                         // 1. Add font face to the FontFaceSet’s [[LoadedFonts]] list.
@@ -705,6 +776,8 @@ GC::Ref<WebIDL::Promise> FontFace::load()
                             font_face_set->switch_to_loaded();
                     }
                 }
+
+                m_font_loader = nullptr;
             }));
         });
 
@@ -713,8 +786,10 @@ GC::Ref<WebIDL::Promise> FontFace::load()
         if (auto* window = as_if<HTML::Window>(global)) {
             auto& font_computer = const_cast<FontComputer&>(window->document()->font_computer());
 
-            if (auto loader = font_computer.load_font_face(parsed_font_face(), move(on_load)))
+            if (auto loader = font_computer.load_font_face(parsed_font_face(), move(on_load))) {
+                m_font_loader = loader;
                 loader->start_loading_next_url();
+            }
         } else {
             // FIXME: Don't know how to load fonts in workers! They don't have a StyleComputer
             dbgln("FIXME: Worker font loading not implemented");

@@ -22,7 +22,6 @@
 namespace Web::CSS {
 
 class CSSImportRule;
-class FontLoader;
 
 struct CSSStyleSheetInit {
     Optional<String> base_url {};
@@ -120,12 +119,6 @@ public:
     void set_source_text(String);
     Optional<String> source_text(Badge<DOM::Document>) const;
 
-    void add_associated_font_loader(GC::Ref<FontLoader const> font_loader)
-    {
-        m_associated_font_loaders.append(font_loader);
-    }
-    bool has_associated_font_loader(FontLoader& font_loader) const;
-
     void add_critical_subresource(Subresource&);
     void remove_critical_subresource(Subresource&);
     LoadingState loading_state() const;
@@ -159,8 +152,6 @@ private:
     bool m_constructed { false };
     bool m_disallow_modification { false };
     Optional<bool> m_did_match;
-
-    Vector<GC::Ptr<FontLoader const>> m_associated_font_loaders;
 
     Vector<Subresource&> m_critical_subresources;
 

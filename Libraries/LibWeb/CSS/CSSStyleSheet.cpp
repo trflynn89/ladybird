@@ -132,7 +132,6 @@ void CSSStyleSheet::visit_edges(Cell::Visitor& visitor)
     visitor.visit(m_namespace_rules);
     visitor.visit(m_import_rules);
     visitor.visit(m_owning_documents_or_shadow_roots);
-    visitor.visit(m_associated_font_loaders);
     for (auto& subresource : m_critical_subresources)
         subresource.visit_edges(visitor);
 }
@@ -482,15 +481,6 @@ void CSSStyleSheet::set_source_text(String source)
 Optional<String> CSSStyleSheet::source_text(Badge<DOM::Document>) const
 {
     return m_source_text;
-}
-
-bool CSSStyleSheet::has_associated_font_loader(FontLoader& font_loader) const
-{
-    for (auto& loader : m_associated_font_loaders) {
-        if (loader.ptr() == &font_loader)
-            return true;
-    }
-    return false;
 }
 
 void CSSStyleSheet::add_critical_subresource(Subresource& subresource)
