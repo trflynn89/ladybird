@@ -11,6 +11,7 @@
 #include <LibWeb/HTML/Scripting/Environments.h>
 #include <LibWeb/HTML/Scripting/SimilarOriginWindowAgent.h>
 #include <LibWeb/Platform/EventLoopPlugin.h>
+#include <LibWeb/StorageAPI/StorageShed.h>
 
 namespace Web::HTML {
 
@@ -19,6 +20,7 @@ NonnullOwnPtr<SimilarOriginWindowAgent> SimilarOriginWindowAgent::create(GC::Hea
     // See 'creating an agent' step in: https://html.spec.whatwg.org/multipage/webappapis.html#obtain-similar-origin-window-agent
     auto agent = adopt_own(*new SimilarOriginWindowAgent(heap, CanBlock::No));
     agent->event_loop = heap.allocate<HTML::EventLoop>(HTML::EventLoop::Type::Window);
+    agent->storage_shed = StorageAPI::StorageShed::create(heap);
     return agent;
 }
 

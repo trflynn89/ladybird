@@ -20,6 +20,10 @@ struct Agent : public JS::Agent {
     // And the event loop of a worklet agent is known as a worklet event loop.
     GC::Root<HTML::EventLoop> event_loop;
 
+    // https://storage.spec.whatwg.org/#user-agent-storage-shed
+    // A user agent holds a storage shed, which is a storage shed. A user agent’s storage shed holds all local storage data.
+    GC::Root<StorageAPI::StorageShed> storage_shed;
+
     virtual void spin_event_loop_until(GC::Root<GC::Function<bool()>> goal_condition) override;
 
 protected:

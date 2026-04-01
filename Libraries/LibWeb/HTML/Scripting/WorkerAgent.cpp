@@ -6,6 +6,7 @@
 
 #include <LibWeb/HTML/EventLoop/EventLoop.h>
 #include <LibWeb/HTML/Scripting/WorkerAgent.h>
+#include <LibWeb/StorageAPI/StorageShed.h>
 
 namespace Web::HTML {
 
@@ -13,6 +14,7 @@ NonnullOwnPtr<WorkerAgent> WorkerAgent::create(GC::Heap& heap, CanBlock can_bloc
 {
     auto agent = adopt_own(*new WorkerAgent(can_block));
     agent->event_loop = heap.allocate<HTML::EventLoop>(HTML::EventLoop::Type::Worker);
+    agent->storage_shed = StorageAPI::StorageShed::create(heap);
     return agent;
 }
 
