@@ -119,6 +119,9 @@ private:
     String m_descent_override;
     String m_line_gap_override;
 
+    FontWeightRange m_cached_weight_range { 400, 400 };
+    int m_cached_slope { 0 };
+
     // https://drafts.csswg.org/css-font-loading/#dom-fontface-status
     Bindings::FontFaceLoadStatus m_status { Bindings::FontFaceLoadStatus::Unloaded };
 
