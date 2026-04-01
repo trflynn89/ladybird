@@ -12,6 +12,7 @@
 #include <LibGC/Ptr.h>
 #include <LibWeb/Forward.h>
 #include <LibWeb/Page/Page.h>
+#include <LibWeb/ServiceWorker/NameToCacheMap.h>
 #include <LibWeb/StorageAPI/StorageEndpoint.h>
 #include <LibWeb/StorageAPI/StorageKey.h>
 #include <LibWeb/StorageAPI/StorageType.h>
@@ -38,6 +39,8 @@ public:
     virtual void clear() = 0;
     virtual void remove(String const&) = 0;
 
+    ServiceWorker::NameToCacheMap& name_to_cache_map() { return m_name_to_cache_map; }
+
     Optional<u64> quota() const { return m_quota; }
 
 protected:
@@ -46,6 +49,9 @@ protected:
     {
     }
 
+    virtual void visit_edges(Visitor&) override;
+
+    ServiceWorker::NameToCacheMap m_name_to_cache_map;
     Optional<u64> m_quota;
 };
 

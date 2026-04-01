@@ -107,6 +107,12 @@ GC::Ref<StorageBottle> StorageBottle::create(GC::Heap& heap, GC::Ref<Page> page,
     return SessionStorageBottle::create(heap, quota);
 }
 
+void StorageBottle::visit_edges(Visitor& visitor)
+{
+    Base::visit_edges(visitor);
+    visitor.visit(m_name_to_cache_map);
+}
+
 void LocalStorageBottle::visit_edges(GC::Cell::Visitor& visitor)
 {
     Base::visit_edges(visitor);
