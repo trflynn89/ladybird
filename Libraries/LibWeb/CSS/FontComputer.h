@@ -22,8 +22,6 @@
 
 namespace Web::CSS {
 
-struct FontFaceKey;
-
 struct FontWeightRange {
     int min { 0 };
     int max { 0 };
@@ -32,18 +30,17 @@ struct FontWeightRange {
     [[nodiscard]] bool contains_inclusive(int weight) const { return min <= weight && weight <= max; }
 };
 
-struct OwnFontFaceKey {
-    explicit OwnFontFaceKey(FontFaceKey const& other);
-
-    operator FontFaceKey() const;
-
-    [[nodiscard]] u32 hash() const { return pair_int_hash(family_name.hash(), pair_int_hash(weight.hash(), slope)); }
-    [[nodiscard]] bool operator==(OwnFontFaceKey const& other) const = default;
-    [[nodiscard]] bool operator==(FontFaceKey const& other) const;
-
+struct FontFaceKey {
     FlyString family_name;
     FontWeightRange weight;
     int slope { 0 };
+    [[nodiscard]] u32 hash() const { return pair_int_hash(family_name.ascii_case_insensitive_hash(), pair_int_hash(weight.hash(), slope)); }
+    [[nodiscard]] bool operator==(FontFaceKey const& other) const
+    {
+        return family_name.equals_ignoring_ascii_case(other.family_name)
+            && weight == other.weight
+            && slope == other.slope;
+    }
 };
 
 struct ComputedFontCacheKey {
@@ -135,7 +132,7 @@ private:
     GC::Ref<DOM::Document> m_document;
 
     using FontLoaderList = Vector<GC::Ref<FontLoader>>;
-    HashMap<OwnFontFaceKey, FontLoaderList> m_loaded_fonts;
+    HashMap<FontFaceKey, FontLoaderList> m_loaded_fonts;
 
     mutable HashMap<ComputedFontCacheKey, NonnullRefPtr<Gfx::FontCascadeList const>> m_computed_font_cache;
     mutable HashMap<FlyString, HashMap<FontFeatureValueKey, Vector<u32>>> m_font_feature_values_cache;

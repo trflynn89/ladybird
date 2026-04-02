@@ -9,7 +9,6 @@
  */
 
 #include "FontComputer.h"
-#include <AK/NonnullRawPtr.h>
 #include <LibGfx/Font/FontDatabase.h>
 #include <LibGfx/Font/WOFF/Loader.h>
 #include <LibGfx/Font/WOFF2/Loader.h>
@@ -37,33 +36,13 @@ namespace Web::CSS {
 GC_DEFINE_ALLOCATOR(FontComputer);
 GC_DEFINE_ALLOCATOR(FontLoader);
 
-struct FontFaceKey {
-    NonnullRawPtr<FlyString const> family_name;
-    FontWeightRange weight;
-    int slope { 0 };
-};
-
 }
 
 namespace AK {
 
-namespace Detail {
-
-template<>
-inline constexpr bool IsHashCompatible<Web::CSS::FontFaceKey, Web::CSS::OwnFontFaceKey> = true;
-template<>
-inline constexpr bool IsHashCompatible<Web::CSS::OwnFontFaceKey, Web::CSS::FontFaceKey> = true;
-
-}
-
 template<>
 struct Traits<Web::CSS::FontFaceKey> : public DefaultTraits<Web::CSS::FontFaceKey> {
-    static unsigned hash(Web::CSS::FontFaceKey const& key) { return pair_int_hash(key.family_name->hash(), pair_int_hash(key.weight.hash(), key.slope)); }
-};
-
-template<>
-struct Traits<Web::CSS::OwnFontFaceKey> : public DefaultTraits<Web::CSS::OwnFontFaceKey> {
-    static unsigned hash(Web::CSS::OwnFontFaceKey const& key) { return key.hash(); }
+    static unsigned hash(Web::CSS::FontFaceKey const& key) { return key.hash(); }
 };
 
 template<>
@@ -94,29 +73,6 @@ struct Traits<Web::CSS::ComputedFontCacheKey> : public DefaultTraits<Web::CSS::C
 }
 
 namespace Web::CSS {
-
-OwnFontFaceKey::OwnFontFaceKey(FontFaceKey const& other)
-    : family_name(other.family_name)
-    , weight(other.weight)
-    , slope(other.slope)
-{
-}
-
-OwnFontFaceKey::operator FontFaceKey() const
-{
-    return FontFaceKey {
-        family_name,
-        weight,
-        slope
-    };
-}
-
-[[nodiscard]] bool OwnFontFaceKey::operator==(FontFaceKey const& other) const
-{
-    return family_name == other.family_name
-        && weight == other.weight
-        && slope == other.slope;
-}
 
 FontLoader::FontLoader(FontComputer& font_computer, RuleOrDeclaration rule_or_declaration, FlyString family_name, Vector<Gfx::UnicodeRange> unicode_ranges, Vector<URL> urls, GC::Ptr<GC::Function<void(RefPtr<Gfx::Typeface const>)>> on_load)
     : m_font_computer(font_computer)
@@ -703,7 +659,7 @@ GC::Ptr<FontLoader> FontComputer::load_font_face(ParsedFontFace const& font_face
     } else {
         FontLoaderList loaders;
         loaders.append(loader);
-        m_loaded_fonts.set(OwnFontFaceKey(key), move(loaders));
+        m_loaded_fonts.set(key, move(loaders));
     }
     // Actual object owned by font loader list inside m_loaded_fonts, this isn't use-after-move/free
     return loader_ref;
