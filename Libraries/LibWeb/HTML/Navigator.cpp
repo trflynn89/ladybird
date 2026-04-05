@@ -145,7 +145,7 @@ GC::Ref<WebXR::XRSystem> Navigator::xr()
 // https://w3c.github.io/pointerevents/#dom-navigator-maxtouchpoints
 WebIDL::Long Navigator::max_touch_points()
 {
-    dbgln("FIXME: Unimplemented Navigator.maxTouchPoints");
+    // FIXME: Implement this for touch-capable devices.
     return 0;
 }
 
