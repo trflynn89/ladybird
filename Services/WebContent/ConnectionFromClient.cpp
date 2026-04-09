@@ -1124,9 +1124,9 @@ void ConnectionFromClient::paste(u64 page_id, Utf16String text)
 void ConnectionFromClient::set_content_filters(u64, Core::AnonymousBuffer filter_list)
 {
     if (filter_list.is_valid())
-        Web::ContentFilter::the().set_filter_list(filter_list.bytes());
+        Web::ContentFilter::the().set_serialized_filter_list(filter_list.bytes());
     else
-        Web::ContentFilter::the().set_filter_list({});
+        Web::ContentFilter::the().set_serialized_filter_list({});
 }
 
 void ConnectionFromClient::set_autoplay_allowed_on_all_websites(u64)

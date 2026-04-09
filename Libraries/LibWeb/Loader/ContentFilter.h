@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <AK/ByteBuffer.h>
 #include <AK/String.h>
 #include <AK/Vector.h>
 #include <LibURL/URL.h>
@@ -23,11 +24,14 @@ class WEB_API ContentFilter {
 public:
     static ContentFilter& the();
 
+    static ErrorOr<ByteBuffer> serialize_filter_list(ReadonlyBytes filter_list_text);
+
     bool filtering_enabled() const { return m_filtering_enabled; }
     void set_filtering_enabled(bool const enabled) { m_filtering_enabled = enabled; }
 
     ErrorOr<void> set_patterns(ReadonlySpan<String>);
     void set_filter_list(ReadonlyBytes);
+    void set_serialized_filter_list(ReadonlyBytes);
     bool is_filtered(URL::URL const&) const;
 
 private:

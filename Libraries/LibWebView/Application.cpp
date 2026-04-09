@@ -7,6 +7,7 @@
 #include <AK/Debug.h>
 #include <LibCore/ArgsParser.h>
 #include <LibCore/Environment.h>
+#include <LibCore/Directory.h>
 #include <LibCore/File.h>
 #include <LibCore/StandardPaths.h>
 #include <LibCore/System.h>
@@ -16,6 +17,7 @@
 #include <LibFileSystem/FileSystem.h>
 #include <LibImageDecoderClient/Client.h>
 #include <LibWeb/CSS/PropertyID.h>
+#include <LibWeb/Loader/ContentFilter.h>
 #include <LibWeb/Loader/UserAgent.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/CookieJar.h>
@@ -1165,14 +1167,40 @@ ErrorOr<void> Application::load_content_filters()
     });
 
     auto filter_path = ByteString::formatted("{}/BrowserContentFilters.txt", config_path);
-    auto file = TRY(Core::File::open(filter_path, Core::File::OpenMode::Read));
-    auto content = TRY(file->read_until_eof());
 
-    if (content.is_empty())
+    auto cache_directory = LexicalPath::join(Core::StandardPaths::cache_directory(), "Ladybird"sv);
+    TRY(Core::Directory::create(cache_directory, Core::Directory::CreateDirectories::Yes));
+
+    auto cache_path = LexicalPath::join(cache_directory.string(), "content-filter-cache"sv).string();
+
+    auto filter_stat = TRY(Core::System::stat(filter_path));
+    auto cache_stat = Core::System::stat(cache_path);
+
+    bool cache_is_valid = !cache_stat.is_error() && cache_stat.value().st_mtime >= filter_stat.st_mtime;
+
+    ByteBuffer serialized;
+
+    if (cache_is_valid) {
+        auto cache_file = TRY(Core::File::open(cache_path, Core::File::OpenMode::Read));
+        serialized = TRY(cache_file->read_until_eof());
+    } else {
+        auto filter_file = TRY(Core::File::open(filter_path, Core::File::OpenMode::Read));
+        auto filter_text = TRY(filter_file->read_until_eof());
+
+        if (filter_text.is_empty())
+            return {};
+
+        serialized = TRY(Web::ContentFilter::serialize_filter_list(filter_text));
+
+        auto cache_file = TRY(Core::File::open(cache_path, Core::File::OpenMode::Write | Core::File::OpenMode::Truncate));
+        TRY(cache_file->write_until_depleted(serialized));
+    }
+
+    if (serialized.is_empty())
         return {};
 
-    m_content_filter_buffer = TRY(Core::AnonymousBuffer::create_with_size(content.size()));
-    memcpy(m_content_filter_buffer.data<u8>(), content.data(), content.size());
+    m_content_filter_buffer = TRY(Core::AnonymousBuffer::create_with_size(serialized.size()));
+    memcpy(m_content_filter_buffer.data<u8>(), serialized.data(), serialized.size());
 
     return {};
 }

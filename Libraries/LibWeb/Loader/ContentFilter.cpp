@@ -23,6 +23,20 @@ ContentFilter::~ContentFilter()
         FFI::adblock_engine_free(m_engine);
 }
 
+ErrorOr<ByteBuffer> ContentFilter::serialize_filter_list(ReadonlyBytes filter_list_text)
+{
+    u8* data = nullptr;
+    size_t length = 0;
+
+    if (!FFI::adblock_serialize_filter_list(filter_list_text.data(), filter_list_text.size(), &data, &length))
+        return Error::from_string_literal("Failed to serialize content filter list");
+
+    auto buffer = TRY(ByteBuffer::copy(data, length));
+    FFI::adblock_free_serialized(data, length);
+
+    return buffer;
+}
+
 void ContentFilter::set_filter_list(ReadonlyBytes filter_list)
 {
     if (m_engine) {
@@ -34,6 +48,19 @@ void ContentFilter::set_filter_list(ReadonlyBytes filter_list)
         return;
 
     m_engine = FFI::adblock_engine_create(filter_list.data(), filter_list.size());
+}
+
+void ContentFilter::set_serialized_filter_list(ReadonlyBytes serialized)
+{
+    if (m_engine) {
+        FFI::adblock_engine_free(m_engine);
+        m_engine = nullptr;
+    }
+
+    if (serialized.is_empty())
+        return;
+
+    m_engine = FFI::adblock_engine_deserialize(serialized.data(), serialized.size());
 }
 
 ErrorOr<void> ContentFilter::set_patterns(ReadonlySpan<String> patterns)
