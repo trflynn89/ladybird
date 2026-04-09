@@ -94,7 +94,7 @@ TEST_CASE(substring_matches)
     EXPECT(!filter.is_filtered(url("http://advancedtech.com/home"sv)));
 }
 
-TEST_CASE(file_scheme_can_be_filtered)
+TEST_CASE(file_scheme_not_filtered)
 {
     Vector<String> patterns = {
         { "secret"_string },
@@ -103,7 +103,8 @@ TEST_CASE(file_scheme_can_be_filtered)
 
     auto& filter = make_filter(move(patterns));
 
-    EXPECT(filter.is_filtered(url("file:///home/user/secret.txt"sv)));
+    // The adblock engine only handles web URLs (http/https), so file:// URLs are never filtered.
+    EXPECT(!filter.is_filtered(url("file:///home/user/secret.txt"sv)));
     EXPECT(!filter.is_filtered(url("file:///home/user/document.pdf"sv)));
 }
 
