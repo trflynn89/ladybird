@@ -11,6 +11,7 @@
 #include <AK/LexicalPath.h>
 #include <AK/Optional.h>
 #include <LibCore/EventLoop.h>
+#include <LibCore/AnonymousBuffer.h>
 #include <LibCore/Forward.h>
 #include <LibDatabase/Forward.h>
 #include <LibDevTools/DevToolsDelegate.h>
@@ -153,6 +154,7 @@ public:
 
     FileDownloader& file_downloader() { return m_file_downloader; }
 
+    ErrorOr<void> load_content_filters();
     void apply_view_options(Badge<ViewImplementation>, ViewImplementation&);
 
     ErrorOr<void> toggle_devtools_enabled();
@@ -318,6 +320,8 @@ private:
     RefPtr<Action> m_block_pop_ups_action;
     StringView m_user_agent_string;
     StringView m_navigator_compatibility_mode;
+
+    Core::AnonymousBuffer m_content_filter_buffer;
 
     Optional<Web::Clipboard::SystemClipboardRepresentation> m_clipboard;
 

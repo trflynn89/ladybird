@@ -268,6 +268,11 @@ void ViewImplementation::did_finish_handling_input_event(Badge<WebContentClient>
         [](auto const&) {});
 }
 
+void ViewImplementation::set_content_filters(Core::AnonymousBuffer filter_list)
+{
+    client().async_set_content_filters(page_id(), move(filter_list));
+}
+
 void ViewImplementation::set_preferred_color_scheme(Web::CSS::PreferredColorScheme color_scheme)
 {
     client().async_set_preferred_color_scheme(page_id(), color_scheme);

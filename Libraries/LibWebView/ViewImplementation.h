@@ -93,6 +93,7 @@ public:
     void enqueue_input_event(Web::InputEvent);
     void did_finish_handling_input_event(Badge<WebContentClient>, Web::EventResult event_result);
 
+    void set_content_filters(Core::AnonymousBuffer);
     void set_preferred_color_scheme(Web::CSS::PreferredColorScheme);
     void set_preferred_contrast(Web::CSS::PreferredContrast);
     void set_preferred_motion(Web::CSS::PreferredMotion);

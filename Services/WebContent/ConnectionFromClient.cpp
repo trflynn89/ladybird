@@ -1121,9 +1121,12 @@ void ConnectionFromClient::paste(u64 page_id, Utf16String text)
         page->page().focused_navigable().paste(text);
 }
 
-void ConnectionFromClient::set_content_filters(u64, Vector<String> filters)
+void ConnectionFromClient::set_content_filters(u64, Core::AnonymousBuffer filter_list)
 {
-    Web::ContentFilter::the().set_patterns(filters).release_value_but_fixme_should_propagate_errors();
+    if (filter_list.is_valid())
+        Web::ContentFilter::the().set_filter_list(filter_list.bytes());
+    else
+        Web::ContentFilter::the().set_filter_list({});
 }
 
 void ConnectionFromClient::set_autoplay_allowed_on_all_websites(u64)

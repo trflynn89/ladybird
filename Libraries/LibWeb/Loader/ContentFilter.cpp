@@ -23,18 +23,28 @@ ContentFilter::~ContentFilter()
         FFI::adblock_engine_free(m_engine);
 }
 
-ErrorOr<void> ContentFilter::set_patterns(ReadonlySpan<String> patterns)
+void ContentFilter::set_filter_list(ReadonlyBytes filter_list)
 {
     if (m_engine) {
         FFI::adblock_engine_free(m_engine);
         m_engine = nullptr;
     }
 
-    if (patterns.is_empty())
+    if (filter_list.is_empty())
+        return;
+
+    m_engine = FFI::adblock_engine_create(filter_list.data(), filter_list.size());
+}
+
+ErrorOr<void> ContentFilter::set_patterns(ReadonlySpan<String> patterns)
+{
+    if (patterns.is_empty()) {
+        set_filter_list({});
         return {};
+    }
 
     auto filter_list = TRY(String::join('\n', patterns));
-    m_engine = FFI::adblock_engine_create(filter_list.bytes().data(), filter_list.bytes().size());
+    set_filter_list(filter_list.bytes());
 
     return {};
 }

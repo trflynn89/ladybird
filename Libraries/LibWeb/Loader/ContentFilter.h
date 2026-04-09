@@ -27,6 +27,7 @@ public:
     void set_filtering_enabled(bool const enabled) { m_filtering_enabled = enabled; }
 
     ErrorOr<void> set_patterns(ReadonlySpan<String>);
+    void set_filter_list(ReadonlyBytes);
     bool is_filtered(URL::URL const&) const;
 
 private:

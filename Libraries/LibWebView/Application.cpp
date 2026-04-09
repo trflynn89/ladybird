@@ -7,6 +7,7 @@
 #include <AK/Debug.h>
 #include <LibCore/ArgsParser.h>
 #include <LibCore/Environment.h>
+#include <LibCore/File.h>
 #include <LibCore/StandardPaths.h>
 #include <LibCore/System.h>
 #include <LibCore/TimeZoneWatcher.h>
@@ -366,6 +367,9 @@ ErrorOr<void> Application::initialize(Main::Arguments const& arguments)
         URL::set_file_scheme_urls_have_tuple_origins();
 
     initialize_actions();
+
+    if (auto result = load_content_filters(); result.is_error())
+        dbgln("Failed to load content filters: {}", result.error());
 
     m_event_loop = create_platform_event_loop();
     TRY(launch_services());
@@ -1154,8 +1158,28 @@ void Application::initialize_actions()
     m_debug_menu->add_action(*m_block_pop_ups_action);
 }
 
+ErrorOr<void> Application::load_content_filters()
+{
+    auto config_path = m_web_content_options.config_path.value_or_lazy_evaluated([] {
+        return ByteString::formatted("{}/ladybird/default-config", s_ladybird_resource_root);
+    });
+
+    auto filter_path = ByteString::formatted("{}/BrowserContentFilters.txt", config_path);
+    auto file = TRY(Core::File::open(filter_path, Core::File::OpenMode::Read));
+    auto content = TRY(file->read_until_eof());
+
+    if (content.is_empty())
+        return {};
+
+    m_content_filter_buffer = TRY(Core::AnonymousBuffer::create_with_size(content.size()));
+    memcpy(m_content_filter_buffer.data<u8>(), content.data(), content.size());
+
+    return {};
+}
+
 void Application::apply_view_options(Badge<ViewImplementation>, ViewImplementation& view)
 {
+    view.set_content_filters(m_content_filter_buffer);
     view.set_preferred_color_scheme(m_color_scheme);
     view.set_preferred_contrast(m_contrast);
     view.set_preferred_motion(m_motion);
