@@ -5,10 +5,23 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Base64.h>
+#include <AK/LexicalPath.h>
+#include <AK/Random.h>
+#include <LibCore/MimeData.h>
 #include <LibURL/Parser.h>
 #include <LibWeb/DOM/Document.h>
+#include <LibWeb/Fetch/Fetching/Fetching.h>
+#include <LibWeb/Fetch/Infrastructure/FetchAlgorithms.h>
+#include <LibWeb/Fetch/Infrastructure/HTTP/MIME.h>
+#include <LibWeb/Fetch/Infrastructure/HTTP/Requests.h>
+#include <LibWeb/Fetch/Infrastructure/URL.h>
 #include <LibWeb/HTML/AttributeNames.h>
 #include <LibWeb/HTML/HTMLHyperlinkElementUtils.h>
+#include <LibWeb/HTML/Navigable.h>
+#include <LibWeb/HTML/Navigation.h>
+#include <LibWeb/HTML/Window.h>
+#include <LibWeb/Platform/EventLoopPlugin.h>
 
 namespace Web::HTML {
 
@@ -470,6 +483,277 @@ Optional<URL::Origin> HTMLHyperlinkElementUtils::hyperlink_element_utils_extract
 
     // 2. Return this's url's origin.
     return m_url->origin();
+}
+
+// https://html.spec.whatwg.org/multipage/links.html#downloading-hyperlinks
+void HTMLHyperlinkElementUtils::download_the_hyperlink(Optional<String> hyperlink_suffix, UserNavigationInvolvement user_involvement)
+{
+    auto& subject = hyperlink_element_utils_element();
+
+    // 1. If subject cannot navigate, then return.
+    if (subject.cannot_navigate())
+        return;
+
+    // 2. If subject's node document's active sandboxing flag set has the sandboxed downloads browsing context flag
+    //    set, then return.
+    if (has_flag(subject.document().active_sandboxing_flag_set(), SandboxingFlagSet::SandboxedDownloads))
+        return;
+
+    // 3. Let urlString be the result of encoding-parsing-and-serializing a URL given subject's href attribute value,
+    //    relative to subject's node document.
+    auto url_string = subject.document().encoding_parse_and_serialize_url(href());
+
+    // 4. If urlString is failure, then return.
+    if (!url_string.has_value())
+        return;
+
+    // 5. If hyperlinkSuffix is non-null, then append it to urlString.
+    if (hyperlink_suffix.has_value())
+        url_string = MUST(String::formatted("{}{}", *url_string, *hyperlink_suffix));
+
+    auto url = URL::Parser::basic_parse(*url_string).release_value();
+    auto filename = subject.attribute(AttributeNames::download);
+
+    // 6. If userInvolvement is not "browser UI", then:
+    if (user_involvement != UserNavigationInvolvement::BrowserUI) {
+        // 1. Assert: subject has a download attribute.
+        VERIFY(filename.has_value());
+
+        // 2. Let navigation be subject's relevant global object's navigation API.
+        auto navigation = as<Window>(relevant_global_object(subject)).navigation();
+
+        // 3. Let filename be the value of subject's download attribute.
+
+        // 4. Let continue be the result of firing a download request navigate event at navigation with destinationURL
+        //    set to urlString, userInvolvement set to userInvolvement, sourceElement set to subject, and filename set
+        //    to filename.
+        auto continue_ = navigation->fire_a_download_request_navigate_event(url, user_involvement, subject, filename.release_value());
+
+        // 5. If continue is false, then return.
+        if (!continue_)
+            return;
+
+        // 6. Inform the navigation API about aborting navigation given subject's node navigable.
+        if (auto navigable = subject.navigable())
+            navigable->inform_the_navigation_api_about_aborting_navigation();
+    }
+
+    // 7. Run these steps in parallel:
+    Platform::EventLoopPlugin::the().deferred_invoke(GC::create_function(subject.heap(), [subject = GC::Ref { subject }, url = move(url), filename = move(filename)]() mutable {
+        auto& realm = subject->realm();
+        auto& vm = realm.vm();
+
+        // FIXME: 1. Optionally, the user agent may abort these steps, if it believes doing so would safeguard the user from a
+        //           potentially hostile download.
+        // https://github.com/whatwg/html/issues/2562
+        // https://github.com/whatwg/html/issues/7718
+
+        // 2. Let request be a new request whose URL is urlString, client is entry settings object, initiator is
+        //    "download", destination is the empty string, and whose synchronous flag and use-URL-credentials flag are
+        //    set.
+        // FIXME: Spec issue: The synchronous flag does not exist anymore.
+        //        https://github.com/whatwg/fetch/pull/1165
+        auto request = Fetch::Infrastructure::Request::create(vm);
+        request->set_url(move(url));
+        request->set_client(&entry_settings_object());
+        request->set_initiator(Fetch::Infrastructure::Request::Initiator::Download);
+        request->set_destination({});
+        request->set_use_url_credentials(true);
+
+        // 3. Let response be the result of fetching request.
+        Fetch::Infrastructure::FetchAlgorithms::Input fetch_algorithms_input {};
+        fetch_algorithms_input.process_response = [subject, filename = move(filename)](GC::Ref<Fetch::Infrastructure::Response> response) mutable {
+            // 4. Handle as a download response with subject's node navigable and null.
+            if (auto navigable = subject->navigable())
+                handle_as_a_download(subject->document(), response, *navigable, {}, move(filename));
+        };
+
+        Fetch::Fetching::fetch(realm, request, Fetch::Infrastructure::FetchAlgorithms::create(vm, move(fetch_algorithms_input)));
+    }));
+}
+
+// https://html.spec.whatwg.org/multipage/links.html#handle-as-a-download
+void handle_as_a_download(GC::Ptr<DOM::Document> document, GC::Ref<Fetch::Infrastructure::Response> response, GC::Ref<Navigable> navigable, Optional<String> navigation_id, Optional<String> proposed_filename)
+{
+    // 1. Let suggestedFilename be the result of getting the suggested filename for response.
+    auto suggested_filename = get_suggested_filename(document, response, move(proposed_filename));
+
+    // 2. Let download behavior be the result of WebDriver BiDi download will begin with navigable and a new WebDriver BiDi navigation status whose id is navigationId, status is "pending", url is response's URL, and suggestedFilename is suggestedFilename.
+
+    // 3. If download behavior is not null and download behavior's allowed is false:
+
+    //     Invoke WebDriver BiDi download end with navigable and a new WebDriver BiDi navigation status whose id is navigationId, status is "canceled", url is response's URL.
+
+    //     Return.
+
+    // 4. If download behavior is not null, let destinationFolder be download behavior's destinationFolder.
+
+    // 5. Run these steps in parallel:
+
+    //     Run implementation-defined steps to save response for later use. If destinationFolder is not null, the user agent should save the file to that path. If the user agent needs a filename, the user agent should use the suggestedFilename.
+
+    //     If any of the following are true:
+
+    //         the download is canceled by the user;
+
+    //         the download is canceled by the user agent;
+
+    //         an error occurs (for example, a network error, not enough storage, an unavailable destination folder);
+
+    //     then:
+
+    //         Invoke WebDriver BiDi download end with navigable and a new WebDriver BiDi navigation status whose id is navigationId, status is "canceled", url is response's URL.
+
+    //         Return.
+
+    //     When the download completes successfully, invoke WebDriver BiDi download end with navigable and a new WebDriver BiDi navigation status whose id is navigationId, status is "complete", downloadedFilepath is an absolute path of the downloaded file if available, otherwise null, url is response's URL.
+}
+
+// https://html.spec.whatwg.org/multipage/links.html#getting-the-suggested-filename
+ByteString get_suggested_filename(GC::Ptr<DOM::Document> document, GC::Ref<Fetch::Infrastructure::Response> response, Optional<String> proposed_filename)
+{
+    // 1. Let filename be the undefined value.
+    Optional<String> filename;
+
+    // FIXME: 2. If response has a `Content-Disposition` header, that header specifies the attachment disposition type, and the
+    //           header includes filename information, then let filename have the value specified by the header, and jump to
+    //           the step labeled sanitize below. [RFC6266]
+
+    // 3. Let interface origin be the origin of the Document in which the download or navigate action resulting in the
+    //    download was initiated, if any.
+    Optional<URL::Origin> interface_origin;
+
+    if (document)
+        interface_origin = document->origin();
+
+    // 4. Let response origin be the origin of the URL of response, unless that URL's scheme component is data, in which
+    //    case let response origin be the same as the interface origin, if any.
+    Optional<URL::Origin> response_origin;
+
+    if (auto url = response->url(); url.has_value() && url->scheme() != "data"sv)
+        response_origin = url->origin();
+    else
+        response_origin = interface_origin;
+
+    // 5. If there is no interface origin, then let trusted operation be true. Otherwise, let trusted operation be true
+    //    if response origin is the same origin as interface origin, and false otherwise.
+    auto trusted_operation = !interface_origin.has_value() || response_origin->is_same_origin(*interface_origin);
+
+    // FIXME: 6. If trusted operation is true and response has a `Content-Disposition` header and that header includes filename
+    //           information, then let filename have the value specified by the header, and jump to the step labeled sanitize
+    //           below. [RFC6266]
+    if (trusted_operation) {
+    }
+
+    // 7. If the download was not initiated from a hyperlink created by an a or area element, or if the element of the
+    //    hyperlink from which it was initiated did not have a download attribute when the download was initiated, or if
+    //    there was such an attribute but its value when the download was initiated was the empty string, then jump to
+    //    the step labeled no proposed filename.
+    if (proposed_filename.has_value() && !proposed_filename->is_empty()) {
+        // 8. Let proposed filename have the value of the download attribute of the element of the hyperlink that
+        //    initiated the download at the time the download was initiated.
+        // 9. If trusted operation is true, let filename have the value of proposed filename, and jump to the step
+        //    labeled sanitize below.
+        if (trusted_operation)
+            filename = move(proposed_filename);
+
+        // FIXME: 10. If response has a `Content-Disposition` header and that header specifies the attachment disposition type,
+        //            let filename have the value of proposed filename, and jump to the step labeled sanitize below. [RFC6266]
+    }
+
+    // 11. No proposed filename: If trusted operation is true, or if the user indicated a preference for having the
+    //     response in question downloaded, let filename have a value derived from the URL of response in an
+    //     implementation-defined manner, and jump to the step labeled sanitize below.
+    if (!filename.has_value() && trusted_operation) {
+        if (auto url = response->url(); url.has_value() && !url->paths().is_empty() && url->scheme().is_one_of("http"sv, "https"sv, "file"sv)) {
+            if (auto last_segment = url->paths().last(); !last_segment.is_empty())
+                filename = move(last_segment);
+        }
+    }
+
+    // 12. Let filename be set to the user's preferred filename or to a filename selected by the user agent, and jump to
+    //     the step labeled sanitize below.
+    // Warning: If the algorithm reaches this step, then a download was begun from a different origin than response, and
+    //          the origin did not mark the file as suitable for downloading, and the download was not initiated by the
+    //          user. This could be because a download attribute was used to trigger the download, or because response
+    //          is not of a type that the user agent supports.
+    //
+    //          This could be dangerous, because, for instance, a hostile server could be trying to get a user to
+    //          unknowingly download private information and then re-upload it to the hostile server, by tricking the
+    //          user into thinking the data is from the hostile server.
+    //
+    //          Thus, it is in the user's interests that the user be somehow notified that response comes from quite a
+    //          different source, and to prevent confusion, any suggested filename from the potentially hostile
+    //          interface origin should be ignored.
+    if (!filename.has_value()) {
+        Array<u8, 16> random;
+        fill_with_random(random);
+
+        filename = MUST(AK::encode_base64url(random, AK::OmitPadding::Yes));
+    }
+
+    // FIXME: 13. Sanitize: Optionally, allow the user to influence filename. For example, a user agent could prompt the user
+    //            for a filename, potentially providing the value of filename as determined above as a default value.
+
+    // 14. Adjust filename to be suitable for the local file system.
+    // Example: For example, this could involve removing characters that are not legal in filenames, or trimming leading
+    //          and trailing whitespace.
+    filename = MUST(filename->trim_whitespace());
+
+    // 15. If the platform conventions do not in any way use extensions to determine the types of file on the file
+    //     system, then return filename as the filename.
+
+    // 16. Let claimed type be the type given by response's Content-Type metadata, if any is known. Let named type be
+    //     the type given by filename's extension, if any is known. For the purposes of this step, a type is a mapping
+    //     of a MIME type to an extension.
+    auto extension_from_mime_type = [](MimeSniff::MimeType const& mime_type) -> Optional<StringView> {
+        if (auto data = Core::get_mime_type_data(mime_type.essence()); data.has_value() && !data->common_extensions.is_empty())
+            return data->common_extensions.first();
+        return {};
+    };
+
+    auto claimed_type = [&]() -> Optional<StringView> {
+        if (auto mime_type = Fetch::Infrastructure::extract_mime_type(response->header_list()); mime_type.has_value())
+            return extension_from_mime_type(*mime_type);
+        return {};
+    }();
+
+    auto named_type = [&]() -> Optional<StringView> {
+        LexicalPath lexical_path { filename->to_byte_string() };
+
+        if (auto extension = lexical_path.extension(); !extension.is_empty())
+            return extension;
+
+        if (auto url = response->url(); url.has_value()) {
+            if (url->scheme().is_one_of("http"sv, "https"sv) && !url->paths().is_empty()) {
+                return MUST(String::from_utf8(Core::guess_mime_type_based_on_filename(url->paths().last())));
+            }
+
+            if (url->scheme() == "data"sv) {
+                if (auto data_url = Fetch::Infrastructure::process_data_url(*url); !data_url.is_error())
+                    return data_url.value().mime_type.essence();
+            }
+        }
+
+        return {};
+    }();
+
+    // 17. If named type is consistent with the user's preferences (e.g., because the value of filename was determined
+    //     by prompting the user), then return filename as the filename.
+
+    // 18. If claimed type and named type are the same type (i.e., the type given by response's Content-Type metadata is
+    //     consistent with the type given by filename's extension), then return filename as the filename.
+
+    // 19. If the claimed type is known, then alter filename to add an extension corresponding to claimed type.
+
+    //     Otherwise, if named type is known to be potentially dangerous (e.g. it will be treated by the platform
+    //     conventions as a native executable, shell script, HTML application, or executable-macro-capable document),
+    //     then optionally alter filename to add a known-safe extension (e.g. ".txt").
+
+    // Note: This last step would make it impossible to download executables, which might not be desirable. As always,
+    //       implementers are forced to balance security and usability in this matter.
+
+    // 20. Return filename as the filename.
 }
 
 }

@@ -121,7 +121,7 @@ public:
         Optional<GC::ConservativeVector<XHR::FormDataEntry>&> form_data_entry_list = {},
         Optional<SerializationRecord> navigation_api_state = {},
         Optional<SerializationRecord> classic_history_api_state = {});
-    bool fire_a_download_request_navigate_event(URL::URL destination_url, UserNavigationInvolvement user_involvement, GC::Ptr<DOM::Element> source_element, String filename);
+    bool fire_a_download_request_navigate_event(URL::URL const& destination_url, UserNavigationInvolvement user_involvement, GC::Ptr<DOM::Element> source_element, String filename);
 
     void initialize_the_navigation_api_entries_for_a_new_document(Vector<NonnullRefPtr<SessionHistoryEntry>> const& new_shes, NonnullRefPtr<SessionHistoryEntry> initial_she);
     void update_the_navigation_api_entries_for_a_same_document_navigation(NonnullRefPtr<SessionHistoryEntry> destination_she, Bindings::NavigationType);

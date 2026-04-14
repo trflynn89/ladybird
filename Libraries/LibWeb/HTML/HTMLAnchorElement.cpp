@@ -57,7 +57,7 @@ bool HTMLAnchorElement::has_activation_behavior() const
     return true;
 }
 
-// https://html.spec.whatwg.org/multipage/links.html#links-created-by-a-and-area-elements
+// https://html.spec.whatwg.org/multipage/links.html#links-created-by-a-and-area-elements:activation-behaviour-2
 void HTMLAnchorElement::activation_behavior(Web::DOM::Event const& event)
 {
     // The activation behavior of an a or area element element given an event event is:
@@ -66,8 +66,8 @@ void HTMLAnchorElement::activation_behavior(Web::DOM::Event const& event)
     if (href().is_empty())
         return;
 
-    // AD-HOC: Do not activate the element for clicks with the ctrl/cmd modifier present. This lets
-    //         the browser process open the link in a new tab.
+    // AD-HOC: Do not activate the element for clicks with the ctrl/cmd modifier present. This lets the browser process
+    //         open the link in a new tab.
     if (is<UIEvents::MouseEvent>(event)) {
         auto const& mouse_event = static_cast<UIEvents::MouseEvent const&>(event);
         if (mouse_event.platform_ctrl_key())
@@ -83,8 +83,9 @@ void HTMLAnchorElement::activation_behavior(Web::DOM::Event const& event)
         CSSPixels x { 0 };
         CSSPixels y { 0 };
 
-        // 2. If event's isTrusted attribute is initialized to true, then set x to the distance in CSS pixels from the left edge of the image
-        //    to the location of the click, and set y to the distance in CSS pixels from the top edge of the image to the location of the click.
+        // 2. If event's isTrusted attribute is initialized to true, then set x to the distance in CSS pixels from the
+        //    left edge of the image to the location of the click, and set y to the distance in CSS pixels from the top
+        //    edge of the image to the location of the click.
         if (event.is_trusted() && is<UIEvents::MouseEvent>(event)) {
             auto const& mouse_event = static_cast<UIEvents::MouseEvent const&>(event);
             x = CSSPixels { mouse_event.offset_x() };
@@ -97,8 +98,8 @@ void HTMLAnchorElement::activation_behavior(Web::DOM::Event const& event)
         // 4. If y is negative, set y to 0.
         y = max(y, 0);
 
-        // 5. Set hyperlinkSuffix to the concatenation of U+003F (?), the value of x expressed as a base-ten integer using ASCII digits,
-        //    U+002C (,), and the value of y expressed as a base-ten integer using ASCII digits.
+        // 5. Set hyperlinkSuffix to the concatenation of U+003F (?), the value of x expressed as a base-ten integer
+        //    using ASCII digits, U+002C (,), and the value of y expressed as a base-ten integer using ASCII digits.
         hyperlink_suffix = MUST(String::formatted("?{},{}", x.to_int(), y.to_int()));
     }
 
@@ -110,17 +111,23 @@ void HTMLAnchorElement::activation_behavior(Web::DOM::Event const& event)
     if (has_download_preference())
         user_involvement = UserNavigationInvolvement::BrowserUI;
 
-    // FIXME: 6. If element has a download attribute, or if the user has expressed a preference to download the
-    //     hyperlink, then download the hyperlink created by element with hyperlinkSuffix set to hyperlinkSuffix and
-    //     userInvolvement set to userInvolvement.
-
-    // 7. Otherwise, follow the hyperlink created by element with hyperlinkSuffix set to hyperlinkSuffix and userInvolvement set to userInvolvement.
-    follow_the_hyperlink(hyperlink_suffix, user_involvement);
+    // 6. If element has a download attribute, or if the user has expressed a preference to download the hyperlink, then
+    //    download the hyperlink created by element with hyperlinkSuffix set to hyperlinkSuffix and userInvolvement set
+    //    to userInvolvement.
+    if (has_attribute(AttributeNames::download) || has_download_preference()) {
+        download_the_hyperlink(move(hyperlink_suffix), user_involvement);
+    }
+    // 7. Otherwise, follow the hyperlink created by element with hyperlinkSuffix set to hyperlinkSuffix and
+    //    userInvolvement set to userInvolvement.
+    else {
+        follow_the_hyperlink(hyperlink_suffix, user_involvement);
+    }
 }
 
 bool HTMLAnchorElement::has_download_preference() const
 {
-    return has_attribute(HTML::AttributeNames::download);
+    // FIXME: Figure out what this means and implement it.
+    return false;
 }
 
 // https://html.spec.whatwg.org/multipage/interaction.html#dom-tabindex

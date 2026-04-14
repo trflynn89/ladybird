@@ -223,6 +223,7 @@ public:
     void set_has_session_history_entry_and_ready_for_navigation();
 
     void inform_the_navigation_api_about_child_navigable_destruction();
+    void inform_the_navigation_api_about_aborting_navigation();
 
     bool has_pending_navigations() const { return !m_pending_navigations.is_empty(); }
     void clear_pending_navigations() { m_pending_navigations.clear(); }
@@ -272,8 +273,6 @@ private:
     void reset_cursor_blink_cycle();
 
     void scroll_offset_did_change();
-
-    void inform_the_navigation_api_about_aborting_navigation();
 
     // https://html.spec.whatwg.org/multipage/document-sequences.html#nav-id
     String m_id;

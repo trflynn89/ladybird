@@ -11,6 +11,22 @@
 #include <LibURL/Parser.h>
 #include <LibURL/URL.h>
 
+TEST_CASE(foo)
+{
+    {
+        auto url = URL::Parser::basic_parse("https://www.serenityos.org"sv);
+        dbgln("!!! {}", url->paths().last());
+    }
+    {
+        auto url = URL::Parser::basic_parse("https://www.serenityos.org/index.html"sv);
+        dbgln("!!! {}", url->paths().last());
+    }
+    {
+        auto url = URL::Parser::basic_parse("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVQIW2P8z8AARAwMjDAGACwBA/+8RVWvAAAAAElFTkSuQmCC"sv);
+        dbgln("!!! {}", url->paths());
+    }
+}
+
 TEST_CASE(basic)
 {
     {

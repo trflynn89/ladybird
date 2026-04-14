@@ -6,8 +6,10 @@
 
 #pragma once
 
+#include <LibGC/Ptr.h>
 #include <LibURL/URL.h>
 #include <LibWeb/Forward.h>
+#include <LibWeb/HTML/UserNavigationInvolvement.h>
 
 namespace Web::HTML {
 
@@ -53,6 +55,8 @@ protected:
 
     Optional<URL::Origin> hyperlink_element_utils_extract_an_origin() const;
 
+    void download_the_hyperlink(Optional<String> hyperlink_suffix, UserNavigationInvolvement);
+
     void set_the_url();
 
 private:
@@ -61,5 +65,8 @@ private:
 
     Optional<URL::URL> m_url;
 };
+
+void handle_as_a_download(GC::Ptr<DOM::Document>, GC::Ref<Fetch::Infrastructure::Response>, GC::Ref<Navigable>, Optional<String> navigation_id, Optional<String> proposed_filename);
+ByteString get_suggested_filename(GC::Ptr<DOM::Document>, GC::Ref<Fetch::Infrastructure::Response>, Optional<String> proposed_filename);
 
 }

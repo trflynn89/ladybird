@@ -1214,7 +1214,7 @@ bool Navigation::inner_navigate_event_firing_algorithm(
 
                 // 5. Finish event given true.
                 event->finish(true);
-                
+
                 // 6. If apiMethodTracker is non-null, then resolve the finished promise for apiMethodTracker.
                 if (api_method_tracker != nullptr)
                     resolve_the_finished_promise(*api_method_tracker);
@@ -1394,7 +1394,7 @@ bool Navigation::fire_a_push_replace_reload_navigate_event(
 }
 
 // https://html.spec.whatwg.org/multipage/nav-history-apis.html#fire-a-download-request-navigate-event
-bool Navigation::fire_a_download_request_navigate_event(URL::URL destination_url, UserNavigationInvolvement user_involvement, GC::Ptr<DOM::Element> source_element, String filename)
+bool Navigation::fire_a_download_request_navigate_event(URL::URL const& destination_url, UserNavigationInvolvement user_involvement, GC::Ptr<DOM::Element> source_element, String filename)
 {
     auto& realm = relevant_realm(*this);
     auto& vm = this->vm();
