@@ -15,7 +15,9 @@ crate-type = ["staticlib", "rlib"]
 [dependencies]
 calendrical_calculations = "=0.2.4"
 icu_calendar = { version = "=2.2.0", features = ["compiled_data"] }
+icu_locale_core = "=2.2.0"
 icu_normalizer = { version = "=2.2.0", features = ["compiled_data"] }
+icu_segmenter = { version = "=2.2.0", features = ["compiled_data"] }
 
 [build-dependencies]
 cbindgen = "0.29"

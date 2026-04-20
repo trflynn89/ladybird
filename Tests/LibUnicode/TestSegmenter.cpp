@@ -129,6 +129,34 @@ TEST_CASE(word_segmentation)
         { 0u, 3u, 4u, 9u, 10u, 11u, 14u, 19u, 22u, 23u, 24u, 27u, 28u, 35u, 36u, 40u, 41u, 45u, 46u, 50u, 51u, 52u, 57u, 58u });
 }
 
+TEST_CASE(word_like_boundaries)
+{
+    auto segmenter = Unicode::Segmenter::create(Unicode::SegmenterGranularity::Word);
+    auto text = u"foo, 123!"_utf16;
+
+    segmenter->set_segmented_text(text);
+
+    auto boundary = segmenter->next_boundary(0);
+    EXPECT_EQ(boundary, 3u);
+    EXPECT(segmenter->is_current_boundary_word_like());
+
+    boundary = segmenter->next_boundary(*boundary);
+    EXPECT_EQ(boundary, 4u);
+    EXPECT(!segmenter->is_current_boundary_word_like());
+
+    boundary = segmenter->next_boundary(*boundary);
+    EXPECT_EQ(boundary, 5u);
+    EXPECT(!segmenter->is_current_boundary_word_like());
+
+    boundary = segmenter->next_boundary(*boundary);
+    EXPECT_EQ(boundary, 8u);
+    EXPECT(segmenter->is_current_boundary_word_like());
+
+    boundary = segmenter->next_boundary(*boundary);
+    EXPECT_EQ(boundary, 9u);
+    EXPECT(!segmenter->is_current_boundary_word_like());
+}
+
 template<size_t N>
 static void test_line_segmentation(StringView string, size_t const (&expected_boundaries)[N])
 {

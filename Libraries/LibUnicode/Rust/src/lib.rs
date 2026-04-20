@@ -14,3 +14,4 @@ mod rust_allocator;
 pub mod calendar;
 pub mod character_types;
 pub mod normalize;
+pub mod segmenter;
