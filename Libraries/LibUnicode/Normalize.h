@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2022, mat
- * Copyright (c) 2024, Tim Flynn <trflynn89@serenityos.org>
+ * Copyright (c) 2024-2026, Tim Flynn <trflynn89@ladybird.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -12,14 +12,13 @@
 
 namespace Unicode {
 
-enum class NormalizationForm {
+enum class NormalizationForm : u8 {
     NFD,
     NFC,
     NFKD,
     NFKC
 };
 NormalizationForm normalization_form_from_string(StringView);
-StringView normalization_form_to_string(NormalizationForm);
 
 String normalize(StringView string, NormalizationForm form);
 
