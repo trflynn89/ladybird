@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#[path = "../../../AbortOnPanic.rs"]
+mod abort_on_panic;
+
 #[cfg(feature = "allocator")]
 #[path = "../../../RustAllocator.rs"]
 mod rust_allocator;

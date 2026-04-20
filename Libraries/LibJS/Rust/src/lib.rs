@@ -52,6 +52,9 @@
 //! - `bytecode/` — Bytecode generator, instruction types, and FFI
 //! - `scope_collector.rs` — Scope analysis
 
+#[path = "../../../AbortOnPanic.rs"]
+mod abort_on_panic;
+
 #[path = "../../../RustAllocator.rs"]
 mod rust_allocator;
 
@@ -94,12 +97,12 @@ pub(crate) fn u32_from_usize(value: usize) -> u32 {
     u32::try_from(value).expect("value exceeds u32::MAX")
 }
 
+use abort_on_panic::abort_on_panic;
 use ast::StatementKind;
 use parser::{ParseError, Parser, ProgramType};
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ffi::c_void;
-use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::rc::Rc;
 
 // =============================================================================
@@ -124,25 +127,6 @@ unsafe impl Send for ParsedProgram {}
 // =============================================================================
 // Internal helpers
 // =============================================================================
-
-/// Catch any Rust panics to prevent undefined behavior from unwinding across
-/// the FFI boundary. Aborts the process on panic.
-fn abort_on_panic<F: FnOnce() -> R, R>(f: F) -> R {
-    match catch_unwind(AssertUnwindSafe(f)) {
-        Ok(result) => result,
-        Err(payload) => {
-            let msg = if let Some(s) = payload.downcast_ref::<&str>() {
-                s.to_string()
-            } else if let Some(s) = payload.downcast_ref::<String>() {
-                s.clone()
-            } else {
-                "unknown panic".to_string()
-            };
-            eprintln!("Rust panic at FFI boundary: {msg}");
-            std::process::abort();
-        }
-    }
-}
 
 /// Write an AST dump string to FFI output pointers.
 ///
