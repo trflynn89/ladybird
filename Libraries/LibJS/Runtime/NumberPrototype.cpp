@@ -132,26 +132,32 @@ static SignificandAndExponent compute_significand_and_exponent_with_precision(do
     //
     // Below, we arrange this as a fraction, placing any negative values into the denominator to ensure that the math
     // involves only unsigned integers.
+
+    // 2 ^ binary_exponent
+    auto const& numerator = binary_exponent > 0
+        ? MUST(binary_significand.shift_left(binary_exponent))
+        : binary_significand;
+
+    auto const& denominator = binary_exponent < 0
+        ? MUST(ONE_BIGINT.shift_left(-binary_exponent))
+        : ONE_BIGINT;
+
     auto compute_significand = [&](i32 exponent) {
-        auto numerator = binary_significand;
-        auto denominator = ONE_BIGINT;
-
-        // 2 ^ binary_exponent
-        if (binary_exponent > 0)
-            numerator = MUST(numerator.shift_left(binary_exponent));
-        else if (binary_exponent < 0)
-            denominator = MUST(denominator.shift_left(-binary_exponent));
-
         // 10 ^ (precision - exponent - 1)
-        if (auto scale = precision - exponent - 1; scale > 0)
-            numerator = numerator.multiplied_by(TEN_BIGINT.pow(scale));
-        else if (scale < 0)
-            denominator = denominator.multiplied_by(TEN_BIGINT.pow(-scale));
+        auto scale = precision - exponent - 1;
 
-        auto [quotient, remainder] = numerator.divided_by(denominator);
+        auto const& scaled_numerator = scale > 0
+            ? numerator.multiplied_by(TEN_BIGINT.pow(scale))
+            : numerator;
+
+        auto const& scaled_denominator = scale < 0
+            ? denominator.multiplied_by(TEN_BIGINT.pow(-scale))
+            : denominator;
+
+        auto [quotient, remainder] = scaled_numerator.divided_by(scaled_denominator);
 
         // Round half-up to distinguish between equally valid candidates.
-        if (MUST(remainder.shift_left(1)) >= denominator)
+        if (MUST(remainder.shift_left(1)) >= scaled_denominator)
             quotient = quotient.plus(1);
 
         return quotient;
@@ -161,9 +167,12 @@ static SignificandAndExponent compute_significand_and_exponent_with_precision(do
     // resulting digit count is incorrect, we adjust the exponent and recompute the significand.
     auto significand = compute_significand(exponent);
 
-    if (auto digit_count = significand.count_digits_in_base(10); digit_count > static_cast<size_t>(precision))
+    auto lower_bound = TEN_BIGINT.pow(precision - 1);
+    auto upper_bound = lower_bound.multiplied_by(TEN_BIGINT);
+
+    if (significand >= upper_bound)
         significand = compute_significand(++exponent);
-    else if (digit_count < static_cast<size_t>(precision))
+    else if (significand < lower_bound)
         significand = compute_significand(--exponent);
 
     // When the computed significand is exactly (10 ^ (precision - 1)), then we have two candidate representations of
@@ -191,10 +200,10 @@ static SignificandAndExponent compute_significand_and_exponent_with_precision(do
     //
     // Similar to `compute_significand` above, we take care to clear any negative exponents to ensure that the math
     // involves only unsigned integers.
-    if (significand == TEN_BIGINT.pow(precision - 1)) {
+    if (significand == lower_bound) {
         auto alternate = compute_significand(exponent - 1);
 
-        if (alternate.count_digits_in_base(10) == static_cast<size_t>(precision)) {
+        if (alternate >= lower_bound && alternate < upper_bound) {
             auto lhs = significand.multiplied_by(TEN_BIGINT).plus(alternate);
             auto rhs = TWO_BIGINT.multiplied_by(binary_significand);
 
