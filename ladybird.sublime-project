@@ -23,11 +23,15 @@
         },
         {
             "name": "generated",
-            "path": "ladybird/Build/release/Lagom/Libraries",
+            "path": "ladybird/Build/release",
             "index_exclude_patterns": ["*"],
             "file_include_patterns": [
                 "*.h",
                 "*.cpp",
+            ],
+            "folder_include_patterns": [
+                "Build/release/Libraries",
+                "Build/release/Services",
             ],
         },
         {
@@ -45,6 +49,7 @@
             "c_family_includes_strip_prefixes": [
                 "Libraries",
                 "Services",
+                "UI/AppKit",
             ],
         },
         "format": {
@@ -59,6 +64,9 @@
             // },
             "ruff": {
                 // "path": "/opt/homebrew/bin",
+                "on_save": true,
+            },
+            "rustfmt": {
                 "on_save": true,
             },
         },
