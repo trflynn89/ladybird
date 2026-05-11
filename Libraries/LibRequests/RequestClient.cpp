@@ -74,12 +74,6 @@ ErrorOr<bool> RequestClient::store_cache_associated_data(URL::URL const& url, By
     return IPCProxy::store_cache_associated_data(url, method, headers, vary_key, associated_data, move(buffer));
 }
 
-ErrorOr<Optional<Core::AnonymousBuffer>> RequestClient::retrieve_cache_associated_data(URL::URL const& url, ByteString const& method, Optional<HTTP::HeaderList const&> request_headers, Optional<u64> vary_key, HTTP::CacheEntryAssociatedData associated_data)
-{
-    auto headers = request_headers.map([](auto const& headers) { return headers.headers(); }).value_or({});
-    return IPCProxy::retrieve_cache_associated_data(url, method, headers, vary_key, associated_data);
-}
-
 bool RequestClient::stop_request(Badge<Request>, Request& request)
 {
     if (!m_requests.contains(request.id()))

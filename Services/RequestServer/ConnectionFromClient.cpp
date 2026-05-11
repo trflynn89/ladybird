@@ -468,29 +468,6 @@ Messages::RequestServer::StoreCacheAssociatedDataResponse ConnectionFromClient::
     return result.value();
 }
 
-Messages::RequestServer::RetrieveCacheAssociatedDataResponse ConnectionFromClient::retrieve_cache_associated_data(URL::URL url, ByteString method, Vector<HTTP::Header> request_headers, Optional<u64> vary_key, HTTP::CacheEntryAssociatedData associated_data)
-{
-    if (!m_disk_cache.has_value())
-        return Optional<Core::AnonymousBuffer> {};
-
-    auto data = m_disk_cache->retrieve_associated_data(url, method, *HTTP::HeaderList::create(move(request_headers)), vary_key, associated_data);
-    if (data.is_error()) {
-        dbgln("Failed to retrieve cache associated data for {}: {}", url, data.error());
-        return Optional<Core::AnonymousBuffer> {};
-    }
-    if (!data.value().has_value())
-        return Optional<Core::AnonymousBuffer> {};
-
-    auto buffer = Core::AnonymousBuffer::create_with_size(data.value()->size());
-    if (buffer.is_error()) {
-        dbgln("Failed to allocate cache associated data buffer for {}: {}", url, buffer.error());
-        return Optional<Core::AnonymousBuffer> {};
-    }
-
-    memcpy(buffer.value().data<void>(), data.value()->data(), data.value()->size());
-    return Optional<Core::AnonymousBuffer> { buffer.release_value() };
-}
-
 void ConnectionFromClient::websocket_connect(u64 websocket_id, URL::URL url, ByteString origin, Vector<ByteString> protocols, Vector<ByteString> extensions, Vector<HTTP::Header> additional_request_headers)
 {
     auto host = url.serialized_host().to_byte_string();
