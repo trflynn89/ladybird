@@ -1170,10 +1170,11 @@ void Request::transfer_headers_to_client_if_needed()
 
     Optional<Core::AnonymousBuffer> javascript_bytecode;
     Optional<u64> javascript_bytecode_cache_vary_key;
+
     if (m_cache_status == CacheStatus::ReadFromCache && m_disk_cache.has_value()) {
         VERIFY(m_cache_entry_reader.has_value());
         javascript_bytecode_cache_vary_key = m_cache_entry_reader->vary_key();
-        auto data = m_disk_cache->retrieve_associated_data(m_url, m_method, *m_request_headers, javascript_bytecode_cache_vary_key, HTTP::CacheEntryAssociatedData::JavaScriptBytecode);
+        auto data = m_disk_cache->retrieve_associated_data(m_url, m_method, *m_request_headers, *javascript_bytecode_cache_vary_key, HTTP::CacheEntryAssociatedData::JavaScriptBytecode);
         if (!data.is_error() && data.value().has_value()) {
             auto buffer = Core::AnonymousBuffer::create_with_size(data.value()->size());
             if (!buffer.is_error()) {
@@ -1185,7 +1186,7 @@ void Request::transfer_headers_to_client_if_needed()
         javascript_bytecode_cache_vary_key = m_cache_entry_writer->vary_key();
     }
 
-    m_client.async_headers_became_available(m_request_id, m_response_headers->headers(), m_status_code, m_reason_phrase, move(javascript_bytecode), javascript_bytecode_cache_vary_key);
+    m_client.async_headers_became_available(m_request_id, m_response_headers->headers(), m_status_code, m_reason_phrase, javascript_bytecode, javascript_bytecode_cache_vary_key);
 }
 
 ErrorOr<void> Request::write_queued_bytes_without_blocking()

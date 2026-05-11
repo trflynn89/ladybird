@@ -65,7 +65,7 @@ RefPtr<Request> RequestClient::start_request(ByteString const& method, URL::URL 
     return request;
 }
 
-ErrorOr<bool> RequestClient::store_cache_associated_data(URL::URL const& url, ByteString const& method, Optional<HTTP::HeaderList const&> request_headers, Optional<u64> vary_key, HTTP::CacheEntryAssociatedData associated_data, ReadonlyBytes data)
+ErrorOr<bool> RequestClient::store_cache_associated_data(URL::URL const& url, ByteString const& method, Optional<HTTP::HeaderList const&> request_headers, u64 vary_key, HTTP::CacheEntryAssociatedData associated_data, ReadonlyBytes data)
 {
     auto buffer = TRY(Core::AnonymousBuffer::create_with_size(data.size()));
     memcpy(buffer.data<void>(), data.data(), data.size());

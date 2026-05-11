@@ -44,7 +44,7 @@ public:
     RefPtr<WebSocket> websocket_connect(URL::URL const&, ByteString const& origin, Vector<ByteString> const& protocols, Vector<ByteString> const& extensions, HTTP::HeaderList const& request_headers);
 
     NonnullRefPtr<Core::Promise<CacheSizes>> estimate_cache_size_accessed_since(UnixDateTime since);
-    ErrorOr<bool> store_cache_associated_data(URL::URL const&, ByteString const& method, Optional<HTTP::HeaderList const&> request_headers, Optional<u64> vary_key, HTTP::CacheEntryAssociatedData, ReadonlyBytes);
+    ErrorOr<bool> store_cache_associated_data(URL::URL const&, ByteString const& method, Optional<HTTP::HeaderList const&> request_headers, u64 vary_key, HTTP::CacheEntryAssociatedData, ReadonlyBytes);
 
     Function<String(URL::URL const&)> on_retrieve_http_cookie;
     Function<void()> on_request_server_died;

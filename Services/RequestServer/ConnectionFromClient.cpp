@@ -454,7 +454,7 @@ void ConnectionFromClient::remove_cache_entries_accessed_since(UnixDateTime sinc
         m_disk_cache->remove_entries_accessed_since(since);
 }
 
-Messages::RequestServer::StoreCacheAssociatedDataResponse ConnectionFromClient::store_cache_associated_data(URL::URL url, ByteString method, Vector<HTTP::Header> request_headers, Optional<u64> vary_key, HTTP::CacheEntryAssociatedData associated_data, Core::AnonymousBuffer data)
+Messages::RequestServer::StoreCacheAssociatedDataResponse ConnectionFromClient::store_cache_associated_data(URL::URL url, ByteString method, Vector<HTTP::Header> request_headers, u64 vary_key, HTTP::CacheEntryAssociatedData associated_data, Core::AnonymousBuffer data)
 {
     if (!m_disk_cache.has_value() || !data.is_valid())
         return false;
