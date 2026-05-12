@@ -252,26 +252,28 @@ ErrorOr<bool> DiskCache::store_associated_data(URL::URL const& url, StringView m
     return m_index.has_entry(cache_key, vary_key);
 }
 
-ErrorOr<Optional<ByteBuffer>> DiskCache::retrieve_associated_data(URL::URL const& url, StringView method, HeaderList const& request_headers, u64 vary_key, CacheEntryAssociatedData associated_data)
+ErrorOr<OwnPtr<CacheAssociatedDataReader>> DiskCache::open_associated_data(URL::URL const& url, StringView method, HeaderList const& request_headers, u64 vary_key, CacheEntryAssociatedData associated_data)
 {
     if (!is_cacheable(method, request_headers))
-        return Optional<ByteBuffer> {};
+        return nullptr;
 
     auto serialized_url = serialize_url_for_cache_storage(url);
     auto cache_key = create_cache_key(serialized_url, method, m_partitioned_cache_key);
 
     if (!m_index.has_entry(cache_key, vary_key))
-        return Optional<ByteBuffer> {};
+        return nullptr;
 
-    auto path = path_for_cache_entry_associated_data(m_cache_directory, cache_key, vary_key, associated_data);
-    auto file = Core::File::open(path.string(), Core::File::OpenMode::Read);
-    if (file.is_error()) {
-        if (file.error().is_errno() && file.error().code() == ENOENT)
-            return Optional<ByteBuffer> {};
-        return file.release_error();
+    auto reader = CacheAssociatedDataReader::create(m_cache_directory, cache_key, vary_key, associated_data);
+    if (reader.is_error()) {
+        if (reader.error().is_errno() && reader.error().code() == ENOENT)
+            return nullptr;
+        return reader.release_error();
     }
 
-    return TRY(file.value()->read_until_eof());
+    if (reader.value()->data_size() == 0)
+        return nullptr;
+
+    return reader.release_value();
 }
 
 bool DiskCache::check_if_cache_has_open_entry(CacheRequest& request, u64 cache_key, URL::URL const& url, CheckReaderEntries check_reader_entries)

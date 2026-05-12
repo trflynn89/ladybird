@@ -11,6 +11,7 @@
 namespace HTTP {
 
 class CacheEntry;
+class CacheAssociatedDataReader;
 class CacheEntryReader;
 class CacheEntryWriter;
 class CacheIndex;
@@ -22,6 +23,8 @@ class HttpResponse;
 class MemoryCache;
 
 struct Header;
+
+enum class CacheEntryAssociatedData;
 
 }
 

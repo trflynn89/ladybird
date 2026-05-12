@@ -10,6 +10,7 @@
 #include <AK/Error.h>
 #include <AK/LexicalPath.h>
 #include <AK/Optional.h>
+#include <AK/OwnPtr.h>
 #include <AK/StringView.h>
 #include <AK/Time.h>
 #include <AK/Types.h>
@@ -55,7 +56,7 @@ public:
     Variant<Optional<CacheEntryReader&>, CacheHasOpenEntry> open_entry(CacheRequest&, URL::URL const&, StringView method, HeaderList const& request_headers, CacheMode, OpenMode);
 
     ErrorOr<bool> store_associated_data(URL::URL const&, StringView method, HeaderList const& request_headers, u64 vary_key, CacheEntryAssociatedData, ReadonlyBytes);
-    ErrorOr<Optional<ByteBuffer>> retrieve_associated_data(URL::URL const&, StringView method, HeaderList const& request_headers, u64 vary_key, CacheEntryAssociatedData);
+    ErrorOr<OwnPtr<CacheAssociatedDataReader>> open_associated_data(URL::URL const&, StringView method, HeaderList const& request_headers, u64 vary_key, CacheEntryAssociatedData);
 
     void remove_entries_exceeding_cache_limit();
     void set_maximum_disk_cache_size(u64 maximum_disk_cache_size);

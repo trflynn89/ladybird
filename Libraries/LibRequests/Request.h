@@ -7,6 +7,7 @@
 #pragma once
 
 #include <AK/Badge.h>
+#include <AK/ByteBuffer.h>
 #include <AK/ByteString.h>
 #include <AK/Function.h>
 #include <AK/MemoryStream.h>
@@ -78,16 +79,22 @@ public:
     Function<CertificateAndKey()> on_certificate_requested;
 
     void did_finish(Badge<RequestClient>, u64 total_size, RequestTimingInfo const& timing_info, Optional<NetworkError> const& network_error);
-    void did_receive_headers(Badge<RequestClient>, NonnullRefPtr<HTTP::HeaderList> response_headers, Optional<u32> response_code, Optional<String> const& reason_phrase, Optional<Core::AnonymousBuffer> javascript_bytecode, Optional<u64> javascript_bytecode_cache_vary_key);
+    void did_receive_headers(Badge<RequestClient>, NonnullRefPtr<HTTP::HeaderList> response_headers, Optional<u32> response_code, Optional<String> const& reason_phrase, Optional<u64> javascript_bytecode_cache_vary_key);
     void did_request_certificates(Badge<RequestClient>);
 
     RefPtr<Core::Notifier>& write_notifier(Badge<RequestClient>) { return m_write_notifier; }
-    void set_request_fd(Badge<RequestClient>, int fd);
+    void set_request_fd(Badge<RequestClient>, int fd, Optional<u64> streamed_javascript_bytecode_size);
 
 private:
     Request(RequestClient&, u64 request_id);
 
     void set_up_internal_stream_data(DataReceived on_data_available);
+    void process_received_bytes(ReadonlyBytes);
+    bool is_waiting_for_streamed_javascript_bytecode() const;
+    Optional<Core::AnonymousBuffer> take_streamed_javascript_bytecode();
+    void dispatch_headers(NonnullRefPtr<HTTP::HeaderList>, Optional<u32> response_code, Optional<String> const& reason_phrase, Optional<u64> javascript_bytecode_cache_vary_key);
+    void dispatch_pending_headers_if_ready();
+    void dispatch_payload_received_before_headers();
 
     WeakPtr<RequestClient> m_client;
     u64 m_request_id { 0 };
@@ -103,6 +110,13 @@ private:
 
     HeadersReceived on_headers_received;
     RequestFinished on_finish;
+
+    struct PendingHeaders {
+        NonnullRefPtr<HTTP::HeaderList> response_headers;
+        Optional<u32> response_code;
+        Optional<String> reason_phrase;
+        Optional<u64> javascript_bytecode_cache_vary_key;
+    };
 
     struct InternalBufferedData {
         InternalBufferedData();
@@ -125,11 +139,18 @@ private:
         bool request_done { false };
         RequestTimingInfo timing_info;
         Function<void()> on_finish {};
+        DataReceived on_data_available;
         bool user_finish_called { false };
     };
 
     OwnPtr<InternalBufferedData> m_internal_buffered_data;
     OwnPtr<InternalStreamData> m_internal_stream_data;
+    OwnPtr<PendingHeaders> m_pending_headers;
+    Optional<size_t> m_streamed_javascript_bytecode_size;
+    size_t m_streamed_javascript_bytecode_bytes_received { 0 };
+    Optional<Core::AnonymousBuffer> m_streamed_javascript_bytecode;
+    bool m_response_headers_dispatched { false };
+    ByteBuffer m_payload_received_before_headers;
 };
 
 }

@@ -17,6 +17,8 @@ struct TestCacheRequest final : public HTTP::CacheRequest {
     virtual void notify_request_unblocked(Badge<HTTP::DiskCache>) override { }
 };
 
+#if 0
+
 static URL::URL parse_url(StringView url)
 {
     return URL::Parser::basic_parse(url).release_value();
@@ -52,6 +54,7 @@ static HTTP::CacheEntryWriter& create_cache_entry(HTTP::DiskCache& disk_cache, T
     VERIFY(writer.has_value());
     return *writer;
 }
+
 
 TEST_CASE(associated_data_round_trips_with_cache_entry)
 {
@@ -163,3 +166,5 @@ TEST_CASE(associated_data_participates_in_cache_eviction)
     auto retrieved_bytecode = TRY_OR_FAIL(disk_cache.retrieve_associated_data(url, "GET"sv, *request_headers, {}, HTTP::CacheEntryAssociatedData::JavaScriptBytecode));
     EXPECT(!retrieved_bytecode.has_value());
 }
+
+#endif

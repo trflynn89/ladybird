@@ -277,37 +277,15 @@ ErrorOr<NonnullOwnPtr<CacheEntryReader>> CacheEntryReader::create(DiskCache& dis
     return adopt_own(*new CacheEntryReader { disk_cache, index, cache_key, vary_key, move(url), move(path), move(file), fd, cache_header, move(reason_phrase), move(response_headers), data_offset, data_size });
 }
 
-CacheEntryReader::CacheEntryReader(DiskCache& disk_cache, CacheIndex& index, u64 cache_key, u64 vary_key, String url, LexicalPath path, NonnullOwnPtr<Core::File> file, int fd, CacheHeader cache_header, Optional<String> reason_phrase, NonnullRefPtr<HeaderList> response_headers, u64 data_offset, u64 data_size)
-    : CacheEntry(disk_cache, index, cache_key, vary_key, move(url), move(path), cache_header)
-    , m_file(move(file))
+CacheEntryFileTransfer::CacheEntryFileTransfer(NonnullOwnPtr<Core::File> file, int fd, u64 data_offset, u64 data_size)
+    : m_file(move(file))
     , m_fd(fd)
-    , m_reason_phrase(move(reason_phrase))
-    , m_response_headers(move(response_headers))
     , m_data_offset(data_offset)
     , m_data_size(data_size)
 {
 }
 
-void CacheEntryReader::revalidation_succeeded(HeaderList const& response_headers)
-{
-    dbgln_if(HTTP_DISK_CACHE_DEBUG, "\033[36m[disk]\033[0m \033[34;1mCache revalidation succeeded for\033[0m {}", m_url);
-
-    update_header_fields(m_response_headers, response_headers);
-    m_index.update_response_headers(m_cache_key, m_vary_key, m_response_headers);
-
-    if (m_revalidation_type != RevalidationType::MustRevalidate)
-        close_and_destroy_cache_entry();
-}
-
-void CacheEntryReader::revalidation_failed()
-{
-    dbgln_if(HTTP_DISK_CACHE_DEBUG, "\033[36m[disk]\033[0m \033[33;1mCache revalidation failed for\033[0m {}", m_url);
-
-    remove();
-    close_and_destroy_cache_entry();
-}
-
-void CacheEntryReader::send_to(int socket_fd, Function<void(u64)> on_complete, Function<void(u64)> on_error)
+void CacheEntryFileTransfer::send_to(int socket_fd, Function<void(u64)> on_complete, Function<void(u64)> on_error)
 {
     VERIFY(m_socket_fd == -1);
     m_socket_fd = socket_fd;
@@ -315,7 +293,7 @@ void CacheEntryReader::send_to(int socket_fd, Function<void(u64)> on_complete, F
     m_on_send_complete = move(on_complete);
     m_on_send_error = move(on_error);
 
-    if (m_marked_for_deletion) {
+    if (marked_for_deletion()) {
         send_error(Error::from_string_literal("Cache entry has been deleted"));
         return;
     }
@@ -331,9 +309,9 @@ void CacheEntryReader::send_to(int socket_fd, Function<void(u64)> on_complete, F
     send_without_blocking();
 }
 
-void CacheEntryReader::send_without_blocking()
+void CacheEntryFileTransfer::send_without_blocking()
 {
-    if (m_marked_for_deletion) {
+    if (marked_for_deletion()) {
         send_error(Error::from_string_literal("Cache entry has been deleted"));
         return;
     }
@@ -357,6 +335,33 @@ void CacheEntryReader::send_without_blocking()
     }
 
     send_without_blocking();
+}
+
+CacheEntryReader::CacheEntryReader(DiskCache& disk_cache, CacheIndex& index, u64 cache_key, u64 vary_key, String url, LexicalPath path, NonnullOwnPtr<Core::File> file, int fd, CacheHeader cache_header, Optional<String> reason_phrase, NonnullRefPtr<HeaderList> response_headers, u64 data_offset, u64 data_size)
+    : CacheEntry(disk_cache, index, cache_key, vary_key, move(url), move(path), cache_header)
+    , CacheEntryFileTransfer(move(file), fd, data_offset, data_size)
+    , m_reason_phrase(move(reason_phrase))
+    , m_response_headers(move(response_headers))
+{
+}
+
+void CacheEntryReader::revalidation_succeeded(HeaderList const& response_headers)
+{
+    dbgln_if(HTTP_DISK_CACHE_DEBUG, "\033[36m[disk]\033[0m \033[34;1mCache revalidation succeeded for\033[0m {}", m_url);
+
+    update_header_fields(m_response_headers, response_headers);
+    m_index.update_response_headers(m_cache_key, m_vary_key, m_response_headers);
+
+    if (m_revalidation_type != RevalidationType::MustRevalidate)
+        close_and_destroy_cache_entry();
+}
+
+void CacheEntryReader::revalidation_failed()
+{
+    dbgln_if(HTTP_DISK_CACHE_DEBUG, "\033[36m[disk]\033[0m \033[33;1mCache revalidation failed for\033[0m {}", m_url);
+
+    remove();
+    close_and_destroy_cache_entry();
 }
 
 void CacheEntryReader::send_complete()
@@ -402,6 +407,39 @@ ErrorOr<void> CacheEntryReader::read_and_validate_footer()
         return Error::from_string_literal("Invalid header hash in footer");
 
     return {};
+}
+
+ErrorOr<NonnullOwnPtr<CacheAssociatedDataReader>> CacheAssociatedDataReader::create(LexicalPath const& cache_directory, u64 cache_key, u64 vary_key, CacheEntryAssociatedData associated_data)
+{
+    auto path = path_for_cache_entry_associated_data(cache_directory, cache_key, vary_key, associated_data);
+    auto file = TRY(Core::File::open(path.string(), Core::File::OpenMode::Read));
+    auto fd = file->fd();
+
+    auto size = TRY(FileSystem::size_from_fstat(fd));
+    if (size < 0)
+        return Error::from_errno(EINVAL);
+
+    return adopt_own(*new CacheAssociatedDataReader { move(path), move(file), fd, static_cast<u64>(size) });
+}
+
+CacheAssociatedDataReader::CacheAssociatedDataReader(LexicalPath path, NonnullOwnPtr<Core::File> file, int fd, u64 data_size)
+    : CacheEntryFileTransfer(move(file), fd, 0, data_size)
+    , m_path(move(path))
+{
+}
+
+void CacheAssociatedDataReader::send_complete()
+{
+    if (m_on_send_complete)
+        m_on_send_complete(m_bytes_sent);
+}
+
+void CacheAssociatedDataReader::send_error(Error error)
+{
+    dbgln_if(HTTP_DISK_CACHE_DEBUG, "\033[36m[disk]\033[0m \033[31;1mError transferring associated data to socket for\033[0m {}: {}", m_path.string(), error);
+
+    if (m_on_send_error)
+        m_on_send_error(m_bytes_sent);
 }
 
 }

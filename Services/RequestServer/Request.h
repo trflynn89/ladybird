@@ -10,6 +10,7 @@
 #include <AK/ByteString.h>
 #include <AK/MemoryStream.h>
 #include <AK/Optional.h>
+#include <AK/OwnPtr.h>
 #include <AK/Time.h>
 #include <LibCore/Proxy.h>
 #include <LibDNS/Resolver.h>
@@ -164,6 +165,8 @@ private:
 
     ErrorOr<void> inform_client_request_started();
     void transfer_headers_to_client_if_needed();
+    void transfer_cached_associated_data_to_client();
+    void transfer_cached_body_to_client();
     ErrorOr<void> write_queued_bytes_without_blocking();
 
     virtual bool is_revalidation_request() const override;
@@ -212,6 +215,7 @@ private:
     AllocatingMemoryStream m_response_buffer;
     RefPtr<Core::Notifier> m_client_writer_notifier;
     Optional<RequestPipe> m_client_request_pipe;
+    OwnPtr<HTTP::CacheAssociatedDataReader> m_cache_associated_data_reader;
     size_t m_bytes_transferred_to_client { 0 };
 
     Optional<Requests::NetworkError> m_network_error;

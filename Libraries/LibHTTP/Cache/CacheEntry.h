@@ -106,7 +106,40 @@ private:
     AK::Duration m_current_time_offset_for_testing;
 };
 
-class CacheEntryReader final : public CacheEntry {
+class CacheEntryFileTransfer {
+public:
+    virtual ~CacheEntryFileTransfer() = default;
+
+    void send_to(int socket_fd, Function<void(u64 bytes_sent)> on_complete, Function<void(u64 bytes_sent)> on_error);
+
+    u64 data_size() const { return m_data_size; }
+
+protected:
+    CacheEntryFileTransfer(NonnullOwnPtr<Core::File>, int fd, u64 data_offset, u64 data_size);
+
+    virtual bool marked_for_deletion() = 0;
+
+    void send_without_blocking();
+    virtual void send_complete() = 0;
+    virtual void send_error(Error) = 0;
+
+    NonnullOwnPtr<Core::File> m_file;
+    int m_fd { -1 };
+
+    RefPtr<Core::Notifier> m_socket_write_notifier;
+    int m_socket_fd { -1 };
+
+    Function<void(u64)> m_on_send_complete;
+    Function<void(u64)> m_on_send_error;
+    u64 m_bytes_sent { 0 };
+
+    u64 const m_data_offset { 0 };
+    u64 const m_data_size { 0 };
+};
+
+class CacheEntryReader final
+    : public CacheEntry
+    , public CacheEntryFileTransfer {
 public:
     static ErrorOr<NonnullOwnPtr<CacheEntryReader>> create(DiskCache&, CacheIndex&, u64 cache_key, u64 vary_key, NonnullRefPtr<HeaderList>, u64 data_size);
     virtual ~CacheEntryReader() override = default;
@@ -122,8 +155,6 @@ public:
     void revalidation_succeeded(HeaderList const&);
     void revalidation_failed();
 
-    void send_to(int socket_fd, Function<void(u64 bytes_sent)> on_complete, Function<void(u64 bytes_sent)> on_error);
-
     u32 status_code() const { return m_cache_header.status_code; }
     Optional<String> const& reason_phrase() const { return m_reason_phrase; }
     HeaderList& response_headers() { return m_response_headers; }
@@ -132,29 +163,31 @@ public:
 private:
     CacheEntryReader(DiskCache&, CacheIndex&, u64 cache_key, u64 vary_key, String url, LexicalPath, NonnullOwnPtr<Core::File>, int fd, CacheHeader, Optional<String> reason_phrase, NonnullRefPtr<HeaderList>, u64 data_offset, u64 data_size);
 
-    void send_without_blocking();
-    void send_complete();
-    void send_error(Error);
+    virtual bool marked_for_deletion() override { return m_marked_for_deletion; }
+    virtual void send_complete() override;
+    virtual void send_error(Error) override;
 
     ErrorOr<void> read_and_validate_footer();
-
-    NonnullOwnPtr<Core::File> m_file;
-    int m_fd { -1 };
-
-    RefPtr<Core::Notifier> m_socket_write_notifier;
-    int m_socket_fd { -1 };
-
-    Function<void(u64)> m_on_send_complete;
-    Function<void(u64)> m_on_send_error;
-    u64 m_bytes_sent { 0 };
 
     Optional<String> m_reason_phrase;
     NonnullRefPtr<HeaderList> m_response_headers;
 
     RevalidationType m_revalidation_type { RevalidationType::None };
+};
 
-    u64 const m_data_offset { 0 };
-    u64 const m_data_size { 0 };
+class CacheAssociatedDataReader final : public CacheEntryFileTransfer {
+public:
+    static ErrorOr<NonnullOwnPtr<CacheAssociatedDataReader>> create(LexicalPath const& cache_directory, u64 cache_key, u64 vary_key, CacheEntryAssociatedData);
+    ~CacheAssociatedDataReader() = default;
+
+private:
+    CacheAssociatedDataReader(LexicalPath, NonnullOwnPtr<Core::File>, int fd, u64 data_size);
+
+    virtual bool marked_for_deletion() override { return false; }
+    virtual void send_complete() override;
+    virtual void send_error(Error) override;
+
+    LexicalPath m_path;
 };
 
 }

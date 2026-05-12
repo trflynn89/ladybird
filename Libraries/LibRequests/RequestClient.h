@@ -7,7 +7,6 @@
 #pragma once
 
 #include <AK/HashMap.h>
-#include <LibCore/AnonymousBuffer.h>
 #include <LibHTTP/Cache/CacheMode.h>
 #include <LibHTTP/Cache/Utilities.h>
 #include <LibHTTP/Cookie/IncludeCredentials.h>
@@ -52,9 +51,9 @@ public:
 private:
     virtual void die() override;
 
-    virtual void request_started(u64 request_id, IPC::File) override;
+    virtual void request_started(u64 request_id, IPC::File, Optional<u64> streamed_javascript_bytecode_size) override;
     virtual void request_finished(u64 request_id, u64, RequestTimingInfo, Optional<NetworkError>) override;
-    virtual void headers_became_available(u64 request_id, Vector<HTTP::Header>, Optional<u32>, Optional<String>, Optional<Core::AnonymousBuffer>, Optional<u64>) override;
+    virtual void headers_became_available(u64 request_id, Vector<HTTP::Header>, Optional<u32>, Optional<String>, Optional<u64>) override;
 
     virtual void retrieve_http_cookie(int client_id, u64 request_id, RequestServer::RequestType request_type, URL::URL url) override;
 

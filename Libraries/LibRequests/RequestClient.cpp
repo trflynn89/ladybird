@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <LibCore/AnonymousBuffer.h>
 #include <LibCore/EventLoop.h>
 #include <LibCore/Promise.h>
 #include <LibCore/System.h>
@@ -112,7 +113,7 @@ void RequestClient::estimated_cache_size(u64 cache_size_estimation_id, CacheSize
         (*promise)->resolve(sizes);
 }
 
-void RequestClient::request_started(u64 request_id, IPC::File response_file)
+void RequestClient::request_started(u64 request_id, IPC::File response_file, Optional<u64> streamed_javascript_bytecode_size)
 {
     auto request = m_requests.get(request_id);
     if (!request.has_value()) {
@@ -121,7 +122,7 @@ void RequestClient::request_started(u64 request_id, IPC::File response_file)
     }
 
     auto response_fd = response_file.take_fd();
-    request.value()->set_request_fd({}, response_fd);
+    request.value()->set_request_fd({}, response_fd, streamed_javascript_bytecode_size);
 }
 
 void RequestClient::request_finished(u64 request_id, u64 total_size, RequestTimingInfo timing_info, Optional<NetworkError> network_error)
@@ -132,10 +133,10 @@ void RequestClient::request_finished(u64 request_id, u64 total_size, RequestTimi
     }
 }
 
-void RequestClient::headers_became_available(u64 request_id, Vector<HTTP::Header> response_headers, Optional<u32> status_code, Optional<String> reason_phrase, Optional<Core::AnonymousBuffer> javascript_bytecode, Optional<u64> javascript_bytecode_cache_vary_key)
+void RequestClient::headers_became_available(u64 request_id, Vector<HTTP::Header> response_headers, Optional<u32> status_code, Optional<String> reason_phrase, Optional<u64> javascript_bytecode_cache_vary_key)
 {
     if (auto request = m_requests.get(request_id); request.has_value())
-        (*request)->did_receive_headers({}, HTTP::HeaderList::create(move(response_headers)), status_code, reason_phrase, move(javascript_bytecode), javascript_bytecode_cache_vary_key);
+        (*request)->did_receive_headers({}, HTTP::HeaderList::create(move(response_headers)), status_code, reason_phrase, javascript_bytecode_cache_vary_key);
     else
         warnln("Received headers for non-existent request {}", request_id);
 }

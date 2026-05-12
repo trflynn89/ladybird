@@ -7,7 +7,6 @@
 
 #include <AK/GenericShorthands.h>
 #include <AK/HashMap.h>
-#include <LibCore/AnonymousBuffer.h>
 #include <LibCore/File.h>
 #include <LibCore/MimeData.h>
 #include <LibCore/Notifier.h>
@@ -666,24 +665,20 @@ void Request::handle_read_cache_state()
     m_response_headers = m_cache_entry_reader->response_headers();
     m_cache_status = CacheStatus::ReadFromCache;
 
+    if (m_disk_cache.has_value()) {
+        auto associated_data_reader = m_disk_cache->open_associated_data(m_url, m_method, *m_request_headers, m_cache_entry_reader->vary_key(), HTTP::CacheEntryAssociatedData::JavaScriptBytecode);
+        if (!associated_data_reader.is_error())
+            m_cache_associated_data_reader = associated_data_reader.release_value();
+    }
+
     if (inform_client_request_started().is_error())
         return;
     transfer_headers_to_client_if_needed();
 
-    m_cache_entry_reader->send_to(
-        m_client_request_pipe->writer_fd(),
-        weak_callback(*this, [](auto& self, auto bytes_sent) {
-            self.m_bytes_transferred_to_client = bytes_sent;
-            self.m_curl_result_code = CURLE_OK;
-
-            self.transition_to_state(State::Complete);
-        }),
-        weak_callback(*this, [](auto& self, auto bytes_sent) {
-            self.m_bytes_transferred_to_client = bytes_sent;
-            self.m_network_error = Requests::NetworkError::CacheReadFailed;
-
-            self.transition_to_state(State::Error);
-        }));
+    if (m_cache_associated_data_reader)
+        transfer_cached_associated_data_to_client();
+    else
+        transfer_cached_body_to_client();
 }
 
 void Request::handle_failed_cache_only_state()
@@ -1126,7 +1121,12 @@ ErrorOr<void> Request::inform_client_request_started()
     }
 
     m_client_request_pipe = request_pipe.release_value();
-    m_client.async_request_started(m_request_id, IPC::File::adopt_fd(m_client_request_pipe->reader_fd()));
+
+    Optional<u64> javascript_bytecode_size;
+    if (m_cache_associated_data_reader)
+        javascript_bytecode_size = m_cache_associated_data_reader->data_size();
+
+    m_client.async_request_started(m_request_id, IPC::File::adopt_fd(m_client_request_pipe->reader_fd()), javascript_bytecode_size);
 
     return {};
 }
@@ -1168,25 +1168,48 @@ void Request::transfer_headers_to_client_if_needed()
         }
     }
 
-    Optional<Core::AnonymousBuffer> javascript_bytecode;
     Optional<u64> javascript_bytecode_cache_vary_key;
 
     if (m_cache_status == CacheStatus::ReadFromCache && m_disk_cache.has_value()) {
         VERIFY(m_cache_entry_reader.has_value());
         javascript_bytecode_cache_vary_key = m_cache_entry_reader->vary_key();
-        auto data = m_disk_cache->retrieve_associated_data(m_url, m_method, *m_request_headers, *javascript_bytecode_cache_vary_key, HTTP::CacheEntryAssociatedData::JavaScriptBytecode);
-        if (!data.is_error() && data.value().has_value()) {
-            auto buffer = Core::AnonymousBuffer::create_with_size(data.value()->size());
-            if (!buffer.is_error()) {
-                memcpy(buffer.value().data<void>(), data.value()->data(), data.value()->size());
-                javascript_bytecode = buffer.release_value();
-            }
-        }
     } else if (m_cache_status == CacheStatus::WrittenToCache && m_cache_entry_writer.has_value()) {
         javascript_bytecode_cache_vary_key = m_cache_entry_writer->vary_key();
     }
 
-    m_client.async_headers_became_available(m_request_id, m_response_headers->headers(), m_status_code, m_reason_phrase, javascript_bytecode, javascript_bytecode_cache_vary_key);
+    m_client.async_headers_became_available(m_request_id, m_response_headers->headers(), m_status_code, m_reason_phrase, javascript_bytecode_cache_vary_key);
+}
+
+void Request::transfer_cached_associated_data_to_client()
+{
+    m_cache_associated_data_reader->send_to(
+        m_client_request_pipe->writer_fd(),
+        weak_callback(*this, [](auto& self, auto) {
+            self.transfer_cached_body_to_client();
+        }),
+        weak_callback(*this, [](auto& self, auto) {
+            self.m_network_error = Requests::NetworkError::CacheReadFailed;
+
+            self.transition_to_state(State::Error);
+        }));
+}
+
+void Request::transfer_cached_body_to_client()
+{
+    m_cache_entry_reader->send_to(
+        m_client_request_pipe->writer_fd(),
+        weak_callback(*this, [](auto& self, auto bytes_sent) {
+            self.m_bytes_transferred_to_client = bytes_sent;
+            self.m_curl_result_code = CURLE_OK;
+
+            self.transition_to_state(State::Complete);
+        }),
+        weak_callback(*this, [](auto& self, auto bytes_sent) {
+            self.m_bytes_transferred_to_client = bytes_sent;
+            self.m_network_error = Requests::NetworkError::CacheReadFailed;
+
+            self.transition_to_state(State::Error);
+        }));
 }
 
 ErrorOr<void> Request::write_queued_bytes_without_blocking()

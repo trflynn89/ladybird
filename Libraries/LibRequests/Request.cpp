@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/NumericLimits.h>
 #include <LibCore/File.h>
 #include <LibRequests/Request.h>
 #include <LibRequests/RequestClient.h>
@@ -38,12 +39,17 @@ bool Request::stop()
 
     m_internal_buffered_data = nullptr;
     m_internal_stream_data = nullptr;
+    m_pending_headers = nullptr;
+    m_streamed_javascript_bytecode_size = {};
+    m_streamed_javascript_bytecode_bytes_received = 0;
+    m_streamed_javascript_bytecode = {};
+    m_payload_received_before_headers.clear();
     m_mode = Mode::Unknown;
 
     return m_client->stop_request({}, *this);
 }
 
-void Request::set_request_fd(Badge<Requests::RequestClient>, int fd)
+void Request::set_request_fd(Badge<Requests::RequestClient>, int fd, Optional<u64> streamed_javascript_bytecode_size)
 {
     // If the request was stopped while this IPC was in-flight, just bail.
     if (!m_internal_stream_data)
@@ -57,6 +63,14 @@ void Request::set_request_fd(Badge<Requests::RequestClient>, int fd)
     notifier->on_activation = move(m_internal_stream_data->read_notifier->on_activation);
     m_internal_stream_data->read_notifier = notifier;
     m_internal_stream_data->read_stream = move(read_stream);
+
+    if (streamed_javascript_bytecode_size.has_value() && *streamed_javascript_bytecode_size <= NumericLimits<size_t>::max()) {
+        m_streamed_javascript_bytecode_size = static_cast<size_t>(*streamed_javascript_bytecode_size);
+
+        auto javascript_bytecode = Core::AnonymousBuffer::create_with_size(*m_streamed_javascript_bytecode_size);
+        if (!javascript_bytecode.is_error())
+            m_streamed_javascript_bytecode = javascript_bytecode.release_value();
+    }
 }
 
 void Request::set_buffered_request_finished_callback(BufferedRequestFinished on_buffered_request_finished)
@@ -113,10 +127,19 @@ void Request::did_finish(Badge<RequestClient>, u64 total_size, RequestTimingInfo
         on_finish(total_size, timing_info, network_error);
 }
 
-void Request::did_receive_headers(Badge<RequestClient>, NonnullRefPtr<HTTP::HeaderList> response_headers, Optional<u32> response_code, Optional<String> const& reason_phrase, Optional<Core::AnonymousBuffer> javascript_bytecode, Optional<u64> javascript_bytecode_cache_vary_key)
+void Request::did_receive_headers(Badge<RequestClient>, NonnullRefPtr<HTTP::HeaderList> response_headers, Optional<u32> response_code, Optional<String> const& reason_phrase, Optional<u64> javascript_bytecode_cache_vary_key)
 {
-    if (on_headers_received)
-        on_headers_received(move(response_headers), response_code, reason_phrase, move(javascript_bytecode), javascript_bytecode_cache_vary_key);
+    if (is_waiting_for_streamed_javascript_bytecode()) {
+        m_pending_headers = make<PendingHeaders>(PendingHeaders {
+            move(response_headers),
+            response_code,
+            reason_phrase,
+            javascript_bytecode_cache_vary_key,
+        });
+        return;
+    }
+
+    dispatch_headers(move(response_headers), response_code, reason_phrase, javascript_bytecode_cache_vary_key);
 }
 
 void Request::did_request_certificates(Badge<RequestClient>)
@@ -134,6 +157,7 @@ void Request::set_up_internal_stream_data(DataReceived on_data_available)
     VERIFY(!m_internal_stream_data);
 
     m_internal_stream_data = make<InternalStreamData>();
+    m_internal_stream_data->on_data_available = move(on_data_available);
     m_internal_stream_data->read_notifier = Core::Notifier::construct(fd(), Core::Notifier::Type::Read);
     if (fd() != -1)
         m_internal_stream_data->read_stream = MUST(ReadStream::create(fd()));
@@ -162,7 +186,7 @@ void Request::set_up_internal_stream_data(DataReceived on_data_available)
         }
     };
 
-    m_internal_stream_data->read_notifier->on_activation = [this, on_data_available = move(on_data_available)]() {
+    m_internal_stream_data->read_notifier->on_activation = [this]() {
         static constexpr size_t buffer_size = 256 * KiB;
         static char buffer[buffer_size];
 
@@ -181,7 +205,7 @@ void Request::set_up_internal_stream_data(DataReceived on_data_available)
             if (read_bytes.is_empty())
                 break;
 
-            on_data_available(read_bytes);
+            process_received_bytes(read_bytes);
         } while (true);
 
         if (m_internal_stream_data->read_stream->is_eof())
@@ -190,6 +214,79 @@ void Request::set_up_internal_stream_data(DataReceived on_data_available)
         if (m_internal_stream_data->request_done)
             m_internal_stream_data->on_finish();
     };
+}
+
+void Request::process_received_bytes(ReadonlyBytes bytes)
+{
+    while (!bytes.is_empty()) {
+        if (is_waiting_for_streamed_javascript_bytecode()) {
+            auto remaining_javascript_bytecode_size = *m_streamed_javascript_bytecode_size - m_streamed_javascript_bytecode_bytes_received;
+            auto bytes_to_copy = min(remaining_javascript_bytecode_size, bytes.size());
+
+            if (m_streamed_javascript_bytecode.has_value())
+                memcpy(static_cast<u8*>(m_streamed_javascript_bytecode->data<void>()) + m_streamed_javascript_bytecode_bytes_received, bytes.data(), bytes_to_copy);
+
+            m_streamed_javascript_bytecode_bytes_received += bytes_to_copy;
+            bytes = bytes.slice(bytes_to_copy);
+
+            dispatch_pending_headers_if_ready();
+            continue;
+        }
+
+        if (!m_response_headers_dispatched) {
+            m_payload_received_before_headers.append(bytes);
+            return;
+        }
+
+        m_internal_stream_data->on_data_available(bytes);
+        return;
+    }
+}
+
+bool Request::is_waiting_for_streamed_javascript_bytecode() const
+{
+    return m_streamed_javascript_bytecode_size.has_value()
+        && m_streamed_javascript_bytecode_bytes_received < *m_streamed_javascript_bytecode_size;
+}
+
+Optional<Core::AnonymousBuffer> Request::take_streamed_javascript_bytecode()
+{
+    if (!m_streamed_javascript_bytecode_size.has_value())
+        return {};
+    if (m_streamed_javascript_bytecode_bytes_received != *m_streamed_javascript_bytecode_size)
+        return {};
+    if (!m_streamed_javascript_bytecode.has_value())
+        return {};
+
+    return m_streamed_javascript_bytecode.release_value();
+}
+
+void Request::dispatch_headers(NonnullRefPtr<HTTP::HeaderList> response_headers, Optional<u32> response_code, Optional<String> const& reason_phrase, Optional<u64> javascript_bytecode_cache_vary_key)
+{
+    m_response_headers_dispatched = true;
+
+    if (on_headers_received)
+        on_headers_received(move(response_headers), response_code, reason_phrase, take_streamed_javascript_bytecode(), javascript_bytecode_cache_vary_key);
+
+    dispatch_payload_received_before_headers();
+}
+
+void Request::dispatch_pending_headers_if_ready()
+{
+    if (!m_pending_headers || is_waiting_for_streamed_javascript_bytecode())
+        return;
+
+    auto pending_headers = move(m_pending_headers);
+    dispatch_headers(move(pending_headers->response_headers), pending_headers->response_code, pending_headers->reason_phrase, pending_headers->javascript_bytecode_cache_vary_key);
+}
+
+void Request::dispatch_payload_received_before_headers()
+{
+    if (!m_internal_stream_data || m_payload_received_before_headers.is_empty())
+        return;
+
+    auto payload = move(m_payload_received_before_headers);
+    m_internal_stream_data->on_data_available(payload);
 }
 
 Request::InternalBufferedData::InternalBufferedData()
