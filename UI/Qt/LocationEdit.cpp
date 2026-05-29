@@ -35,6 +35,8 @@
 
 namespace Ladybird {
 
+static constexpr int LOCATION_EDIT_MIN_WIDTH = 250;
+
 static QColor location_focus_glow_color(QPalette const& palette, int alpha)
 {
     auto color = ChromeStyle::chrome_accent(palette);
@@ -152,6 +154,7 @@ LocationEdit::LocationEdit(QWidget* parent)
 {
     setObjectName("LadybirdLocationEdit");
     setMinimumHeight(37);
+    setMinimumWidth(LOCATION_EDIT_MIN_WIDTH);
     setTextMargins(38, 0, 40, 0);
     update_chrome_style();
 
