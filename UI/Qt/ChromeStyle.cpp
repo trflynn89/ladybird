@@ -311,7 +311,7 @@ QWidget#LadybirdToolbarContainer {{
     border-bottom: 1px solid {5};
 }}
 
-QWidget#LadybirdNavigationToolbar QToolButton {{
+QWidget#LadybirdNavigationToolbar > QToolButton {{
     color: {6};
     background: transparent;
     border: 1px solid transparent;
@@ -321,22 +321,22 @@ QWidget#LadybirdNavigationToolbar QToolButton {{
     padding: 0;
 }}
 
-QWidget#LadybirdNavigationToolbar QToolButton:hover {{
+QWidget#LadybirdNavigationToolbar > QToolButton:hover {{
     background: {2};
     border-color: {4};
 }}
 
-QWidget#LadybirdNavigationToolbar QToolButton:pressed,
-QWidget#LadybirdNavigationToolbar QToolButton:checked {{
+QWidget#LadybirdNavigationToolbar > QToolButton:pressed,
+QWidget#LadybirdNavigationToolbar > QToolButton:checked {{
     background: {3};
     border-color: {4};
 }}
 
-QWidget#LadybirdNavigationToolbar QToolButton:disabled {{
+QWidget#LadybirdNavigationToolbar > QToolButton:disabled {{
     color: {7};
 }}
 
-QWidget#LadybirdNavigationToolbar QToolButton::menu-indicator {{
+QWidget#LadybirdNavigationToolbar > QToolButton::menu-indicator {{
     image: none;
 }}
 )",
