@@ -110,18 +110,19 @@ Tab::Tab(BrowserWindow* window, RefPtr<WebView::WebContentClient> parent_client,
     m_toolbar = new QWidget(this);
     m_toolbar->setObjectName("LadybirdNavigationToolbar");
     m_toolbar->setFixedHeight(47);
-    m_toolbar->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
+    m_toolbar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
-    auto* toolbar_container_layout = new QVBoxLayout(m_toolbar_container);
-    toolbar_container_layout->setSpacing(0);
-    toolbar_container_layout->setContentsMargins(0, 0, 0, 0);
+    m_toolbar_container_layout = new QVBoxLayout(m_toolbar_container);
+    m_toolbar_container_layout->setSpacing(0);
+    m_toolbar_container_layout->setContentsMargins(0, 0, 0, 0);
 
-    auto* toolbar_layout = new QHBoxLayout(m_toolbar);
-    toolbar_layout->setSpacing(6);
-    toolbar_layout->setContentsMargins(12, 3, 12, 3);
+    m_toolbar_layout = new QHBoxLayout(m_toolbar);
+    m_toolbar_layout->setSpacing(6);
+    m_toolbar_layout->setContentsMargins(12, 3, 12, 3);
 
     m_location_edit = new LocationEdit(this);
     m_bookmarks_bar = new BookmarksBar(this);
+
     m_loading_animation_timer = new QTimer(this);
     m_loading_animation_timer->setInterval(80);
 
@@ -142,8 +143,7 @@ Tab::Tab(BrowserWindow* window, RefPtr<WebView::WebContentClient> parent_client,
     focus_location_editor_action->setShortcuts({ QKeySequence("Ctrl+L"), QKeySequence("Alt+D") });
     addAction(focus_location_editor_action);
 
-    toolbar_container_layout->addWidget(m_toolbar);
-    toolbar_container_layout->addWidget(m_bookmarks_bar);
+    m_toolbar_container_layout->addWidget(m_toolbar);
     tab_layout->addWidget(m_toolbar_container);
     tab_layout->addWidget(m_view);
     tab_layout->addWidget(m_find_in_page);
@@ -173,13 +173,14 @@ Tab::Tab(BrowserWindow* window, RefPtr<WebView::WebContentClient> parent_client,
     m_image_context_menu = create_context_menu(*this, view(), view().image_context_menu());
     m_media_context_menu = create_context_menu(*this, view(), view().media_context_menu());
 
-    toolbar_layout->addWidget(create_toolbar_button(*m_toolbar, *m_navigate_back_action));
-    toolbar_layout->addWidget(create_toolbar_button(*m_toolbar, *m_navigate_forward_action));
-    toolbar_layout->addWidget(create_toolbar_button(*m_toolbar, *m_reload_action));
+    m_toolbar_layout->addWidget(create_toolbar_button(*m_toolbar, *m_navigate_back_action));
+    m_toolbar_layout->addWidget(create_toolbar_button(*m_toolbar, *m_navigate_forward_action));
+    m_toolbar_layout->addWidget(create_toolbar_button(*m_toolbar, *m_reload_action));
     m_location_edit->set_trailing_action(create_application_action(*m_location_edit, view().toggle_bookmark_action()));
-    toolbar_layout->addWidget(m_location_edit, 1);
-    toolbar_layout->addWidget(m_hamburger_button);
+    m_toolbar_layout->addWidget(m_location_edit, 1);
+    m_toolbar_layout->addWidget(m_hamburger_button);
 
+    update_bookmarks_bar_display(WebView::Application::settings().bookmarks_bar_display_mode());
     update_chrome_style();
 
     m_hamburger_button->setVisible(!Settings::the()->show_menubar());
@@ -530,6 +531,26 @@ void Tab::set_window(BrowserWindow& window)
     connect_hamburger_menu();
     m_hamburger_button->setVisible(!Settings::the()->show_menubar());
     recreate_toolbar_icons();
+}
+
+void Tab::update_bookmarks_bar_display(WebView::BookmarksBarDisplayMode display_mode)
+{
+    m_toolbar_container_layout->removeWidget(m_bookmarks_bar);
+    m_toolbar_layout->removeWidget(m_bookmarks_bar);
+
+    switch (display_mode) {
+    case WebView::BookmarksBarDisplayMode::Hidden:
+        m_bookmarks_bar->setVisible(false);
+        break;
+    case WebView::BookmarksBarDisplayMode::BelowLocationBar:
+        m_toolbar_container_layout->addWidget(m_bookmarks_bar);
+        m_bookmarks_bar->setVisible(true);
+        break;
+    case WebView::BookmarksBarDisplayMode::RightOfLocationBar:
+        m_toolbar_layout->insertWidget(m_toolbar_layout->indexOf(m_hamburger_button), m_bookmarks_bar);
+        m_bookmarks_bar->setVisible(true);
+        break;
+    }
 }
 
 void Tab::connect_hamburger_menu()

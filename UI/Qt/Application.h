@@ -60,7 +60,8 @@ private:
     virtual void insert_clipboard_entry(Web::Clipboard::SystemClipboardRepresentation) override;
 
     virtual void rebuild_bookmarks_menu() const override;
-    virtual void update_bookmarks_bar_display(bool) const override;
+    virtual void update_bookmarks_bar_display(WebView::BookmarksBarDisplayMode) const override;
+    virtual bool supports_bookmarks_bar_display_mode(WebView::BookmarksBarDisplayMode) const override { return true; }
     virtual void show_bookmark_context_menu(Gfx::IntPoint, Optional<WebView::BookmarkItem const&>, Optional<String const&> target_folder_id) override;
     virtual Optional<BookmarkID> bookmark_item_id_for_context_menu() const override;
     virtual NonnullRefPtr<BookmarkPromise> display_add_bookmark_dialog() const override;

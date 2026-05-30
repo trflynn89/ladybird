@@ -22,8 +22,12 @@ namespace WebView {
 
 static constexpr auto NEW_TAB_PAGE_URL_KEY = "newTabPageURL"sv;
 
+static constexpr auto BOOKMARKS_BAR_DISPLAY_MODE_KEY = "bookmarksBarDisplayMode"sv;
 static constexpr auto SHOW_BOOKMARKS_BAR_KEY = "showBookmarksBar"sv;
-static constexpr auto DEFAULT_SHOW_BOOKMARKS_BAR = true;
+static constexpr auto BOOKMARKS_BAR_DISPLAY_MODE_HIDDEN = "hidden"sv;
+static constexpr auto BOOKMARKS_BAR_DISPLAY_MODE_BELOW_LOCATION_BAR = "below-location-bar"sv;
+static constexpr auto BOOKMARKS_BAR_DISPLAY_MODE_RIGHT_OF_LOCATION_BAR = "right-of-location-bar"sv;
+static constexpr auto DEFAULT_BOOKMARKS_BAR_DISPLAY_MODE = BookmarksBarDisplayMode::BelowLocationBar;
 
 static constexpr auto DEFAULT_ZOOM_LEVEL_FACTOR_KEY = "defaultZoomLevelFactor"sv;
 static constexpr double INITIAL_ZOOM_LEVEL_FACTOR = 1.0;
@@ -102,6 +106,31 @@ Optional<ConfigVariableID> config_variable_id_from_name(StringView name)
     return {};
 }
 
+static Optional<BookmarksBarDisplayMode> bookmarks_bar_display_mode_from_string(StringView display_mode)
+{
+    if (display_mode == BOOKMARKS_BAR_DISPLAY_MODE_HIDDEN)
+        return BookmarksBarDisplayMode::Hidden;
+    if (display_mode == BOOKMARKS_BAR_DISPLAY_MODE_BELOW_LOCATION_BAR)
+        return BookmarksBarDisplayMode::BelowLocationBar;
+    if (display_mode == BOOKMARKS_BAR_DISPLAY_MODE_RIGHT_OF_LOCATION_BAR)
+        return BookmarksBarDisplayMode::RightOfLocationBar;
+    return {};
+}
+
+static StringView bookmarks_bar_display_mode_to_string(BookmarksBarDisplayMode display_mode)
+{
+    switch (display_mode) {
+    case BookmarksBarDisplayMode::Hidden:
+        return BOOKMARKS_BAR_DISPLAY_MODE_HIDDEN;
+    case BookmarksBarDisplayMode::BelowLocationBar:
+        return BOOKMARKS_BAR_DISPLAY_MODE_BELOW_LOCATION_BAR;
+    case BookmarksBarDisplayMode::RightOfLocationBar:
+        return BOOKMARKS_BAR_DISPLAY_MODE_RIGHT_OF_LOCATION_BAR;
+    }
+
+    VERIFY_NOT_REACHED();
+}
+
 static ConfigVariableDefinition const& config_variable_definition(ConfigVariableID id)
 {
     return config_variable_definitions()[static_cast<size_t>(id)];
@@ -169,8 +198,12 @@ Settings Settings::create(Badge<Application>)
             settings.m_new_tab_page_url = parsed_new_tab_page_url.release_value();
     }
 
-    if (auto show_bookmarks_bar = settings_json.value().get_bool(SHOW_BOOKMARKS_BAR_KEY); show_bookmarks_bar.has_value())
-        settings.m_show_bookmarks_bar = *show_bookmarks_bar;
+    if (auto bookmarks_bar_display_mode = settings_json.value().get_string(BOOKMARKS_BAR_DISPLAY_MODE_KEY); bookmarks_bar_display_mode.has_value()) {
+        if (auto display_mode = bookmarks_bar_display_mode_from_string(bookmarks_bar_display_mode->bytes_as_string_view()); display_mode.has_value())
+            settings.m_bookmarks_bar_display_mode = *display_mode;
+    } else if (auto show_bookmarks_bar = settings_json.value().get_bool(SHOW_BOOKMARKS_BAR_KEY); show_bookmarks_bar.has_value()) {
+        settings.m_bookmarks_bar_display_mode = *show_bookmarks_bar ? BookmarksBarDisplayMode::BelowLocationBar : BookmarksBarDisplayMode::Hidden;
+    }
 
     if (auto factor = settings_json.value().get_double_with_precision_loss(DEFAULT_ZOOM_LEVEL_FACTOR_KEY); factor.has_value())
         settings.m_default_zoom_level_factor = factor.release_value();
@@ -254,7 +287,7 @@ Settings Settings::create(Badge<Application>)
 Settings::Settings(ByteString settings_path)
     : m_settings_path(move(settings_path))
     , m_new_tab_page_url(URL::about_newtab())
-    , m_show_bookmarks_bar(DEFAULT_SHOW_BOOKMARKS_BAR)
+    , m_bookmarks_bar_display_mode(DEFAULT_BOOKMARKS_BAR_DISPLAY_MODE)
     , m_default_zoom_level_factor(INITIAL_ZOOM_LEVEL_FACTOR)
     , m_languages({ DEFAULT_LANGUAGE })
 {
@@ -267,7 +300,7 @@ JsonValue Settings::serialize_json() const
 {
     JsonObject settings;
     settings.set(NEW_TAB_PAGE_URL_KEY, m_new_tab_page_url.serialize());
-    settings.set(SHOW_BOOKMARKS_BAR_KEY, m_show_bookmarks_bar);
+    settings.set(BOOKMARKS_BAR_DISPLAY_MODE_KEY, bookmarks_bar_display_mode_to_string(m_bookmarks_bar_display_mode));
     settings.set(DEFAULT_ZOOM_LEVEL_FACTOR_KEY, m_default_zoom_level_factor);
 
     if (!m_zoom_per_host.is_empty()) {
@@ -383,13 +416,18 @@ void Settings::set_new_tab_page_url(URL::URL new_tab_page_url)
         observer.new_tab_page_url_changed();
 }
 
-void Settings::set_show_bookmarks_bar(bool show_bookmarks_bar)
+void Settings::set_bookmarks_bar_display_mode(BookmarksBarDisplayMode display_mode)
 {
-    m_show_bookmarks_bar = show_bookmarks_bar;
+    m_bookmarks_bar_display_mode = display_mode;
     persist_settings();
 
     for (auto& observer : m_observers)
-        observer.show_bookmarks_bar_changed();
+        observer.bookmarks_bar_display_mode_changed();
+}
+
+void Settings::set_show_bookmarks_bar(bool show_bookmarks_bar)
+{
+    set_bookmarks_bar_display_mode(show_bookmarks_bar ? BookmarksBarDisplayMode::BelowLocationBar : BookmarksBarDisplayMode::Hidden);
 }
 
 void Settings::set_default_zoom_level_factor(double zoom_level)

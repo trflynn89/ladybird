@@ -63,9 +63,9 @@ static double sanitized_display_refresh_rate(double refresh_rate)
 }
 
 struct ApplicationSettingsObserver final : public SettingsObserver {
-    virtual void show_bookmarks_bar_changed() override
+    virtual void bookmarks_bar_display_mode_changed() override
     {
-        Application::the().show_bookmarks_bar_changed({});
+        Application::the().bookmarks_bar_display_mode_changed({});
     }
 
     virtual void browsing_data_settings_changed() override
@@ -1371,11 +1371,27 @@ void Application::initialize_actions()
     m_bookmarks_menu->add_action(*m_toggle_bookmark_action);
     update_bookmark_action_for_current_web_view();
 
-    m_toggle_bookmark_bar_action = Action::create("Toggle Bookmarks Bar"sv, ActionID::ToggleBookmarksBar, [this]() {
-        m_settings.set_show_bookmarks_bar(!m_settings.show_bookmarks_bar());
-    });
-    m_bookmarks_menu->add_action(*m_toggle_bookmark_bar_action);
-    update_bookmarks_bar_action();
+    auto set_bookmarks_bar_display_mode = [this](BookmarksBarDisplayMode display_mode) {
+        return [this, display_mode]() {
+            m_settings.set_bookmarks_bar_display_mode(display_mode);
+        };
+    };
+
+    auto bookmarks_bar_display_mode_menu = Menu::create_group("Bookmarks Bar"sv);
+
+    m_hide_bookmarks_bar_action = Action::create_checkable("Don't Show"sv, ActionID::ToggleBookmarksBarDisplayMode, set_bookmarks_bar_display_mode(BookmarksBarDisplayMode::Hidden));
+    bookmarks_bar_display_mode_menu->add_action(*m_hide_bookmarks_bar_action);
+
+    m_show_bookmarks_bar_below_location_bar_action = Action::create_checkable("Beneath Location Bar"sv, ActionID::ToggleBookmarksBarDisplayMode, set_bookmarks_bar_display_mode(BookmarksBarDisplayMode::BelowLocationBar));
+    bookmarks_bar_display_mode_menu->add_action(*m_show_bookmarks_bar_below_location_bar_action);
+
+    if (supports_bookmarks_bar_display_mode(BookmarksBarDisplayMode::RightOfLocationBar)) {
+        m_show_bookmarks_bar_right_of_location_bar_action = Action::create_checkable("Right of Location Bar"sv, ActionID::ToggleBookmarksBarDisplayMode, set_bookmarks_bar_display_mode(BookmarksBarDisplayMode::RightOfLocationBar));
+        bookmarks_bar_display_mode_menu->add_action(*m_show_bookmarks_bar_right_of_location_bar_action);
+    }
+
+    m_bookmarks_menu->add_submenu(*bookmarks_bar_display_mode_menu);
+    update_bookmarks_bar_actions();
 
     m_bookmarks_menu->add_separator();
     m_bookmarks_menu_static_size = m_bookmarks_menu->size();
@@ -1590,15 +1606,29 @@ void Application::bookmarks_changed(Badge<ApplicationBookmarkStoreObserver>)
     rebuild_bookmarks_menu();
 }
 
-void Application::update_bookmarks_bar_action()
+void Application::update_bookmarks_bar_actions()
 {
-    m_toggle_bookmark_bar_action->set_text(m_settings.show_bookmarks_bar() ? "Hide Bookmark Bar"sv : "Show Bookmark Bar"sv);
+    auto display_mode = m_settings.bookmarks_bar_display_mode();
+    if (!supports_bookmarks_bar_display_mode(display_mode))
+        return;
+
+    switch (display_mode) {
+    case BookmarksBarDisplayMode::Hidden:
+        m_hide_bookmarks_bar_action->set_checked(true);
+        break;
+    case BookmarksBarDisplayMode::BelowLocationBar:
+        m_show_bookmarks_bar_below_location_bar_action->set_checked(true);
+        break;
+    case BookmarksBarDisplayMode::RightOfLocationBar:
+        m_show_bookmarks_bar_right_of_location_bar_action->set_checked(true);
+        break;
+    }
 }
 
-void Application::show_bookmarks_bar_changed(Badge<ApplicationSettingsObserver>)
+void Application::bookmarks_bar_display_mode_changed(Badge<ApplicationSettingsObserver>)
 {
-    update_bookmarks_bar_action();
-    update_bookmarks_bar_display(m_settings.show_bookmarks_bar());
+    update_bookmarks_bar_actions();
+    update_bookmarks_bar_display(m_settings.bookmarks_bar_display_mode());
 }
 
 void Application::create_bookmark_menu_items(Optional<MenuData> data)

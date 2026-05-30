@@ -43,6 +43,12 @@ enum class GlobalPrivacyControl {
     Yes,
 };
 
+enum class BookmarksBarDisplayMode {
+    Hidden,
+    BelowLocationBar,
+    RightOfLocationBar,
+};
+
 enum class ConfigVariableID : u8 {
     ShowWebContentProcessIDInTabTitle,
     ShowAdvancedDebugMenu,
@@ -69,7 +75,7 @@ public:
     virtual ~SettingsObserver();
 
     virtual void new_tab_page_url_changed() { }
-    virtual void show_bookmarks_bar_changed() { }
+    virtual void bookmarks_bar_display_mode_changed() { }
     virtual void default_zoom_level_factor_changed() { }
     virtual void zoom_per_host_changed(StringView host) { (void)host; }
     virtual void languages_changed() { }
@@ -92,7 +98,10 @@ public:
     URL::URL const& new_tab_page_url() const { return m_new_tab_page_url; }
     void set_new_tab_page_url(URL::URL);
 
-    bool show_bookmarks_bar() const { return m_show_bookmarks_bar; }
+    BookmarksBarDisplayMode bookmarks_bar_display_mode() const { return m_bookmarks_bar_display_mode; }
+    void set_bookmarks_bar_display_mode(BookmarksBarDisplayMode);
+
+    bool show_bookmarks_bar() const { return m_bookmarks_bar_display_mode != BookmarksBarDisplayMode::Hidden; }
     void set_show_bookmarks_bar(bool);
 
     double default_zoom_level_factor() const { return m_default_zoom_level_factor; }
@@ -155,7 +164,7 @@ private:
     ByteString m_settings_path;
 
     URL::URL m_new_tab_page_url;
-    bool m_show_bookmarks_bar { true };
+    BookmarksBarDisplayMode m_bookmarks_bar_display_mode { BookmarksBarDisplayMode::BelowLocationBar };
     double m_default_zoom_level_factor { 0 };
     HashMap<String, double> m_zoom_per_host;
     Vector<String> m_languages;

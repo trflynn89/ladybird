@@ -76,7 +76,7 @@ public:
     static HistoryStore& history_store() { return *the().m_history_store; }
     void update_bookmark_action_for_current_web_view();
     void bookmarks_changed(Badge<ApplicationBookmarkStoreObserver>);
-    void show_bookmarks_bar_changed(Badge<ApplicationSettingsObserver>);
+    void bookmarks_bar_display_mode_changed(Badge<ApplicationSettingsObserver>);
     void clear_history();
 
     virtual void show_bookmark_context_menu(Gfx::IntPoint, Optional<BookmarkItem const&>, [[maybe_unused]] Optional<String const&> target_folder_id) { }
@@ -208,7 +208,8 @@ protected:
     virtual Optional<ByteString> ask_user_for_download_path([[maybe_unused]] StringView file) const { return {}; }
 
     virtual void rebuild_bookmarks_menu() const { }
-    virtual void update_bookmarks_bar_display([[maybe_unused]] bool show_bookmarks_bar) const { }
+    virtual void update_bookmarks_bar_display(BookmarksBarDisplayMode) const { }
+    virtual bool supports_bookmarks_bar_display_mode(BookmarksBarDisplayMode display_mode) const { return display_mode != BookmarksBarDisplayMode::RightOfLocationBar; }
     virtual void on_recently_closed_entries_changed() const { }
 
     struct BookmarkID {
@@ -243,7 +244,7 @@ private:
 
     void initialize_actions();
 
-    void update_bookmarks_bar_action();
+    void update_bookmarks_bar_actions();
 
     struct MenuData {
         Menu& menu;
@@ -362,7 +363,9 @@ private:
 
     RefPtr<Menu> m_bookmarks_menu;
     RefPtr<Action> m_toggle_bookmark_action;
-    RefPtr<Action> m_toggle_bookmark_bar_action;
+    RefPtr<Action> m_hide_bookmarks_bar_action;
+    RefPtr<Action> m_show_bookmarks_bar_below_location_bar_action;
+    RefPtr<Action> m_show_bookmarks_bar_right_of_location_bar_action;
     size_t m_bookmarks_menu_static_size { 0 };
 
     RefPtr<Menu> m_bookmarks_bar_context_menu;

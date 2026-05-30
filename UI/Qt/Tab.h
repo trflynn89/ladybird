@@ -80,6 +80,7 @@ public:
     QToolButton* hamburger_button() const { return m_hamburger_button; }
 
     void set_window(BrowserWindow&);
+    void update_bookmarks_bar_display(WebView::BookmarksBarDisplayMode);
     void update_hover_label();
 
     bool url_is_hidden() const { return m_location_edit->url_is_hidden(); }
@@ -109,6 +110,8 @@ private:
 
     QWidget* m_toolbar_container { nullptr };
     QWidget* m_toolbar { nullptr };
+    QBoxLayout* m_toolbar_container_layout { nullptr };
+    QBoxLayout* m_toolbar_layout { nullptr };
     BookmarksBar* m_bookmarks_bar { nullptr };
     QToolButton* m_hamburger_button { nullptr };
     LocationEdit* m_location_edit { nullptr };

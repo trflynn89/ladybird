@@ -41,7 +41,7 @@ enum class ActionID {
     ManageBookmarks,
     ToggleBookmark,
     ToggleBookmarkViaToolbar,
-    ToggleBookmarksBar,
+    ToggleBookmarksBarDisplayMode,
     BookmarkItem,
 
     AddBookmark,

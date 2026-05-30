@@ -305,11 +305,11 @@ void Application::rebuild_bookmarks_menu() const
     }
 }
 
-void Application::update_bookmarks_bar_display(bool show_bookmarks_bar) const
+void Application::update_bookmarks_bar_display(WebView::BookmarksBarDisplayMode display_mode) const
 {
     for (auto* widget : QApplication::topLevelWidgets()) {
         if (auto* window = as_if<BrowserWindow>(widget))
-            window->update_bookmarks_bar_display(show_bookmarks_bar);
+            window->update_bookmarks_bar_display(display_mode);
     }
 }
 

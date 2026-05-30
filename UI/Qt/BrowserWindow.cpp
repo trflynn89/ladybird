@@ -468,11 +468,10 @@ void BrowserWindow::rebuild_bookmarks_menu()
     });
 }
 
-void BrowserWindow::update_bookmarks_bar_display(bool show_bookmarks_bar)
+void BrowserWindow::update_bookmarks_bar_display(WebView::BookmarksBarDisplayMode display_mode)
 {
     for_each_tab([&](Tab& tab) {
-        if (tab.view().is_fullscreen() == Web::ViewportIsFullscreen::No)
-            tab.bookmarks_bar().setVisible(show_bookmarks_bar);
+        tab.update_bookmarks_bar_display(display_mode);
     });
 }
 
@@ -1042,7 +1041,7 @@ void BrowserWindow::enter_fullscreen()
 void BrowserWindow::exit_fullscreen()
 {
     m_tabs_container->set_tab_bar_visible(true);
-    current_tab()->bookmarks_bar().setVisible(WebView::Application::settings().show_bookmarks_bar());
+    current_tab()->update_bookmarks_bar_display(WebView::Application::settings().bookmarks_bar_display_mode());
 
     if (m_restore_to_maximized)
         showMaximized();

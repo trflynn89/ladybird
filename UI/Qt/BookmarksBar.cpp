@@ -174,7 +174,7 @@ BookmarksBar::BookmarksBar(QWidget* parent)
 {
     setObjectName("LadybirdBookmarksBar");
     setIconSize({ BOOKMARK_BUTTON_ICON_SIZE, BOOKMARK_BUTTON_ICON_SIZE });
-    setVisible(WebView::Application::settings().show_bookmarks_bar());
+    setVisible(WebView::Application::settings().bookmarks_bar_display_mode() != WebView::BookmarksBarDisplayMode::Hidden);
     setMovable(false);
     setFloatable(false);
     update_chrome_style();
@@ -249,6 +249,9 @@ void BookmarksBar::rebuild()
                     set_button_properties(button, qstring_from_ak_string(bookmark->text()));
             },
             [&](NonnullRefPtr<WebView::Menu> const& folder) {
+                if (folder->properties().get("type"sv) != "folder"sv)
+                    return;
+
                 auto title = qstring_from_ak_string(folder->title());
 
                 auto* submenu = create_application_menu(*this, *folder);
