@@ -95,6 +95,7 @@ private:
     void show_tab_preview();
     void hide_tab_preview();
     QPoint tab_preview_position_for(int index, QSize const& popup_size) const;
+    QWidget* top_level_browser_widget() const;
 
     QRect visual_tab_rect(int index) const;
     int tab_index_at(QPoint const&) const;
@@ -211,6 +212,9 @@ private:
     void recreate_icons();
     void update_chrome_style();
     void update_vertical_tabs_overlay_geometry();
+    void set_vertical_tabs_hover_window_geometry(QRect const&);
+    bool should_show_collapsed_vertical_tabs_hover_window() const;
+    void position_vertical_tabs_hover_window_over_collapsed_tabs();
     void set_vertical_tabs_hover_expanded(bool);
     void defer_update_vertical_tabs_hover_expanded();
     void update_vertical_tabs_hover_expanded();
@@ -231,6 +235,7 @@ private:
     QWidget* m_tab_bar_row { nullptr };
     QWidget* m_vertical_tabs_reserved_space { nullptr };
     QWidget* m_vertical_tab_bar_column { nullptr };
+    QWidget* m_vertical_tabs_hover_window { nullptr };
     QWidget* m_vertical_tabs_content_separator { nullptr };
     QWidget* m_vertical_tabs_resize_handle { nullptr };
     QWidget* m_vertical_tabs_content { nullptr };
@@ -247,6 +252,7 @@ private:
     bool m_vertical_tabs_expand_on_hover { false };
     WebView::VerticalTabsPosition m_vertical_tabs_position { WebView::VerticalTabsPosition::Left };
     bool m_vertical_tabs_hover_expanded { false };
+    bool m_vertical_tabs_hover_window_contains_cursor { false };
     bool m_is_resizing_vertical_tabs { false };
     bool m_is_updating_chrome_style { false };
     int m_vertical_tabs_expanded_width { 0 };

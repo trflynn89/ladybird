@@ -961,7 +961,7 @@ void TabBar::mouseReleaseEvent(QMouseEvent* event)
 
 void TabBar::mouseDoubleClickEvent(QMouseEvent* event)
 {
-    if (window_uses_client_side_decorations(*this) && tab_index_at(event->pos()) < 0 && event->button() == Qt::LeftButton) {
+    if (window_uses_client_side_decorations(*top_level_browser_widget()) && tab_index_at(event->pos()) < 0 && event->button() == Qt::LeftButton) {
         toggle_window_maximized();
         event->accept();
         return;
@@ -1074,7 +1074,7 @@ void TabBar::start_tab_drag(int index)
 
     auto action = drag->exec(Qt::MoveAction, Qt::MoveAction);
 
-    auto* source_window = qobject_cast<BrowserWindow*>(window());
+    auto* source_window = qobject_cast<BrowserWindow*>(top_level_browser_widget());
     if (source_window && dragged_tab) {
         auto current_index = source_window->tab_index(dragged_tab);
         if (current_index >= 0) {
@@ -1179,7 +1179,7 @@ QPoint TabBar::tab_preview_position_for(int index, QSize const& popup_size) cons
     auto tab_rect = visual_tab_rect(index);
     auto screen = QGuiApplication::screenAt(mapToGlobal(tab_rect.center()));
     if (!screen)
-        screen = window()->screen();
+        screen = top_level_browser_widget()->screen();
     if (!screen)
         screen = QGuiApplication::primaryScreen();
     auto available_geometry = screen ? screen->availableGeometry() : QRect {};
@@ -1262,6 +1262,13 @@ QSize TabBar::vertical_size_hint(int tab_count) const
 bool TabBar::vertical_tabs_are_on_right() const
 {
     return m_vertical_tabs_position == WebView::VerticalTabsPosition::Right;
+}
+
+QWidget* TabBar::top_level_browser_widget() const
+{
+    if (m_tab_widget)
+        return m_tab_widget->window();
+    return window();
 }
 
 int TabBar::max_vertical_scroll_offset() const
@@ -1425,7 +1432,7 @@ void TabBar::update_tab_button_geometry()
 
 void TabBar::toggle_window_maximized()
 {
-    auto* top_level_window = window();
+    auto* top_level_window = top_level_browser_widget();
     if (top_level_window->isMaximized())
         top_level_window->showNormal();
     else
@@ -1434,11 +1441,11 @@ void TabBar::toggle_window_maximized()
 
 bool TabBar::start_window_move()
 {
-    auto* handle = window()->windowHandle();
+    auto* handle = top_level_browser_widget()->windowHandle();
     if (!handle)
         return false;
 #if defined(AK_OS_MACOS)
-    if (start_appkit_window_drag(*this))
+    if (start_appkit_window_drag(*top_level_browser_widget()))
         return true;
 #endif
     return handle->startSystemMove();
@@ -1510,6 +1517,17 @@ TabWidget::TabWidget(QWidget* parent)
     m_vertical_tab_bar_column->setProperty(VERTICAL_TABS_RESIZE_HANDLE_HOVERED_PROPERTY, false);
     m_vertical_tab_bar_column->setProperty(VERTICAL_TABS_RESIZE_HANDLE_ACTIVE_PROPERTY, false);
     m_vertical_tab_bar_column->installEventFilter(this);
+
+    // Keep hover-expanded vertical tabs in a top-level window so they can stack
+    // above native web content windows.
+    m_vertical_tabs_hover_window = new QWidget(this, Qt::ToolTip | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint | Qt::WindowDoesNotAcceptFocus);
+    m_vertical_tabs_hover_window->setAttribute(Qt::WA_TranslucentBackground);
+    m_vertical_tabs_hover_window->setAttribute(Qt::WA_ShowWithoutActivating);
+    m_vertical_tabs_hover_window->setAttribute(Qt::WA_X11DoNotAcceptFocus);
+    m_vertical_tabs_hover_window->setFocusPolicy(Qt::NoFocus);
+    m_vertical_tabs_hover_window->setMouseTracking(true);
+    m_vertical_tabs_hover_window->installEventFilter(this);
+    m_vertical_tabs_hover_window->hide();
 
     m_vertical_tabs_content_separator = new QWidget(this);
     m_vertical_tabs_content_separator->setObjectName("LadybirdVerticalTabsContentSeparator");
@@ -1653,6 +1671,8 @@ void TabWidget::set_tab_bar_visible(bool visible)
         return;
 
     m_tab_bar_visible = visible;
+    if (!m_tab_bar_visible)
+        set_vertical_tabs_hover_expanded(false);
     update_tab_chrome_visibility();
     update_tab_layout();
 }
@@ -1743,8 +1763,28 @@ void TabWidget::dropEvent(QDropEvent* event)
 
 bool TabWidget::eventFilter(QObject* watched, QEvent* event)
 {
-    if (watched == window() && event->type() == QEvent::Leave)
-        defer_update_vertical_tabs_hover_expanded();
+    if (watched == window()) {
+        switch (event->type()) {
+        case QEvent::Leave:
+            defer_update_vertical_tabs_hover_expanded();
+            break;
+        case QEvent::Move:
+        case QEvent::Resize:
+        case QEvent::WindowStateChange:
+        case QEvent::Show:
+        case QEvent::WindowActivate:
+            update_vertical_tabs_overlay_geometry();
+            break;
+        case QEvent::Hide:
+        case QEvent::WindowDeactivate:
+            m_vertical_tabs_hover_window_contains_cursor = false;
+            m_vertical_tabs_hover_window->hide();
+            set_vertical_tabs_hover_expanded(false);
+            break;
+        default:
+            break;
+        }
+    }
 
     if (watched == m_vertical_tabs_resize_handle) {
         auto reset_resize_handle = [this] {
@@ -1803,6 +1843,17 @@ bool TabWidget::eventFilter(QObject* watched, QEvent* event)
         }
     }
 
+    if (watched == m_vertical_tabs_hover_window) {
+        if (event->type() == QEvent::Enter || event->type() == QEvent::MouseMove) {
+            m_vertical_tabs_hover_window_contains_cursor = true;
+            if (!m_vertical_tabs_hover_expanded)
+                set_vertical_tabs_hover_expanded(true);
+        } else if (event->type() == QEvent::Leave) {
+            m_vertical_tabs_hover_window_contains_cursor = false;
+            defer_update_vertical_tabs_hover_expanded();
+        }
+    }
+
     if (watched == m_vertical_tabs_content && event->type() == QEvent::Leave)
         defer_update_vertical_tabs_hover_expanded();
 
@@ -1814,7 +1865,8 @@ bool TabWidget::eventFilter(QObject* watched, QEvent* event)
         || watched == m_new_tab_button;
 
     if (is_vertical_tabs_hover_target) {
-        if (event->type() == QEvent::Enter) {
+        if (event->type() == QEvent::Enter || event->type() == QEvent::MouseMove) {
+            m_vertical_tabs_hover_window_contains_cursor = true;
             set_vertical_tabs_hover_expanded(true);
         } else if (event->type() == QEvent::Leave) {
             defer_update_vertical_tabs_hover_expanded();
@@ -1852,6 +1904,8 @@ bool TabWidget::eventFilter(QObject* watched, QEvent* event)
 void TabWidget::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
+    if (m_vertical_tabs_hover_expanded)
+        set_vertical_tabs_hover_expanded(false);
     update_tab_layout();
 }
 
@@ -1920,15 +1974,13 @@ bool TabWidget::cursor_is_over_vertical_tabs() const
     if (!m_vertical_tabs_content->isVisible())
         return false;
 
-    if (m_vertical_tab_bar_column->underMouse() || m_tab_bar->underMouse() || m_new_tab_button->underMouse())
-        return true;
+    if (m_vertical_tabs_hover_expanded)
+        return m_vertical_tabs_hover_window->isVisible() && m_vertical_tabs_hover_window_contains_cursor;
 
-    auto vertical_tabs_x = vertical_tabs_are_on_right() ? max(0, m_vertical_tabs_content->width() - current_vertical_tabs_width()) : 0;
-    auto vertical_tabs_rect = QRect {
-        m_vertical_tabs_content->mapToGlobal(QPoint { vertical_tabs_x, 0 }),
-        QSize { current_vertical_tabs_width(), m_vertical_tabs_content->height() },
-    };
-    return window()->underMouse() && vertical_tabs_rect.contains(QCursor::pos());
+    auto cursor_position = QCursor::pos();
+    auto chrome_rect = vertical_tabs_chrome_rect();
+    auto vertical_tabs_rect = QRect { mapToGlobal(chrome_rect.topLeft()), chrome_rect.size() };
+    return vertical_tabs_rect.contains(cursor_position);
 }
 
 bool TabWidget::vertical_tabs_are_on_right() const
@@ -2200,9 +2252,9 @@ void TabWidget::update_tab_layout()
         m_vertical_tab_bar_column->setFixedWidth(side_bar_width);
         set_dynamic_property_if_needed(*m_vertical_tab_bar_column, VERTICAL_TABS_POSITION_PROPERTY, vertical_tabs_position_property_value(m_vertical_tabs_position));
         update_vertical_tabs_button_layout();
-        update_vertical_tabs_overlay_geometry();
         m_vertical_tabs_content_layout->activate();
         m_tab_bar->set_available_width(vertical_tabs_tab_width());
+        update_vertical_tabs_overlay_geometry();
         update_vertical_tabs_resize_handle();
         update_vertical_tabs_content_separator();
         return;
@@ -2286,22 +2338,80 @@ void TabWidget::update_chrome_style()
 void TabWidget::update_vertical_tabs_overlay_geometry()
 {
     if (!m_tab_bar_visible || m_tab_bar->tab_layout() == TabLayout::Horizontal) {
+        m_vertical_tabs_hover_window->hide();
+        if (m_vertical_tab_bar_column->parentWidget() != this)
+            m_vertical_tab_bar_column->setParent(this);
         m_vertical_tab_bar_column->hide();
         return;
     }
 
-    m_vertical_tab_bar_column->setGeometry(vertical_tabs_chrome_rect());
+    auto chrome_rect = vertical_tabs_chrome_rect();
+    if (m_vertical_tabs_hover_expanded) {
+        auto hover_window_geometry = QRect { mapToGlobal(chrome_rect.topLeft()), chrome_rect.size() };
+        set_vertical_tabs_hover_window_geometry(hover_window_geometry);
+
+        if (m_vertical_tab_bar_column->parentWidget() != m_vertical_tabs_hover_window)
+            m_vertical_tab_bar_column->setParent(m_vertical_tabs_hover_window);
+
+        m_vertical_tab_bar_column->setGeometry({ QPoint(0, 0), chrome_rect.size() });
+        m_vertical_tab_bar_column->show();
+        if (!window()->isVisible() || window()->isMinimized() || !window()->isActiveWindow()) {
+            m_vertical_tabs_hover_window->hide();
+        } else {
+            m_vertical_tabs_hover_window->show();
+            m_vertical_tabs_hover_window->raise();
+        }
+        return;
+    }
+
+    if (m_vertical_tab_bar_column->parentWidget() != this)
+        m_vertical_tab_bar_column->setParent(this);
+
+    m_vertical_tab_bar_column->setGeometry(chrome_rect);
     m_vertical_tab_bar_column->show();
     m_vertical_tab_bar_column->raise();
+
+    if (should_show_collapsed_vertical_tabs_hover_window())
+        position_vertical_tabs_hover_window_over_collapsed_tabs();
+    else
+        m_vertical_tabs_hover_window->hide();
+}
+
+void TabWidget::set_vertical_tabs_hover_window_geometry(QRect const& geometry)
+{
+    m_vertical_tabs_hover_window->setGeometry(geometry);
+    if (auto* window_handle = m_vertical_tabs_hover_window->windowHandle())
+        window_handle->setGeometry(geometry);
+}
+
+bool TabWidget::should_show_collapsed_vertical_tabs_hover_window() const
+{
+    return can_expand_vertical_tabs_on_hover()
+        && window()->isVisible()
+        && !window()->isMinimized()
+        && window()->isActiveWindow();
+}
+
+void TabWidget::position_vertical_tabs_hover_window_over_collapsed_tabs()
+{
+    auto chrome_rect = vertical_tabs_chrome_rect();
+    auto hover_window_geometry = QRect { mapToGlobal(chrome_rect.topLeft()), chrome_rect.size() };
+    set_vertical_tabs_hover_window_geometry(hover_window_geometry);
+    m_vertical_tabs_hover_window->show();
+    m_vertical_tabs_hover_window->raise();
 }
 
 void TabWidget::set_vertical_tabs_hover_expanded(bool expanded)
 {
     expanded &= can_expand_vertical_tabs_on_hover();
+    if (!expanded)
+        m_vertical_tabs_hover_window_contains_cursor = false;
     if (m_vertical_tabs_hover_expanded == expanded)
         return;
 
     m_vertical_tabs_hover_expanded = expanded;
+    if (m_vertical_tabs_hover_expanded)
+        m_vertical_tabs_hover_window_contains_cursor = true;
     if (m_vertical_tabs_hover_expanded)
         m_vertical_tabs_hover_collapse_timer->start();
     else
