@@ -94,23 +94,23 @@ static bool autocomplete_color_is_dark(QColor const& color)
     return color.lightness() < 128;
 }
 
-static QColor autocomplete_selection_fill(QPalette const& palette)
+static QColor autocomplete_selection_fill(QPalette const& palette, ChromeStyle::WindowVariant variant)
 {
-    auto text = ChromeStyle::chrome_text(palette);
+    auto text = ChromeStyle::chrome_text(palette, variant);
     if (!autocomplete_color_is_dark(text))
-        return ChromeStyle::mix(ChromeStyle::chrome_surface_pressed(palette), text, 0.06);
+        return ChromeStyle::mix(ChromeStyle::chrome_surface_pressed(palette, variant), text, 0.06);
 
-    auto surface = palette.color(QPalette::Base);
+    auto surface = ChromeStyle::chrome_surface(palette, variant);
     if (autocomplete_color_is_dark(surface))
-        surface = palette.color(QPalette::Window);
+        surface = ChromeStyle::chrome_background(palette, variant);
     if (autocomplete_color_is_dark(surface))
         surface = QColor(255, 255, 255);
     return ChromeStyle::mix(surface, QColor(0, 0, 0), 0.08);
 }
 
-static QColor autocomplete_selection_border(QPalette const& palette)
+static QColor autocomplete_selection_border(QPalette const& palette, ChromeStyle::WindowVariant variant)
 {
-    return ChromeStyle::mix(ChromeStyle::chrome_border(palette), autocomplete_selection_fill(palette), ChromeStyle::is_dark(palette) ? 0.32 : 0.24);
+    return ChromeStyle::mix(ChromeStyle::chrome_border(palette, variant), autocomplete_selection_fill(palette, variant), ChromeStyle::is_dark(palette) ? 0.32 : 0.24);
 }
 
 class AutocompleteModel final : public QAbstractListModel {
@@ -258,6 +258,8 @@ class AutocompleteDelegate final : public QStyledItemDelegate {
 public:
     using QStyledItemDelegate::QStyledItemDelegate;
 
+    void set_window_variant(ChromeStyle::WindowVariant variant) { m_window_variant = variant; }
+
     QSize sizeHint(QStyleOptionViewItem const&, QModelIndex const& index) const override
     {
         if (!index.isValid())
@@ -282,7 +284,7 @@ public:
         if (kind == RowKind::SectionHeader) {
             auto text = index.data(HeaderTextRole).toString();
             painter->setFont(autocomplete_section_header_font());
-            auto header_color = ChromeStyle::chrome_muted_text(option.palette);
+            auto header_color = ChromeStyle::chrome_muted_text(option.palette, m_window_variant);
             header_color.setAlpha(170);
             painter->setPen(header_color);
             auto rect = option.rect.adjusted(
@@ -297,8 +299,8 @@ public:
         if (selected) {
             auto rect = option.rect.adjusted(3, 2, -3, -2);
             painter->setRenderHint(QPainter::Antialiasing, true);
-            painter->setPen(QPen(autocomplete_selection_border(option.palette), 1));
-            painter->setBrush(autocomplete_selection_fill(option.palette));
+            painter->setPen(QPen(autocomplete_selection_border(option.palette, m_window_variant), 1));
+            painter->setBrush(autocomplete_selection_fill(option.palette, m_window_variant));
             painter->drawRoundedRect(rect, 7, 7);
         }
 
@@ -335,13 +337,13 @@ public:
             int block_y = option.rect.top() + (option.rect.height() - block_height) / 2;
 
             painter->setFont(autocomplete_primary_font());
-            painter->setPen(ChromeStyle::chrome_text(option.palette));
+            painter->setPen(ChromeStyle::chrome_text(option.palette, m_window_variant));
             auto elided_title = primary_fm.elidedText(title_text, Qt::ElideRight, text_width);
             painter->drawText(QRect(text_x, block_y, text_width, primary_fm.height()),
                 Qt::AlignLeft | Qt::AlignVCenter, elided_title);
 
             painter->setFont(autocomplete_secondary_font());
-            auto secondary_color = ChromeStyle::chrome_muted_text(option.palette);
+            auto secondary_color = ChromeStyle::chrome_muted_text(option.palette, m_window_variant);
             secondary_color.setAlpha(180);
             painter->setPen(secondary_color);
             auto elided_secondary = secondary_fm.elidedText(secondary_text, Qt::ElideRight, text_width);
@@ -351,7 +353,7 @@ public:
                 Qt::AlignLeft | Qt::AlignVCenter, elided_secondary);
         } else {
             painter->setFont(QApplication::font());
-            painter->setPen(ChromeStyle::chrome_text(option.palette));
+            painter->setPen(ChromeStyle::chrome_text(option.palette, m_window_variant));
             QFontMetrics fm(QApplication::font());
             auto elided_url = fm.elidedText(url_text, Qt::ElideRight, text_width);
             painter->drawText(
@@ -361,6 +363,9 @@ public:
 
         painter->restore();
     }
+
+private:
+    ChromeStyle::WindowVariant m_window_variant { ChromeStyle::WindowVariant::Normal };
 };
 
 Autocomplete::Autocomplete(QLineEdit* anchor)
@@ -444,9 +449,11 @@ void Autocomplete::update_chrome_style()
 
     m_is_updating_chrome_style = true;
     auto palette = QApplication::palette();
+    auto variant = ChromeStyle::window_variant(m_anchor);
     m_popup->setPalette(palette);
     m_list_view->setPalette(palette);
-    m_popup->setStyleSheet(ChromeStyle::autocomplete_popup_style_sheet(palette));
+    m_delegate->set_window_variant(variant);
+    m_popup->setStyleSheet(ChromeStyle::autocomplete_popup_style_sheet(palette, variant));
     m_popup->update();
     m_list_view->viewport()->update();
     m_is_updating_chrome_style = false;

@@ -54,9 +54,10 @@ private:
         painter.setRenderHint(QPainter::Antialiasing, true);
 
         if (isDown() || underMouse()) {
+            auto variant = ChromeStyle::window_variant(this);
             auto background = isDown()
-                ? ChromeStyle::mix(ChromeStyle::chrome_surface_pressed(palette()), ChromeStyle::chrome_button_text(palette()), 0.04)
-                : ChromeStyle::mix(ChromeStyle::chrome_surface_hover(palette()), ChromeStyle::chrome_button_text(palette()), 0.04);
+                ? ChromeStyle::mix(ChromeStyle::chrome_surface_pressed(palette(), variant), ChromeStyle::chrome_button_text(palette(), variant), 0.04)
+                : ChromeStyle::mix(ChromeStyle::chrome_surface_hover(palette(), variant), ChromeStyle::chrome_button_text(palette(), variant), 0.04);
             painter.setPen(Qt::NoPen);
             painter.setBrush(background);
             auto hover_rect = QRectF(0, 0, hover_size, hover_size);
@@ -466,7 +467,7 @@ void LocationEdit::update_chrome_style()
         return;
 
     m_is_updating_chrome_style = true;
-    setStyleSheet(ChromeStyle::location_edit_style_sheet(palette()));
+    setStyleSheet(ChromeStyle::location_edit_style_sheet(palette(), ChromeStyle::window_variant(this)));
     m_is_updating_chrome_style = false;
     update_zoom_indicator();
 }
@@ -613,14 +614,15 @@ void LocationEdit::highlight_location()
     auto url = ak_string_from_qstring(text());
     QList<QInputMethodEvent::Attribute> attributes;
 
-    auto darkened_text_color = ChromeStyle::chrome_text(palette());
+    auto variant = ChromeStyle::window_variant(this);
+    auto darkened_text_color = ChromeStyle::chrome_text(palette(), variant);
     darkened_text_color.setAlpha(127);
 
     QTextCharFormat dark_attributes;
     dark_attributes.setForeground(darkened_text_color);
 
     QTextCharFormat highlight_attributes;
-    highlight_attributes.setForeground(ChromeStyle::chrome_text(palette()));
+    highlight_attributes.setForeground(ChromeStyle::chrome_text(palette(), variant));
 
     auto append_attributes = [&](StringView scheme_and_subdomain, StringView effective_tld_plus_one, StringView remainder) {
         attributes.append({

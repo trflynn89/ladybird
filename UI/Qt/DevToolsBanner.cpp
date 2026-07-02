@@ -55,7 +55,7 @@ void DevToolsBanner::update_chrome_style()
         return;
 
     m_is_updating_chrome_style = true;
-    setStyleSheet(ChromeStyle::devtools_banner_style_sheet(palette()));
+    setStyleSheet(ChromeStyle::devtools_banner_style_sheet(palette(), ChromeStyle::window_variant(this)));
     m_is_updating_chrome_style = false;
 }
 

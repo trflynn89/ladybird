@@ -198,7 +198,7 @@ void BookmarksBar::update_chrome_style()
         return;
 
     m_is_updating_chrome_style = true;
-    setStyleSheet(ChromeStyle::bookmarks_bar_style_sheet(palette()));
+    setStyleSheet(ChromeStyle::bookmarks_bar_style_sheet(palette(), ChromeStyle::window_variant(this)));
     m_is_updating_chrome_style = false;
 }
 

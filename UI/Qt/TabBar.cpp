@@ -299,8 +299,9 @@ private:
         auto hovered = is_hovered();
 
         if (isDown()) {
-            painter.setBrush(ChromeStyle::chrome_surface_pressed(palette()));
-            painter.setPen(QPen(ChromeStyle::chrome_control_border(palette()), 1));
+            auto variant = ChromeStyle::window_variant(this);
+            painter.setBrush(ChromeStyle::chrome_surface_pressed(palette(), variant));
+            painter.setPen(QPen(ChromeStyle::chrome_control_border(palette(), variant), 1));
             painter.drawPath(tab_path);
         } else if (hovered) {
             painter.setBrush(tab_hover_surface(palette(), 1.0));
@@ -328,9 +329,10 @@ private:
 
         contents_rect.setLeft(icon_rect.right() + 8);
 
-        auto text_color = ChromeStyle::mix(ChromeStyle::chrome_button_text(palette()), ChromeStyle::chrome_muted_text(palette()), dark ? 0.26 : 0.40);
+        auto variant = ChromeStyle::window_variant(this);
+        auto text_color = ChromeStyle::mix(ChromeStyle::chrome_button_text(palette(), variant), ChromeStyle::chrome_muted_text(palette(), variant), dark ? 0.26 : 0.40);
         if (hovered || isDown())
-            text_color = ChromeStyle::chrome_button_text(palette());
+            text_color = ChromeStyle::chrome_button_text(palette(), variant);
         painter.setPen(text_color);
         auto text_font = m_tab_bar.font();
         painter.setFont(text_font);
@@ -444,9 +446,9 @@ public:
         outer_layout->addWidget(m_card);
     }
 
-    void set_preview(QPalette const& palette, QString title, QString url, QPixmap const& thumbnail)
+    void set_preview(QPalette const& palette, ChromeStyle::WindowVariant variant, QString title, QString url, QPixmap const& thumbnail)
     {
-        update_chrome_style(palette);
+        update_chrome_style(palette, variant);
 
         if (title.trimmed().isEmpty())
             title = "Untitled";
@@ -461,14 +463,14 @@ public:
     }
 
 private:
-    void update_chrome_style(QPalette const& palette)
+    void update_chrome_style(QPalette const& palette, ChromeStyle::WindowVariant variant)
     {
-        auto card_background = ChromeStyle::style_sheet_color(ChromeStyle::chrome_surface(palette));
-        auto thumbnail_background = ChromeStyle::chrome_surface_recessed(palette);
-        auto border_color = ChromeStyle::chrome_control_border(palette);
+        auto card_background = ChromeStyle::style_sheet_color(ChromeStyle::chrome_surface(palette, variant));
+        auto thumbnail_background = ChromeStyle::chrome_surface_recessed(palette, variant);
+        auto border_color = ChromeStyle::chrome_control_border(palette, variant);
         auto border = ChromeStyle::style_sheet_color(border_color);
-        auto text = ChromeStyle::style_sheet_color(ChromeStyle::chrome_text(palette));
-        auto muted_text = ChromeStyle::style_sheet_color(ChromeStyle::chrome_muted_text(palette));
+        auto text = ChromeStyle::style_sheet_color(ChromeStyle::chrome_text(palette, variant));
+        auto muted_text = ChromeStyle::style_sheet_color(ChromeStyle::chrome_muted_text(palette, variant));
 
         m_thumbnail->set_colors(thumbnail_background, border_color);
 
@@ -668,9 +670,10 @@ void TabBar::paintEvent(QPaintEvent*)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
 
-    auto border = ChromeStyle::chrome_border(palette());
+    auto variant = ChromeStyle::window_variant(this);
+    auto border = ChromeStyle::chrome_border(palette(), variant);
     auto dark = ChromeStyle::is_dark(palette());
-    auto text_color = ChromeStyle::chrome_text(palette());
+    auto text_color = ChromeStyle::chrome_text(palette(), variant);
     auto is_vertical = tab_layout() != TabLayout::Horizontal;
     auto is_collapsed_vertical = tab_layout() == TabLayout::VerticalCollapsed;
 
@@ -704,8 +707,8 @@ void TabBar::paintEvent(QPaintEvent*)
             painter.drawPath(tab_path.translated(0, 1));
 
             auto selected_gradient = QLinearGradient(shape_rect.topLeft(), shape_rect.bottomLeft());
-            selected_gradient.setColorAt(0.0, ChromeStyle::chrome_active_tab_surface_top(palette()));
-            selected_gradient.setColorAt(1.0, ChromeStyle::chrome_active_tab_surface_bottom(palette()));
+            selected_gradient.setColorAt(0.0, ChromeStyle::chrome_active_tab_surface_top(palette(), variant));
+            selected_gradient.setColorAt(1.0, ChromeStyle::chrome_active_tab_surface_bottom(palette(), variant));
             painter.setBrush(selected_gradient);
             painter.setPen(QPen(selected_tab_border(palette(), is_collapsed_vertical), 1));
             painter.drawPath(tab_path);
@@ -1180,7 +1183,7 @@ void TabBar::show_tab_preview()
         return;
     }
 
-    m_tab_preview_popup->set_preview(palette(), tab->title(), qstring_from_ak_string(tab->view().url().serialize()), *thumbnail);
+    m_tab_preview_popup->set_preview(palette(), ChromeStyle::window_variant(this), tab->title(), qstring_from_ak_string(tab->view().url().serialize()), *thumbnail);
     m_tab_preview_popup->move(tab_preview_position_for(index, m_tab_preview_popup->sizeHint()));
     m_tab_preview_popup->show();
     m_tab_preview_popup->raise();
@@ -2298,7 +2301,7 @@ void TabWidget::update_chrome_style()
         return;
 
     m_is_updating_chrome_style = true;
-    auto style_sheet = ChromeStyle::tab_widget_style_sheet(palette());
+    auto style_sheet = ChromeStyle::tab_widget_style_sheet(palette(), ChromeStyle::window_variant(this));
     m_tab_bar_row->setStyleSheet(style_sheet);
     m_vertical_tab_bar_column->setStyleSheet(style_sheet);
     m_vertical_tabs_content_separator->setStyleSheet(style_sheet);

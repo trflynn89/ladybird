@@ -125,7 +125,7 @@ void FindInPageWidget::update_chrome_style()
         return;
 
     m_is_updating_chrome_style = true;
-    setStyleSheet(ChromeStyle::find_in_page_style_sheet(palette()));
+    setStyleSheet(ChromeStyle::find_in_page_style_sheet(palette(), ChromeStyle::window_variant(this)));
     m_is_updating_chrome_style = false;
 }
 

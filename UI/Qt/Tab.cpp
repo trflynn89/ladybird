@@ -282,14 +282,14 @@ static QString download_status_text(WebView::FileDownloader::Download const& dow
     VERIFY_NOT_REACHED();
 }
 
-static QString downloads_popover_style_sheet(QPalette const& palette)
+static QString downloads_popover_style_sheet(QPalette const& palette, ChromeStyle::WindowVariant variant)
 {
-    auto surface = ChromeStyle::style_sheet_color(ChromeStyle::chrome_surface(palette));
-    auto recessed_surface = ChromeStyle::style_sheet_color(ChromeStyle::chrome_surface_recessed(palette));
-    auto hover_surface = ChromeStyle::style_sheet_color(ChromeStyle::chrome_surface_hover(palette));
-    auto border = ChromeStyle::style_sheet_color(ChromeStyle::chrome_border(palette));
-    auto text = ChromeStyle::style_sheet_color(ChromeStyle::chrome_text(palette));
-    auto muted_text = ChromeStyle::style_sheet_color(ChromeStyle::chrome_muted_text(palette));
+    auto surface = ChromeStyle::style_sheet_color(ChromeStyle::chrome_surface(palette, variant));
+    auto recessed_surface = ChromeStyle::style_sheet_color(ChromeStyle::chrome_surface_recessed(palette, variant));
+    auto hover_surface = ChromeStyle::style_sheet_color(ChromeStyle::chrome_surface_hover(palette, variant));
+    auto border = ChromeStyle::style_sheet_color(ChromeStyle::chrome_border(palette, variant));
+    auto text = ChromeStyle::style_sheet_color(ChromeStyle::chrome_text(palette, variant));
+    auto muted_text = ChromeStyle::style_sheet_color(ChromeStyle::chrome_muted_text(palette, variant));
     auto accent = ChromeStyle::style_sheet_color(ChromeStyle::chrome_accent(palette));
 
     return qformatted(R"(
@@ -518,10 +518,10 @@ public:
         layout->addWidget(show_all_button);
     }
 
-    void update_chrome_style(QPalette const& palette)
+    void update_chrome_style(QPalette const& palette, ChromeStyle::WindowVariant variant)
     {
         setPalette(palette);
-        setStyleSheet(downloads_popover_style_sheet(palette));
+        setStyleSheet(downloads_popover_style_sheet(palette, variant));
     }
 
     bool set_downloads(ReadonlySpan<WebView::FileDownloader::Download> downloads)
@@ -1347,14 +1347,15 @@ void Tab::update_chrome_style()
     if (m_is_updating_chrome_style)
         return;
     m_is_updating_chrome_style = true;
-    m_toolbar_container->setStyleSheet(ChromeStyle::toolbar_container_style_sheet(palette()));
-    auto hover_surface = ChromeStyle::style_sheet_color(ChromeStyle::chrome_surface(palette()));
-    auto hover_border = ChromeStyle::style_sheet_color(ChromeStyle::chrome_border(palette()));
-    auto hover_text = ChromeStyle::style_sheet_color(ChromeStyle::chrome_text(palette()));
+    auto variant = m_window->is_private() == WebView::IsPrivate::Yes ? ChromeStyle::WindowVariant::Private : ChromeStyle::WindowVariant::Normal;
+    m_toolbar_container->setStyleSheet(ChromeStyle::toolbar_container_style_sheet(palette(), variant));
+    auto hover_surface = ChromeStyle::style_sheet_color(ChromeStyle::chrome_surface(palette(), variant));
+    auto hover_border = ChromeStyle::style_sheet_color(ChromeStyle::chrome_border(palette(), variant));
+    auto hover_text = ChromeStyle::style_sheet_color(ChromeStyle::chrome_text(palette(), variant));
     m_hover_label->setStyleSheet(qformatted("background: {}; color: {}; border: 1px solid {}; border-radius: 6px;",
         hover_surface, hover_text, hover_border));
     if (m_downloads_popover)
-        m_downloads_popover->update_chrome_style(palette());
+        m_downloads_popover->update_chrome_style(palette(), variant);
     m_is_updating_chrome_style = false;
 }
 
@@ -1491,7 +1492,8 @@ void Tab::show_downloads_popover()
         };
     }
 
-    m_downloads_popover->update_chrome_style(palette());
+    auto variant = m_window->is_private() == WebView::IsPrivate::Yes ? ChromeStyle::WindowVariant::Private : ChromeStyle::WindowVariant::Normal;
+    m_downloads_popover->update_chrome_style(palette(), variant);
     (void)m_downloads_popover->set_downloads(WebView::Application::the().file_downloader().downloads());
     position_downloads_popover();
     m_downloads_popover->show();

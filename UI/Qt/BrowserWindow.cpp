@@ -980,7 +980,8 @@ void BrowserWindow::create_menu_bar_window_controls()
 
 void BrowserWindow::update_menu_bar_style()
 {
-    menuBar()->setStyleSheet(ChromeStyle::menu_bar_style_sheet(palette()));
+    auto variant = is_private() == WebView::IsPrivate::Yes ? ChromeStyle::WindowVariant::Private : ChromeStyle::WindowVariant::Normal;
+    menuBar()->setStyleSheet(ChromeStyle::menu_bar_style_sheet(palette(), variant));
 }
 
 void BrowserWindow::update_menu_bar_visibility()
@@ -1603,7 +1604,8 @@ void BrowserWindow::update_window_corners()
     auto should_round_window = should_use_rounded_corners && !isFullScreen();
 
     clearMask();
-    set_rounded_window_corners(*this, should_round_window, WINDOW_CORNER_RADIUS, ChromeStyle::chrome_background(palette()));
+    auto variant = is_private() == WebView::IsPrivate::Yes ? ChromeStyle::WindowVariant::Private : ChromeStyle::WindowVariant::Normal;
+    set_rounded_window_corners(*this, should_round_window, WINDOW_CORNER_RADIUS, ChromeStyle::chrome_background(palette(), variant));
 #endif
 }
 
@@ -1639,7 +1641,8 @@ void BrowserWindow::paintEvent(QPaintEvent* event)
         return;
 
     QPainter painter(this);
-    auto color = ChromeStyle::chrome_window_outline(palette());
+    auto variant = is_private() == WebView::IsPrivate::Yes ? ChromeStyle::WindowVariant::Private : ChromeStyle::WindowVariant::Normal;
+    auto color = ChromeStyle::chrome_window_outline(palette(), variant);
     auto frame = rect();
     painter.fillRect(QRect(frame.left(), frame.top(), frame.width(), 1), color);
     painter.fillRect(QRect(frame.left(), frame.bottom(), frame.width(), 1), color);
