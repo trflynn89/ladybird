@@ -6,26 +6,14 @@
 
 #pragma once
 
-#include <AK/Types.h>
 #include <LibWebView/PrivateBrowsing.h>
 
 #import <Cocoa/Cocoa.h>
-#import <Interface/LadybirdWebViewWindow.h>
 
-@class BookmarksBar;
-@class LadybirdWebView;
-
-@interface BrowserWindow : LadybirdWebViewWindow
+@interface BrowserWindow : NSWindow
 
 - (instancetype)init:(WebView::IsPrivate)is_private;
-- (instancetype)initAsChild:(BrowserWindow*)parent
-                  pageIndex:(u64)page_index;
 
-- (WebView::IsPrivate)isPrivate;
-
-- (BookmarksBar*)bookmarksBar;
-
-- (void)rebuildBookmarksBar;
-- (void)updateBookmarksBarDisplay:(bool)show_bookmarks_bar;
+@property (nonatomic, weak) NSResponder* preferred_first_responder;
 
 @end

@@ -385,7 +385,7 @@ static Web::DevicePixelPoint node_picker_position_for(Ladybird::WebViewBridge co
         if (self == nil) {
             return;
         }
-        [[self window] orderFront:nil];
+        [self.observer onWebViewActivated];
     };
 
     m_web_view_bridge->on_close = [weak_self]() {
@@ -393,7 +393,7 @@ static Web::DevicePixelPoint node_picker_position_for(Ladybird::WebViewBridge co
         if (self == nil) {
             return;
         }
-        [[self window] close];
+        [self.observer onWebViewClosed];
     };
 
     m_web_view_bridge->on_load_start = [weak_self]() {

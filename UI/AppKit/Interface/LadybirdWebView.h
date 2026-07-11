@@ -41,6 +41,9 @@
 - (void)onFindInPageResult:(size_t)current_match_index
            totalMatchCount:(Optional<size_t> const&)total_match_count;
 
+- (void)onWebViewActivated;
+- (void)onWebViewClosed;
+
 @end
 
 @interface LadybirdWebView : NSView <NSMenuDelegate, NSTextInputClient>
