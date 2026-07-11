@@ -5,6 +5,8 @@ add_library(ladybird_impl STATIC
     Interface/Autocomplete.mm
     Interface/BookmarkFolder.mm
     Interface/BookmarksBar.mm
+    Interface/BrowserWindow.mm
+    Interface/BrowserWindowController.mm
     Interface/Event.mm
     Interface/InfoBar.mm
     Interface/LadybirdWebView.mm
@@ -14,8 +16,6 @@ add_library(ladybird_impl STATIC
     Interface/Menu.mm
     Interface/Palette.mm
     Interface/SearchPanel.mm
-    Interface/Tab.mm
-    Interface/TabController.mm
     Utilities/ApplicationIcon.mm
     Utilities/Conversions.mm
     Utilities/DictionaryLookup.mm
