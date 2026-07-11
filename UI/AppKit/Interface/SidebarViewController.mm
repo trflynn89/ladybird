@@ -122,7 +122,7 @@ static NSUserInterfaceItemIdentifier const SIDEBAR_TAB_CELL_IDENTIFIER = @"Sideb
         ];
 
         [self addTrackingArea:[[NSTrackingArea alloc] initWithRect:NSZeroRect
-                                                           options:NSTrackingMouseEnteredAndExited | NSTrackingActiveInKeyWindow | NSTrackingInVisibleRect
+                                                           options:NSTrackingMouseEnteredAndExited | NSTrackingActiveInActiveApp | NSTrackingInVisibleRect
                                                              owner:self
                                                           userInfo:nil]];
     }
@@ -305,6 +305,37 @@ static NSUserInterfaceItemIdentifier const SIDEBAR_TAB_CELL_IDENTIFIER = @"Sideb
 
 @end
 
+@interface SidebarTrackingScrollView : NSScrollView
+@property (nonatomic, copy) void (^on_hover_change)(BOOL);
+@end
+
+@implementation SidebarTrackingScrollView
+
+- (instancetype)initWithFrame:(NSRect)frame
+{
+    if (self = [super initWithFrame:frame]) {
+        [self addTrackingArea:[[NSTrackingArea alloc] initWithRect:NSZeroRect
+                                                           options:NSTrackingMouseEnteredAndExited | NSTrackingActiveInActiveApp | NSTrackingInVisibleRect
+                                                             owner:self
+                                                          userInfo:nil]];
+    }
+    return self;
+}
+
+- (void)mouseEntered:(NSEvent*)event
+{
+    if (self.on_hover_change)
+        self.on_hover_change(YES);
+}
+
+- (void)mouseExited:(NSEvent*)event
+{
+    if (self.on_hover_change)
+        self.on_hover_change(NO);
+}
+
+@end
+
 @interface SidebarTableView : NSTableView
 @property (nonatomic, copy) void (^on_middle_click)(NSInteger);
 @property (nonatomic, copy) NSMenu* (^context_menu_for_row)(NSInteger);
@@ -357,7 +388,7 @@ static NSUserInterfaceItemIdentifier const SIDEBAR_TAB_CELL_IDENTIFIER = @"Sideb
 
 - (void)loadView
 {
-    auto* scroll_view = [[NSScrollView alloc] initWithFrame:NSZeroRect];
+    auto* scroll_view = [[SidebarTrackingScrollView alloc] initWithFrame:NSZeroRect];
     scroll_view.drawsBackground = NO;
     scroll_view.hasVerticalScroller = YES;
 
@@ -397,6 +428,10 @@ static NSUserInterfaceItemIdentifier const SIDEBAR_TAB_CELL_IDENTIFIER = @"Sideb
     self.view = container;
 
     __weak SidebarViewController* weak_self = self;
+    scroll_view.on_hover_change = ^(BOOL hovered) {
+        if (weak_self.on_hover_change)
+            weak_self.on_hover_change(hovered);
+    };
     self.table_view.on_middle_click = ^(NSInteger row) {
         SidebarViewController* self = weak_self;
         if (self != nil && row >= 0 && row < (NSInteger)self.tabs.count && self.on_close_tab)

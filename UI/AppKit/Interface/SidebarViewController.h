@@ -26,5 +26,6 @@
 @property (nonatomic, copy) void (^on_move_tab_to_new_window)(Tab*);
 @property (nonatomic, copy) void (^on_new_tab)(void);
 @property (nonatomic, copy) void (^on_toggle_tab_audio_state)(Tab*);
+@property (nonatomic, copy) void (^on_hover_change)(BOOL);
 
 @end
