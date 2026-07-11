@@ -41,6 +41,69 @@ struct HideCursor {
     }
 };
 
+static NSCursor* ns_cursor_for_standard_cursor(Gfx::StandardCursor cursor)
+{
+    switch (cursor) {
+    case Gfx::StandardCursor::Arrow:
+        return NSCursor.arrowCursor;
+    case Gfx::StandardCursor::Crosshair:
+        return NSCursor.crosshairCursor;
+    case Gfx::StandardCursor::IBeam:
+        return NSCursor.IBeamCursor;
+    case Gfx::StandardCursor::ResizeHorizontal:
+        return NSCursor.resizeLeftRightCursor;
+    case Gfx::StandardCursor::ResizeVertical:
+        return NSCursor.resizeUpDownCursor;
+    case Gfx::StandardCursor::ResizeDiagonalTLBR:
+        if (@available(macOS 15.0, *)) {
+            return [NSCursor frameResizeCursorFromPosition:NSCursorFrameResizePositionBottomRight
+                                              inDirections:NSCursorFrameResizeDirectionsAll];
+        }
+        // FIXME: AppKit does not have a corresponding cursor, so we should make one.
+        return NSCursor.arrowCursor;
+    case Gfx::StandardCursor::ResizeDiagonalBLTR:
+        if (@available(macOS 15.0, *)) {
+            return [NSCursor frameResizeCursorFromPosition:NSCursorFrameResizePositionBottomLeft
+                                              inDirections:NSCursorFrameResizeDirectionsAll];
+        }
+        // FIXME: AppKit does not have a corresponding cursor, so we should make one.
+        return NSCursor.arrowCursor;
+    case Gfx::StandardCursor::ResizeColumn:
+        return NSCursor.resizeLeftRightCursor;
+    case Gfx::StandardCursor::ResizeRow:
+        return NSCursor.resizeUpDownCursor;
+    case Gfx::StandardCursor::Hand:
+        return NSCursor.pointingHandCursor;
+    case Gfx::StandardCursor::Help:
+        // FIXME: AppKit does not have a corresponding cursor, so we should make one.
+        return NSCursor.arrowCursor;
+    case Gfx::StandardCursor::OpenHand:
+        return NSCursor.openHandCursor;
+    case Gfx::StandardCursor::Drag:
+        return NSCursor.closedHandCursor;
+    case Gfx::StandardCursor::DragCopy:
+        return NSCursor.dragCopyCursor;
+    case Gfx::StandardCursor::Move:
+        // FIXME: AppKit does not have a corresponding cursor, so we should make one.
+        return NSCursor.dragCopyCursor;
+    case Gfx::StandardCursor::Wait:
+        // FIXME: AppKit does not have a corresponding cursor, so we should make one.
+        return NSCursor.arrowCursor;
+    case Gfx::StandardCursor::Disallowed:
+        // FIXME: AppKit does not have a corresponding cursor, so we should make one.
+        return NSCursor.arrowCursor;
+    case Gfx::StandardCursor::Eyedropper:
+        // FIXME: AppKit does not have a corresponding cursor, so we should make one.
+        return NSCursor.arrowCursor;
+    case Gfx::StandardCursor::Zoom:
+        // FIXME: AppKit does not have a corresponding cursor, so we should make one.
+        return NSCursor.arrowCursor;
+    case Gfx::StandardCursor::Hidden:
+    default:
+        return nil;
+    }
+}
+
 static Optional<u64> display_id_for_screen(NSScreen* screen)
 {
     if (screen == nil)
@@ -111,6 +174,7 @@ static Web::DevicePixelPoint node_picker_position_for(Ladybird::WebViewBridge co
 }
 
 @property (nonatomic, weak) id<LadybirdWebViewObserver> observer;
+@property (nonatomic, strong) NSCursor* current_cursor;
 @property (nonatomic, strong) NSMenu* page_context_menu;
 @property (nonatomic, strong) NSMenu* link_context_menu;
 @property (nonatomic, strong) NSMenu* selected_text_link_context_menu;
@@ -170,6 +234,7 @@ static Web::DevicePixelPoint node_picker_position_for(Ladybird::WebViewBridge co
 {
     if (self = [super init]) {
         self.observer = observer;
+        self.current_cursor = NSCursor.arrowCursor;
 
         if (WebView::Application::web_content_options().force_cpu_painting != WebView::ForceCPUPainting::Yes) {
             m_metal_device = MTLCreateSystemDefaultDevice();
@@ -489,11 +554,12 @@ static Web::DevicePixelPoint node_picker_position_for(Ladybird::WebViewBridge co
             return;
         }
         cursor.visit(
-            [](Gfx::ImageCursor const& image_cursor) {
+            [&self](Gfx::ImageCursor const& image_cursor) {
                 auto* cursor_image = Ladybird::gfx_bitmap_to_ns_image(*image_cursor.bitmap.bitmap());
                 auto hotspot = Ladybird::gfx_point_to_ns_point(image_cursor.hotspot);
 
-                [[[NSCursor alloc] initWithImage:cursor_image hotSpot:hotspot] set];
+                self.current_cursor = [[NSCursor alloc] initWithImage:cursor_image hotSpot:hotspot];
+                [self.current_cursor set];
             },
             [&self](Gfx::StandardCursor standard_cursor) {
                 if (standard_cursor == Gfx::StandardCursor::Hidden) {
@@ -505,83 +571,9 @@ static Web::DevicePixelPoint node_picker_position_for(Ladybird::WebViewBridge co
                 }
 
                 m_hidden_cursor.clear();
-
-                switch (standard_cursor) {
-                case Gfx::StandardCursor::Arrow:
-                    [[NSCursor arrowCursor] set];
-                    break;
-                case Gfx::StandardCursor::Crosshair:
-                    [[NSCursor crosshairCursor] set];
-                    break;
-                case Gfx::StandardCursor::IBeam:
-                    [[NSCursor IBeamCursor] set];
-                    break;
-                case Gfx::StandardCursor::ResizeHorizontal:
-                    [[NSCursor resizeLeftRightCursor] set];
-                    break;
-                case Gfx::StandardCursor::ResizeVertical:
-                    [[NSCursor resizeUpDownCursor] set];
-                    break;
-                case Gfx::StandardCursor::ResizeDiagonalTLBR:
-                    if (@available(macOS 15.0, *))
-                        [[NSCursor frameResizeCursorFromPosition:NSCursorFrameResizePositionBottomRight
-                                                    inDirections:NSCursorFrameResizeDirectionsAll] set];
-                    else
-                        // FIXME: AppKit does not have a corresponding cursor, so we should make one.
-                        [[NSCursor arrowCursor] set];
-                    break;
-                case Gfx::StandardCursor::ResizeDiagonalBLTR:
-                    if (@available(macOS 15.0, *))
-                        [[NSCursor frameResizeCursorFromPosition:NSCursorFrameResizePositionBottomLeft
-                                                    inDirections:NSCursorFrameResizeDirectionsAll] set];
-                    else
-                        // FIXME: AppKit does not have a corresponding cursor, so we should make one.
-                        [[NSCursor arrowCursor] set];
-                    break;
-                case Gfx::StandardCursor::ResizeColumn:
-                    [[NSCursor resizeLeftRightCursor] set];
-                    break;
-                case Gfx::StandardCursor::ResizeRow:
-                    [[NSCursor resizeUpDownCursor] set];
-                    break;
-                case Gfx::StandardCursor::Hand:
-                    [[NSCursor pointingHandCursor] set];
-                    break;
-                case Gfx::StandardCursor::Help:
-                    // FIXME: AppKit does not have a corresponding cursor, so we should make one.
-                    [[NSCursor arrowCursor] set];
-                    break;
-                case Gfx::StandardCursor::OpenHand:
-                    [[NSCursor openHandCursor] set];
-                    break;
-                case Gfx::StandardCursor::Drag:
-                    [[NSCursor closedHandCursor] set];
-                    break;
-                case Gfx::StandardCursor::DragCopy:
-                    [[NSCursor dragCopyCursor] set];
-                    break;
-                case Gfx::StandardCursor::Move:
-                    // FIXME: AppKit does not have a corresponding cursor, so we should make one.
-                    [[NSCursor dragCopyCursor] set];
-                    break;
-                case Gfx::StandardCursor::Wait:
-                    // FIXME: AppKit does not have a corresponding cursor, so we should make one.
-                    [[NSCursor arrowCursor] set];
-                    break;
-                case Gfx::StandardCursor::Disallowed:
-                    // FIXME: AppKit does not have a corresponding cursor, so we should make one.
-                    [[NSCursor arrowCursor] set];
-                    break;
-                case Gfx::StandardCursor::Eyedropper:
-                    // FIXME: AppKit does not have a corresponding cursor, so we should make one.
-                    [[NSCursor arrowCursor] set];
-                    break;
-                case Gfx::StandardCursor::Zoom:
-                    // FIXME: AppKit does not have a corresponding cursor, so we should make one.
-                    [[NSCursor arrowCursor] set];
-                    break;
-                default:
-                    break;
+                if (auto* cursor = ns_cursor_for_standard_cursor(standard_cursor)) {
+                    self.current_cursor = cursor;
+                    [self.current_cursor set];
                 }
             });
     };
@@ -1459,9 +1451,9 @@ static Web::DevicePixelPoint node_picker_position_for(Ladybird::WebViewBridge co
 
 - (void)cursorUpdate:(NSEvent*)event
 {
-    // The NSApp will override the custom cursor set from on_cursor_change when the view hierarchy changes in some way
-    // (such as when we show self.status_label on link hover). Overriding this method with an empty implementation will
-    // prevent this from happening. See: https://stackoverflow.com/a/20197686
+    // AppKit sends this when the pointer enters from another cursor region, such as a split-view
+    // divider, or when the view hierarchy changes. Restore the cursor requested by WebContent.
+    [self.current_cursor set];
 }
 
 - (BOOL)canBecomeKeyView

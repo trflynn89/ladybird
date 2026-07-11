@@ -64,6 +64,10 @@ static constexpr CGFloat DOWNLOADS_POPOVER_ROW_HEIGHT = 66;
 static constexpr CGFloat DOWNLOADS_POPOVER_ROW_SPACING = 6;
 static constexpr CGFloat DOWNLOADS_POPOVER_SHOW_ALL_BUTTON_HEIGHT = 28;
 
+static constexpr u16 SIDEBAR_COLLAPSED_WIDTH = 52;
+static constexpr u16 SIDEBAR_DEFAULT_EXPANDED_WIDTH = 232;
+static constexpr u16 SIDEBAR_MIN_EXPANDED_WIDTH = 190;
+static constexpr u16 SIDEBAR_MAX_EXPANDED_WIDTH = 400;
 enum class LocationFieldDisplay {
     Editing,
     NotEditing,
@@ -689,6 +693,7 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
     bool m_fullscreen_should_restore_tab_bar;
     bool m_close_all_tabs;
     bool m_allow_window_close;
+    bool m_is_applying_sidebar_settings;
     Function<void()> m_pending_immediate_close;
 }
 
@@ -703,6 +708,8 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 @property (nonatomic, strong) NSSplitViewItem* sidebar_item;
 @property (nonatomic, strong) NSSplitViewItem* content_item;
 @property (nonatomic, strong) SidebarViewController* sidebar_view_controller;
+@property (nonatomic, strong) NSTimer* sidebar_width_persistence_timer;
+@property (nonatomic, assign) u16 vertical_tabs_expanded_width;
 @property (nonatomic, assign, readwrite, getter=isVerticalTabsPresentation) BOOL vertical_tabs_presentation;
 @property (nonatomic, strong) NSTitlebarAccessoryViewController* bookmarks_bar_controller;
 
@@ -1189,6 +1196,9 @@ private:
 
     if (!vertical) {
         auto window_frame = self.window.frame;
+        [NSNotificationCenter.defaultCenter removeObserver:self
+                                                      name:NSSplitViewDidResizeSubviewsNotification
+                                                    object:self.split_view_controller.splitView];
 
         // Remove the sidebar before the content item so that dismantling the split view cannot
         // trigger a layout pass over sidebar rows at a degenerate width.
@@ -1208,9 +1218,13 @@ private:
     self.sidebar_view_controller = [[SidebarViewController alloc] initWithTabs:self.tabs];
     self.split_view_controller = [[NSSplitViewController alloc] initWithNibName:nil bundle:nil];
     self.contentViewController = self.split_view_controller;
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                           selector:@selector(splitViewDidResizeSubviews:)
+                                               name:NSSplitViewDidResizeSubviewsNotification
+                                             object:self.split_view_controller.splitView];
     self.sidebar_item = [NSSplitViewItem splitViewItemWithViewController:self.sidebar_view_controller];
-    self.sidebar_item.minimumThickness = 232;
-    self.sidebar_item.maximumThickness = 232;
+    self.sidebar_item.minimumThickness = SIDEBAR_DEFAULT_EXPANDED_WIDTH;
+    self.sidebar_item.maximumThickness = SIDEBAR_DEFAULT_EXPANDED_WIDTH;
     self.sidebar_item.canCollapse = NO;
     self.content_item = [NSSplitViewItem splitViewItemWithViewController:self.page_host];
     [self.split_view_controller addSplitViewItem:self.sidebar_item];
@@ -1250,11 +1264,58 @@ private:
     if (!self.vertical_tabs_presentation)
         return;
     auto window_frame = self.window.frame;
-    auto expanded = WebView::Application::settings().tab_settings().vertical_tabs_expanded;
+    auto const& settings = WebView::Application::settings().tab_settings();
+    auto expanded = settings.vertical_tabs_expanded;
     self.sidebar_view_controller.expanded = expanded;
-    self.sidebar_item.minimumThickness = expanded ? 232 : 52;
-    self.sidebar_item.maximumThickness = expanded ? 232 : 52;
+    m_is_applying_sidebar_settings = true;
+    if (!self.sidebar_width_persistence_timer.valid) {
+        auto width = settings.vertical_tabs_expanded_width.value_or(SIDEBAR_DEFAULT_EXPANDED_WIDTH);
+        self.vertical_tabs_expanded_width = clamp(width, SIDEBAR_MIN_EXPANDED_WIDTH, SIDEBAR_MAX_EXPANDED_WIDTH);
+    }
+    auto sidebar_width = expanded ? self.vertical_tabs_expanded_width : SIDEBAR_COLLAPSED_WIDTH;
+    self.sidebar_item.minimumThickness = sidebar_width;
+    self.sidebar_item.maximumThickness = sidebar_width;
+    [self.split_view_controller.view layoutSubtreeIfNeeded];
+    [self.split_view_controller.splitView setPosition:sidebar_width ofDividerAtIndex:0];
     [self.window setFrame:window_frame display:YES];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (!self.vertical_tabs_presentation || self.split_view_controller == nil) {
+            self->m_is_applying_sidebar_settings = false;
+            return;
+        }
+
+        self.sidebar_item.minimumThickness = expanded ? SIDEBAR_MIN_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH;
+        self.sidebar_item.maximumThickness = expanded ? SIDEBAR_MAX_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH;
+        [self.split_view_controller.view layoutSubtreeIfNeeded];
+        auto sidebar_width = expanded ? self.vertical_tabs_expanded_width : SIDEBAR_COLLAPSED_WIDTH;
+        [self.split_view_controller.splitView setPosition:sidebar_width ofDividerAtIndex:0];
+        self->m_is_applying_sidebar_settings = false;
+    });
+}
+
+- (void)splitViewDidResizeSubviews:(NSNotification*)notification
+{
+    if (!self.vertical_tabs_presentation || m_is_applying_sidebar_settings)
+        return;
+    if (!WebView::Application::settings().tab_settings().vertical_tabs_expanded)
+        return;
+
+    self.vertical_tabs_expanded_width = clamp(static_cast<u16>(NSWidth(self.sidebar_view_controller.view.frame)), SIDEBAR_MIN_EXPANDED_WIDTH, SIDEBAR_MAX_EXPANDED_WIDTH);
+    [self.sidebar_width_persistence_timer invalidate];
+    __weak BrowserWindowController* weak_self = self;
+    self.sidebar_width_persistence_timer = [NSTimer scheduledTimerWithTimeInterval:0.25
+                                                                           repeats:NO
+                                                                             block:^(NSTimer*) {
+                                                                                 BrowserWindowController* self = weak_self;
+                                                                                 if (self == nil)
+                                                                                     return;
+                                                                                 self.sidebar_width_persistence_timer = nil;
+                                                                                 auto settings = WebView::Application::settings().tab_settings();
+                                                                                 if (settings.vertical_tabs_expanded_width == self.vertical_tabs_expanded_width)
+                                                                                     return;
+                                                                                 settings.vertical_tabs_expanded_width = self.vertical_tabs_expanded_width;
+                                                                                 WebView::Application::settings().set_tab_settings(move(settings));
+                                                                             }];
 }
 
 - (void)setSidebarToggleVisible:(BOOL)visible forTab:(Tab*)tab
@@ -2103,6 +2164,7 @@ private:
     auto* notification_center = NSNotificationCenter.defaultCenter;
     for (Tab* tab in self.tabs)
         [notification_center removeObserver:self name:nil object:tab];
+    [notification_center removeObserver:self name:NSSplitViewDidResizeSubviewsNotification object:nil];
 
     [self.page_host showTab:nil];
     for (Tab* tab in self.tabs) {
