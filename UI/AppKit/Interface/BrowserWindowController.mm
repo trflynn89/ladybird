@@ -714,6 +714,7 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 @property (nonatomic, assign) NSLayoutConstraint* location_toolbar_item_width;
 
 - (LocationSearchField*)locationSearchField;
+- (NSWindow*)tabWindow;
 - (NSString*)currentLocationFieldQuery;
 - (BOOL)locationFieldCursorIsAtEnd;
 - (void)applyOmniboxDisplay:(WebView::Omnibox::Display const&)display;
@@ -768,7 +769,10 @@ private:
     if (self = [super init]) {
         __weak BrowserWindowController* weak_self = self;
 
-        self.toolbar = [[NSToolbar alloc] initWithIdentifier:TOOLBAR_IDENTIFIER];
+        // AppKit synchronizes toolbars that share an identifier, but each tab owns independent
+        // location-field state. Give each toolbar a unique identity to keep that state isolated.
+        auto* toolbar_identifier = [TOOLBAR_IDENTIFIER stringByAppendingFormat:@".%@", NSUUID.UUID.UUIDString];
+        self.toolbar = [[NSToolbar alloc] initWithIdentifier:toolbar_identifier];
         [self.toolbar setDelegate:self];
         [self.toolbar setDisplayMode:NSToolbarDisplayModeIconOnly];
         if (@available(macOS 15, *)) {
@@ -903,23 +907,35 @@ private:
 
 - (void)focusLocationToolbarItem
 {
+    if (self.selected_tab.toolbar_controller != self) {
+        [self.selected_tab.toolbar_controller focusLocationToolbarItem];
+        return;
+    }
     [self restoreLocationFieldForEditing];
     [self tab].preferred_first_responder = self.location_toolbar_item.view;
-    [(BrowserWindow*)self.window setPreferred_first_responder:self.location_toolbar_item.view];
-    [self.window makeFirstResponder:self.location_toolbar_item.view];
+    [(BrowserWindow*)[self tabWindow] setPreferred_first_responder:self.location_toolbar_item.view];
+    [[self tabWindow] makeFirstResponder:self.location_toolbar_item.view];
 }
 
 - (void)focusWebViewWhenActivated
 {
+    if (self.selected_tab.toolbar_controller != self) {
+        [self.selected_tab.toolbar_controller focusWebViewWhenActivated];
+        return;
+    }
     [self tab].preferred_first_responder = [self tab].web_view;
-    [(BrowserWindow*)self.window setPreferred_first_responder:[self tab].web_view];
+    [(BrowserWindow*)[self tabWindow] setPreferred_first_responder:[self tab].web_view];
 }
 
 - (void)focusWebView
 {
+    if (self.selected_tab.toolbar_controller != self) {
+        [self.selected_tab.toolbar_controller focusWebView];
+        return;
+    }
     [self tab].preferred_first_responder = [self tab].web_view;
-    [(BrowserWindow*)self.window setPreferred_first_responder:[self tab].web_view];
-    [self.window makeFirstResponder:[self tab].web_view];
+    [(BrowserWindow*)[self tabWindow] setPreferred_first_responder:[self tab].web_view];
+    [[self tabWindow] makeFirstResponder:[self tab].web_view];
 }
 
 #pragma mark - Private methods
@@ -929,13 +945,18 @@ private:
     return self.selected_tab;
 }
 
+- (NSWindow*)tabWindow
+{
+    return self.tab.view.window ?: self.window;
+}
+
 - (void)selectTab:(Tab*)tab
 {
     if (tab != self.selected_tab || ![self.tabs containsObject:tab])
         return;
 
     [self.page_host showTab:tab];
-    self.window.toolbar = self.toolbar;
+    self.window.toolbar = tab.toolbar;
     [(BrowserWindow*)self.window setPreferred_first_responder:tab.preferred_first_responder];
     [self updateTabChrome];
 
@@ -1015,7 +1036,7 @@ private:
 {
     auto* delegate = (ApplicationDelegate*)[NSApp delegate];
 
-    self.window.titlebarAppearsTransparent = NO;
+    self.tabWindow.titlebarAppearsTransparent = NO;
 
     [delegate createNewTab:WebView::Application::settings().new_tab_page_url()
                    fromTab:[self tab]
@@ -1023,7 +1044,7 @@ private:
                activateTab:Web::HTML::ActivateTab::Yes
                tabLocation:TabLocation::end()];
 
-    self.window.titlebarAppearsTransparent = YES;
+    self.tabWindow.titlebarAppearsTransparent = YES;
 }
 
 - (void)setLocationFieldText:(StringView)url display:(LocationFieldDisplay)display
@@ -1105,7 +1126,7 @@ private:
     [self setLocationFieldText:url.serialize() display:LocationFieldDisplay::Editing];
 
     auto* editor = (NSTextView*)[location_search_field currentEditor];
-    if (editor != nil && [self.window firstResponder] == editor && ![editor hasMarkedText]) {
+    if (editor != nil && [self.tabWindow firstResponder] == editor && ![editor hasMarkedText]) {
         auto* serialized_url = Ladybird::string_to_ns_string(url.serialize());
         [editor setString:serialized_url];
         [editor setSelectedRange:NSMakeRange(0, serialized_url.length)];
@@ -1120,7 +1141,7 @@ private:
 
     // Omnibox display updates mutate the field contents in place, so callers need the typed prefix,
     // not an inline completion or row preview suffix selected through the end of the text.
-    if (editor == nil || [self.window firstResponder] != editor)
+    if (editor == nil || [self.tabWindow firstResponder] != editor)
         return [[location_search_field stringValue] copy];
 
     auto* text = [[editor textStorage] string];
@@ -1141,7 +1162,7 @@ private:
 {
     auto* location_search_field = [self locationSearchField];
     auto* editor = (NSTextView*)[location_search_field currentEditor];
-    if (editor == nil || [self.window firstResponder] != editor)
+    if (editor == nil || [self.tabWindow firstResponder] != editor)
         return NO;
 
     auto* text = [[editor textStorage] string];
@@ -1157,7 +1178,7 @@ private:
 {
     auto* location_search_field = [self locationSearchField];
     auto* editor = (NSTextView*)[location_search_field currentEditor];
-    if (editor != nil && [self.window firstResponder] == editor && [editor hasMarkedText])
+    if (editor != nil && [self.tabWindow firstResponder] == editor && [editor hasMarkedText])
         return;
 
     auto* display_text = Ladybird::string_to_ns_string(display.text);
@@ -1169,7 +1190,7 @@ private:
 
     m_is_applying_omnibox_display = true;
     [location_search_field setStringValue:display_text];
-    if (editor != nil && [self.window firstResponder] == editor) {
+    if (editor != nil && [self.tabWindow firstResponder] == editor) {
         [editor setString:display_text];
         [editor setSelectedRange:selection_range];
         [editor scrollRangeToVisible:NSMakeRange(selection_range.location, 0)];
@@ -1183,7 +1204,7 @@ private:
         return;
 
     auto* editor = (NSTextView*)[[self locationSearchField] currentEditor];
-    if (editor == nil || [notification object] != editor || [self.window firstResponder] != editor || [editor hasMarkedText])
+    if (editor == nil || [notification object] != editor || [self.tabWindow firstResponder] != editor || [editor hasMarkedText])
         return;
 
     m_omnibox->cursor_moved([self locationFieldCursorIsAtEnd]);
@@ -1360,7 +1381,7 @@ private:
 
     [self updateDownloadsButton];
 
-    if ([self.window isKeyWindow] && self.downloads_button) {
+    if ([self.tabWindow isKeyWindow] && self.downloads_button) {
         [self showDownloadsPopover:self.downloads_button];
         return;
     }
@@ -1579,6 +1600,8 @@ private:
         : [[Tab alloc] init:m_is_private];
     self.tabs = [NSMutableArray arrayWithObject:tab];
     self.selected_tab = tab;
+    tab.toolbar = self.toolbar;
+    tab.toolbar_controller = self;
 
     self.window = [[BrowserWindow alloc] init:m_is_private];
 
@@ -1600,7 +1623,7 @@ private:
     [notification_center addObserver:self selector:@selector(tabChromeDidChange:) name:TabFaviconDidChangeNotification object:tab];
     [notification_center addObserver:self selector:@selector(tabChromeDidChange:) name:TabAudioStateDidChangeNotification object:tab];
 
-    [self.window setToolbar:self.toolbar];
+    [self.window setToolbar:tab.toolbar];
     [self.window setToolbarStyle:NSWindowToolbarStyleUnified];
 
     auto& view = [[[self tab] web_view] view];
@@ -1844,7 +1867,7 @@ private:
             return YES;
         auto const& url = [[[self tab] web_view] view].url();
         [self setLocationFieldText:url.serialize()];
-        [self.window makeFirstResponder:nil];
+        [self.tabWindow makeFirstResponder:nil];
         return YES;
     }
 
@@ -1879,7 +1902,7 @@ private:
     dispatch_async(dispatch_get_main_queue(), ^{
         auto* location_search_field = [self locationSearchField];
         auto* editor = (NSTextView*)[location_search_field currentEditor];
-        if (editor != nil && [self.window firstResponder] == editor)
+        if (editor != nil && [self.tabWindow firstResponder] == editor)
             return;
 
         [[NSNotificationCenter defaultCenter] removeObserver:self
@@ -1899,7 +1922,7 @@ private:
 
     auto* location_search_field = [self locationSearchField];
     auto* editor = (NSTextView*)[location_search_field currentEditor];
-    if (editor != nil && [self.window firstResponder] == editor && [editor hasMarkedText]) {
+    if (editor != nil && [self.tabWindow firstResponder] == editor && [editor hasMarkedText]) {
         m_omnibox->set_suspended(true);
         return;
     }
