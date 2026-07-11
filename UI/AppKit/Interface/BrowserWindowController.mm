@@ -1244,6 +1244,9 @@ private:
     self.sidebar_view_controller.on_move_tab_to_new_window = ^(Tab* tab) {
         [(ApplicationDelegate*)NSApp.delegate moveTabToNewWindow:tab];
     };
+    self.sidebar_view_controller.on_toggle_tab_audio_state = ^(Tab* tab) {
+        [tab togglePageMuteState:nil];
+    };
     self.sidebar_view_controller.on_new_tab = ^{
         BrowserWindowController* self = weak_self;
         if (self == nil)

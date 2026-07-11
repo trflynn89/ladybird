@@ -6,6 +6,7 @@
 
 #include <LibWebView/ViewImplementation.h>
 
+#import <Interface/LadybirdWebView.h>
 #import <Interface/SidebarViewController.h>
 #import <Interface/Tab.h>
 
@@ -39,6 +40,7 @@ static NSUserInterfaceItemIdentifier const SIDEBAR_TAB_CELL_IDENTIFIER = @"Sideb
 @property (nonatomic, strong) NSArray<NSLayoutConstraint*>* collapsed_constraints;
 @property (nonatomic, assign) BOOL expanded;
 @property (nonatomic, assign) BOOL hovered;
+@property (nonatomic, assign) BOOL audio_indicator_visible;
 
 @end
 
@@ -139,6 +141,13 @@ static NSUserInterfaceItemIdentifier const SIDEBAR_TAB_CELL_IDENTIFIER = @"Sideb
     self.title_label.hidden = !expanded;
     [NSLayoutConstraint deactivateConstraints:expanded ? self.collapsed_constraints : self.expanded_constraints];
     [NSLayoutConstraint activateConstraints:expanded ? self.expanded_constraints : self.collapsed_constraints];
+    auto& view = tab.web_view.view;
+    auto muted = view.page_mute_state() == Web::HTML::MuteState::Muted;
+    auto playing = view.audio_play_state() == Web::HTML::AudioPlayState::Playing;
+    self.audio_indicator_visible = muted || playing;
+    self.audio_button.image = [NSImage imageWithSystemSymbolName:muted ? @"speaker.slash.fill" : @"speaker.wave.2.fill"
+                                        accessibilityDescription:muted ? @"Unmute tab" : @"Mute tab"];
+    self.audio_button.toolTip = muted ? @"Unmute tab" : @"Mute tab";
     self.toolTip = tab.displayTitle;
     [self updateCloseButton];
 }
@@ -159,6 +168,7 @@ static NSUserInterfaceItemIdentifier const SIDEBAR_TAB_CELL_IDENTIFIER = @"Sideb
 {
     self.close_button.hidden = !self.hovered;
     self.favicon_view.hidden = !self.expanded && self.hovered;
+    self.audio_button.hidden = !self.audio_indicator_visible || (!self.expanded && self.hovered);
 }
 
 - (void)closeTab:(id)sender
