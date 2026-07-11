@@ -101,6 +101,7 @@ static Web::DevicePixelPoint node_picker_position_for(Ladybird::WebViewBridge co
 
     id<MTLDevice> m_metal_device;
     id<MTLCommandQueue> m_metal_queue;
+    BOOL m_should_present_frames;
 
     // We have to send key events for modifer keys, but AppKit does not generate key down/up events when only a modifier
     // key is pressed. Instead, we only receive an event that the modifier flags have changed, and we must determine for
@@ -132,6 +133,8 @@ static Web::DevicePixelPoint node_picker_position_for(Ladybird::WebViewBridge co
 // Length of the marked text (input-method preedit) currently shown in the focused editable. LibWeb owns the marked-text
 // range and replaces the preedit itself. The UI keeps this length only to answer the NSTextInputClient range queries.
 @property (nonatomic, assign) NSUInteger marked_text_length;
+
+- (void)displayCurrentFrame;
 
 @end
 
@@ -290,9 +293,13 @@ static Web::DevicePixelPoint node_picker_position_for(Ladybird::WebViewBridge co
 
 - (void)handleVisibility:(BOOL)is_visible
 {
+    m_should_present_frames = is_visible;
     m_web_view_bridge->set_system_visibility_state(is_visible
             ? Web::HTML::VisibilityState::Visible
             : Web::HTML::VisibilityState::Hidden);
+
+    if (is_visible)
+        [self displayCurrentFrame];
 }
 
 - (void)findInPage:(NSString*)query
@@ -359,10 +366,7 @@ static Web::DevicePixelPoint node_picker_position_for(Ladybird::WebViewBridge co
         LadybirdWebView* self = weak_self;
         if (self == nil)
             return;
-        if (m_metal_device)
-            [self presentMetalFrame];
-        else
-            [self.layer setNeedsDisplay];
+        [self displayCurrentFrame];
     };
 
     m_web_view_bridge->on_new_web_view = [weak_self](auto activate_tab, auto, auto page_index) {
@@ -385,7 +389,7 @@ static Web::DevicePixelPoint node_picker_position_for(Ladybird::WebViewBridge co
         if (self == nil) {
             return;
         }
-        [[self window] orderFront:nil];
+        [self.observer onWebViewActivated];
     };
 
     m_web_view_bridge->on_close = [weak_self]() {
@@ -393,7 +397,7 @@ static Web::DevicePixelPoint node_picker_position_for(Ladybird::WebViewBridge co
         if (self == nil) {
             return;
         }
-        [[self window] close];
+        [self.observer onWebViewClosed];
     };
 
     m_web_view_bridge->on_load_start = [weak_self]() {
@@ -1131,6 +1135,20 @@ static Web::DevicePixelPoint node_picker_position_for(Ladybird::WebViewBridge co
     [blit endEncoding];
     [cmd_buf presentDrawable:drawable];
     [cmd_buf commit];
+}
+
+- (void)displayCurrentFrame
+{
+    // CAMetalLayer waits up to one second for a drawable when its view is not being presented.
+    // Background tabs may still receive a final paint after becoming inactive, so keep their
+    // latest bitmap cached without asking their layer for a drawable.
+    if (!m_should_present_frames || self.window == nil || !self.window.visible)
+        return;
+
+    if (m_metal_device)
+        [self presentMetalFrame];
+    else
+        [self.layer setNeedsDisplay];
 }
 
 - (void)viewWillStartLiveResize

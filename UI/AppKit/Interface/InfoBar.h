@@ -8,7 +8,7 @@
 
 #import <Cocoa/Cocoa.h>
 
-@class BrowserWindow;
+@class Tab;
 
 using InfoBarButtonClicked = void (^)(void);
 
@@ -19,9 +19,9 @@ using InfoBarButtonClicked = void (^)(void);
      actionButtonClicked:(InfoBarButtonClicked)on_action
       dismissButtonTitle:(NSString*)title
     dismissButtonClicked:(InfoBarButtonClicked)on_dismissed
-                activeTab:(BrowserWindow*)tab;
+               activeTab:(Tab*)tab;
 - (void)hide;
 
-- (void)tabBecameActive:(BrowserWindow*)tab;
+- (void)tabBecameActive:(Tab*)tab;
 
 @end

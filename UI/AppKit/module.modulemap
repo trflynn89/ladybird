@@ -7,11 +7,6 @@ module Ladybird [system] {
         export *
     }
 
-    explicit module WebViewWindow {
-        header "Interface/LadybirdWebViewWindow.h"
-        export *
-    }
-
     explicit module WebViewApplication {
         header "../../Libraries/LibWebView/Application.h"
         export *
