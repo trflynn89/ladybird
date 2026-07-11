@@ -46,6 +46,8 @@
 - (void)detachTabForTransfer:(Tab*)tab;
 - (void)closeShellAfterTransfer;
 - (void)presentVerticalTabs:(BOOL)vertical;
+- (void)selectNextTab;
+- (void)selectPreviousTab;
 
 @property (nonatomic, assign, readonly, getter=isVerticalTabsPresentation) BOOL vertical_tabs_presentation;
 

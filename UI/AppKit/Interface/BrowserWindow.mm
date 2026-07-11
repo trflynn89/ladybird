@@ -88,4 +88,59 @@ static NSString* window_frame_autosave_name()
     [super setIsMiniaturized:miniaturized];
 }
 
+- (BOOL)performKeyEquivalent:(NSEvent*)event
+{
+    auto* controller = (BrowserWindowController*)self.windowController;
+    if (controller.isVerticalTabsPresentation) {
+        auto modifiers = event.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl | NSEventModifierFlagOption | NSEventModifierFlagShift);
+        if (modifiers == (NSEventModifierFlagCommand | NSEventModifierFlagShift)) {
+            auto* characters = event.charactersIgnoringModifiers;
+            if (characters.length == 1) {
+                switch ([characters characterAtIndex:0]) {
+                case '[':
+                case '{':
+                    [controller selectPreviousTab];
+                    return YES;
+                case ']':
+                case '}':
+                    [controller selectNextTab];
+                    return YES;
+                }
+            }
+        }
+    }
+
+    return [super performKeyEquivalent:event];
+}
+
+- (void)selectNextTab:(id)sender
+{
+    auto* controller = (BrowserWindowController*)self.windowController;
+    if (controller.isVerticalTabsPresentation)
+        [controller selectNextTab];
+    else
+        [super selectNextTab:sender];
+}
+
+- (void)selectPreviousTab:(id)sender
+{
+    auto* controller = (BrowserWindowController*)self.windowController;
+    if (controller.isVerticalTabsPresentation)
+        [controller selectPreviousTab];
+    else
+        [super selectPreviousTab:sender];
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem*)menu_item
+{
+    auto action = menu_item.action;
+    if (action == @selector(selectNextTab:) || action == @selector(selectPreviousTab:)) {
+        auto* controller = (BrowserWindowController*)self.windowController;
+        if (controller.isVerticalTabsPresentation)
+            return controller.tabs.count > 1;
+        return self.tabbedWindows.count > 1;
+    }
+    return [super validateMenuItem:menu_item];
+}
+
 @end
