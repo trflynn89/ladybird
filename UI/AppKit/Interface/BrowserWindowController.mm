@@ -68,6 +68,8 @@ static constexpr u16 SIDEBAR_COLLAPSED_WIDTH = 52;
 static constexpr u16 SIDEBAR_DEFAULT_EXPANDED_WIDTH = 232;
 static constexpr u16 SIDEBAR_MIN_EXPANDED_WIDTH = 190;
 static constexpr u16 SIDEBAR_MAX_EXPANDED_WIDTH = 400;
+static constexpr NSTimeInterval SIDEBAR_HOVER_OVERLAY_ANIMATION_DURATION = 0.15;
+
 enum class LocationFieldDisplay {
     Editing,
     NotEditing,
@@ -694,6 +696,7 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
     bool m_close_all_tabs;
     bool m_allow_window_close;
     bool m_is_applying_sidebar_settings;
+    bool m_keep_sidebar_hover_overlay;
     Function<void()> m_pending_immediate_close;
 }
 
@@ -710,6 +713,9 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 @property (nonatomic, strong) SidebarViewController* sidebar_view_controller;
 @property (nonatomic, strong) NSTimer* sidebar_width_persistence_timer;
 @property (nonatomic, assign) u16 vertical_tabs_expanded_width;
+@property (nonatomic, strong) NSView* sidebar_hover_view;
+@property (nonatomic, strong) SidebarViewController* sidebar_hover_view_controller;
+@property (nonatomic, strong) NSTimer* sidebar_hover_timer;
 @property (nonatomic, assign, readwrite, getter=isVerticalTabsPresentation) BOOL vertical_tabs_presentation;
 @property (nonatomic, strong) NSTitlebarAccessoryViewController* bookmarks_bar_controller;
 
@@ -751,7 +757,9 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 - (void)setTabOverviewVisible:(BOOL)visible forTab:(Tab*)tab;
 - (void)setSidebarToggleVisible:(BOOL)visible forTab:(Tab*)tab;
 - (void)updateSidebarToggleForTab:(Tab*)tab sidebarOnRight:(BOOL)sidebar_on_right;
-- (void)updateSidebarToggleForTab:(Tab*)tab sidebarOnRight:(BOOL)sidebar_on_right;
+- (void)showSidebarHoverOverlay;
+- (void)hideSidebarHoverOverlay;
+- (void)scheduleSidebarHoverCollapse;
 
 @end
 
@@ -1039,6 +1047,9 @@ private:
     [tab.web_view handleVisibility:(self.window.occlusionState & NSWindowOcclusionStateVisible) != 0];
     [self updateTabChrome];
     [self.sidebar_view_controller selectTab:tab];
+    [self.sidebar_hover_view_controller selectTab:tab];
+    if (!m_keep_sidebar_hover_overlay)
+        [self hideSidebarHoverOverlay];
 
     auto* delegate = (ApplicationDelegate*)NSApp.delegate;
     if (self.window.isMainWindow)
@@ -1130,6 +1141,8 @@ private:
     [notification_center addObserver:self selector:@selector(tabChromeDidChange:) name:TabAudioStateDidChangeNotification object:tab];
     self.sidebar_view_controller.tabs = self.tabs;
     [self.sidebar_view_controller reloadTabs];
+    self.sidebar_hover_view_controller.tabs = self.tabs;
+    [self.sidebar_hover_view_controller reloadTabs];
     if (self.vertical_tabs_presentation) {
         [self setTabOverviewVisible:NO forTab:tab];
         [self setSidebarToggleVisible:YES forTab:tab];
@@ -1151,6 +1164,8 @@ private:
     [(NSMutableArray<Tab*>*)self.tabs removeObjectAtIndex:index];
     self.sidebar_view_controller.tabs = self.tabs;
     [self.sidebar_view_controller reloadTabs];
+    self.sidebar_hover_view_controller.tabs = self.tabs;
+    [self.sidebar_hover_view_controller reloadTabs];
 
     if (self.tabs.count == 0) {
         [self.page_host showTab:nil];
@@ -1206,6 +1221,7 @@ private:
 
     if (!vertical) {
         auto window_frame = self.window.frame;
+        [self hideSidebarHoverOverlay];
         [NSNotificationCenter.defaultCenter removeObserver:self
                                                       name:NSSplitViewDidResizeSubviewsNotification
                                                     object:self.split_view_controller.splitView];
@@ -1267,6 +1283,12 @@ private:
                                                activateTab:Web::HTML::ActivateTab::Yes
                                                tabLocation:TabLocation::end()];
     };
+    self.sidebar_view_controller.on_hover_change = ^(BOOL hovered) {
+        if (hovered)
+            [weak_self showSidebarHoverOverlay];
+        else
+            [weak_self scheduleSidebarHoverCollapse];
+    };
     [self.sidebar_view_controller selectTab:self.selected_tab];
     [self applyTabSettings];
     [self.window setFrame:window_frame display:YES];
@@ -1279,6 +1301,8 @@ private:
     auto window_frame = self.window.frame;
     auto const& settings = WebView::Application::settings().tab_settings();
     auto expanded = settings.vertical_tabs_expanded;
+    if (expanded || !settings.vertical_tabs_expand_on_hover)
+        [self hideSidebarHoverOverlay];
     auto sidebar_on_right = settings.vertical_tabs_position == WebView::VerticalTabsPosition::Right;
     auto sidebar_index = [self.split_view_controller.splitViewItems indexOfObjectIdenticalTo:self.sidebar_item];
     if ((sidebar_on_right && sidebar_index == 0) || (!sidebar_on_right && sidebar_index == 1)) {
@@ -1318,6 +1342,132 @@ private:
         [self.split_view_controller.splitView setPosition:divider_position ofDividerAtIndex:0];
         self->m_is_applying_sidebar_settings = false;
     });
+}
+
+- (void)showSidebarHoverOverlay
+{
+    auto const& settings = WebView::Application::settings().tab_settings();
+    if (!self.vertical_tabs_presentation || settings.vertical_tabs_expanded || !settings.vertical_tabs_expand_on_hover || self.sidebar_hover_view)
+        return;
+
+    auto* overlay_container = self.window.contentView;
+    auto collapsed_sidebar_rect = [self.sidebar_view_controller.view convertRect:self.sidebar_view_controller.view.bounds toView:overlay_container];
+    auto sidebar_rect = collapsed_sidebar_rect;
+    if (settings.vertical_tabs_position == WebView::VerticalTabsPosition::Right)
+        sidebar_rect.origin.x = NSMaxX(sidebar_rect) - self.vertical_tabs_expanded_width;
+    sidebar_rect.size.width = self.vertical_tabs_expanded_width;
+
+    self.sidebar_hover_view_controller = [[SidebarViewController alloc] initWithTabs:self.tabs];
+    self.sidebar_hover_view_controller.expanded = YES;
+    self.sidebar_hover_view_controller.draws_background = NO;
+    __weak BrowserWindowController* weak_self = self;
+    self.sidebar_hover_view_controller.on_select_tab = ^(Tab* tab) {
+        BrowserWindowController* self = weak_self;
+        if (self == nil)
+            return;
+        self->m_keep_sidebar_hover_overlay = true;
+        [self selectTab:tab];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self->m_keep_sidebar_hover_overlay = false;
+        });
+    };
+    self.sidebar_hover_view_controller.on_close_tab = ^(Tab* tab) { [weak_self closeTab:tab]; };
+    self.sidebar_hover_view_controller.on_close_other_tabs = ^(Tab* tab) { [weak_self closeOtherTabs:tab]; };
+    self.sidebar_hover_view_controller.on_move_tab_to_new_window = ^(Tab* tab) { [(ApplicationDelegate*)NSApp.delegate moveTabToNewWindow:tab]; };
+    self.sidebar_hover_view_controller.on_new_tab = ^{
+        BrowserWindowController* self = weak_self;
+        if (self.sidebar_view_controller.on_new_tab) {
+            self->m_keep_sidebar_hover_overlay = true;
+            self.sidebar_view_controller.on_new_tab();
+            dispatch_async(dispatch_get_main_queue(), ^{
+                self->m_keep_sidebar_hover_overlay = false;
+            });
+        }
+    };
+    self.sidebar_hover_view_controller.on_toggle_tab_audio_state = ^(Tab* tab) { [tab togglePageMuteState:nil]; };
+    self.sidebar_hover_view_controller.on_hover_change = ^(BOOL hovered) {
+        if (!hovered)
+            [weak_self scheduleSidebarHoverCollapse];
+        else
+            [weak_self.sidebar_hover_timer invalidate];
+    };
+    [self.sidebar_hover_view_controller selectTab:self.selected_tab];
+
+    // The overlay is not backed by a sidebar split view item, so it needs its own material to match
+    // the docked sidebar. Keeping it within the browser's content hierarchy also clips it to the
+    // window's border and rounded corners.
+    auto* effect_view = [[NSVisualEffectView alloc] initWithFrame:NSMakeRect(0, 0, NSWidth(sidebar_rect), NSHeight(sidebar_rect))];
+    effect_view.material = NSVisualEffectMaterialUnderWindowBackground;
+    effect_view.blendingMode = NSVisualEffectBlendingModeWithinWindow;
+    effect_view.state = NSVisualEffectStateActive;
+    effect_view.wantsLayer = YES;
+    effect_view.frame = collapsed_sidebar_rect;
+    [overlay_container addSubview:effect_view positioned:NSWindowAbove relativeTo:nil];
+    self.sidebar_hover_view = effect_view;
+
+    auto* sidebar_view = self.sidebar_hover_view_controller.view;
+    sidebar_view.translatesAutoresizingMaskIntoConstraints = NO;
+    [effect_view addSubview:sidebar_view];
+    [NSLayoutConstraint activateConstraints:@[
+        [sidebar_view.leadingAnchor constraintEqualToAnchor:effect_view.leadingAnchor],
+        [sidebar_view.trailingAnchor constraintEqualToAnchor:effect_view.trailingAnchor],
+        [sidebar_view.topAnchor constraintEqualToAnchor:effect_view.topAnchor],
+        [sidebar_view.bottomAnchor constraintEqualToAnchor:effect_view.bottomAnchor],
+    ]];
+
+    auto* separator = [[NSView alloc] initWithFrame:NSZeroRect];
+    separator.wantsLayer = YES;
+    separator.layer.backgroundColor = NSColor.separatorColor.CGColor;
+    separator.translatesAutoresizingMaskIntoConstraints = NO;
+    [effect_view addSubview:separator];
+    auto* separator_edge = settings.vertical_tabs_position == WebView::VerticalTabsPosition::Right
+        ? [separator.leadingAnchor constraintEqualToAnchor:effect_view.leadingAnchor]
+        : [separator.trailingAnchor constraintEqualToAnchor:effect_view.trailingAnchor];
+    [NSLayoutConstraint activateConstraints:@[
+        separator_edge,
+        [separator.topAnchor constraintEqualToAnchor:effect_view.topAnchor],
+        [separator.bottomAnchor constraintEqualToAnchor:effect_view.bottomAnchor],
+        [separator.widthAnchor constraintEqualToConstant:1],
+    ]];
+
+    [NSAnimationContext runAnimationGroup:^(NSAnimationContext* context) {
+        context.duration = SIDEBAR_HOVER_OVERLAY_ANIMATION_DURATION;
+        [self.sidebar_hover_view.animator setFrame:sidebar_rect];
+    }];
+}
+
+- (void)scheduleSidebarHoverCollapse
+{
+    [self.sidebar_hover_timer invalidate];
+    __weak BrowserWindowController* weak_self = self;
+    self.sidebar_hover_timer = [NSTimer scheduledTimerWithTimeInterval:0.25
+                                                               repeats:NO
+                                                                 block:^(NSTimer*) {
+                                                                     BrowserWindowController* self = weak_self;
+                                                                     if (self == nil)
+                                                                         return;
+                                                                     auto point = NSEvent.mouseLocation;
+                                                                     auto strip_rect = [self.window convertRectToScreen:[self.sidebar_view_controller.view convertRect:self.sidebar_view_controller.view.bounds toView:nil]];
+                                                                     auto hovering_overlay = NO;
+                                                                     if (self.sidebar_hover_view) {
+                                                                         auto overlay_rect = [self.window convertRectToScreen:[self.sidebar_hover_view.superview convertRect:self.sidebar_hover_view.frame toView:nil]];
+                                                                         hovering_overlay = NSPointInRect(point, overlay_rect);
+                                                                     }
+                                                                     if (NSPointInRect(point, strip_rect) || hovering_overlay) {
+                                                                         [self scheduleSidebarHoverCollapse];
+                                                                         return;
+                                                                     }
+                                                                     [self hideSidebarHoverOverlay];
+                                                                 }];
+}
+
+- (void)hideSidebarHoverOverlay
+{
+    [self.sidebar_hover_timer invalidate];
+    self.sidebar_hover_timer = nil;
+    [self.sidebar_hover_view removeFromSuperview];
+    self.sidebar_hover_view = nil;
+    self.sidebar_hover_view_controller = nil;
 }
 
 - (void)updateSidebarToggleForTab:(Tab*)tab sidebarOnRight:(BOOL)sidebar_on_right
@@ -1501,6 +1651,7 @@ private:
 - (void)tabChromeDidChange:(NSNotification*)notification
 {
     [self.sidebar_view_controller reloadTab:notification.object];
+    [self.sidebar_hover_view_controller reloadTab:notification.object];
     if (notification.object == self.selected_tab)
         [self updateTabChrome];
 }
@@ -2159,6 +2310,8 @@ private:
 - (void)windowDidResignKey:(NSNotification*)notification
 {
     [self.autocomplete close];
+    if (!m_keep_sidebar_hover_overlay)
+        [self hideSidebarHoverOverlay];
 }
 
 - (BOOL)windowShouldClose:(NSWindow*)sender
@@ -2221,6 +2374,8 @@ private:
     self.selected_tab = nil;
     self.initial_tab = nil;
     self.sidebar_view_controller.tabs = @[];
+    self.sidebar_hover_view_controller.tabs = @[];
+    [self hideSidebarHoverOverlay];
     self.tab_awaiting_close_all_confirmation = nil;
     m_close_all_tabs = false;
 
@@ -2246,6 +2401,7 @@ private:
 - (void)windowDidResize:(NSNotification*)notification
 {
     [self.autocomplete close];
+    [self hideSidebarHoverOverlay];
 
     [self updateLocationToolbarItemWidth];
 
@@ -2265,6 +2421,7 @@ private:
 - (void)windowWillEnterFullScreen:(NSNotification*)notification
 {
     if (m_fullscreen_requested_for_web_content) {
+        [self hideSidebarHoverOverlay];
         [self.window.toolbar setVisible:NO];
         [self updateBookmarksBarDisplay:NO];
 
