@@ -11,11 +11,11 @@ add_library(ladybird_impl STATIC
     Interface/InfoBar.mm
     Interface/LadybirdWebView.mm
     Interface/LadybirdWebViewBridge.cpp
-    Interface/LadybirdWebViewWindow.mm
     Interface/LocationSearchField.mm
     Interface/Menu.mm
     Interface/Palette.mm
     Interface/SearchPanel.mm
+    Interface/Tab.mm
     Utilities/ApplicationIcon.mm
     Utilities/Conversions.mm
     Utilities/DictionaryLookup.mm

@@ -6,9 +6,10 @@
 
 #include <Interface/LadybirdWebViewBridge.h>
 
-#import <Interface/BrowserWindow.h>
+#import <Interface/BrowserWindowController.h>
 #import <Interface/LadybirdWebView.h>
 #import <Interface/SearchPanel.h>
+#import <Interface/Tab.h>
 #import <Utilities/Conversions.h>
 
 #if !__has_feature(objc_arc)
@@ -149,9 +150,9 @@ static constexpr CGFloat const SEARCH_FIELD_WIDTH = 300;
 
 #pragma mark - Private methods
 
-- (BrowserWindow*)tab
+- (Tab*)tab
 {
-    return (BrowserWindow*)[self window];
+    return [(BrowserWindowController*)self.window.windowController selected_tab];
 }
 
 - (void)setPasteBoardContents:(NSString*)query
@@ -203,7 +204,7 @@ static constexpr CGFloat const SEARCH_FIELD_WIDTH = 300;
     doCommandBySelector:(SEL)selector
 {
     if (selector == @selector(insertNewline:)) {
-        NSEvent* event = [[self tab] currentEvent];
+        NSEvent* event = NSApp.currentEvent;
 
         if ((event.modifierFlags & NSEventModifierFlagShift) == 0) {
             [self findNextMatch:nil];

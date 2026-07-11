@@ -16,12 +16,14 @@
 #import <Application/Application.h>
 #import <Application/ApplicationDelegate.h>
 #import <Interface/Autocomplete.h>
+#import <Interface/BookmarksBar.h>
 #import <Interface/BrowserWindow.h>
 #import <Interface/BrowserWindowController.h>
 #import <Interface/LadybirdWebView.h>
 #import <Interface/LocationSearchField.h>
 #import <Interface/Menu.h>
 #import <Interface/Palette.h>
+#import <Interface/Tab.h>
 #import <Utilities/Conversions.h>
 
 #if !__has_feature(objc_arc)
@@ -37,6 +39,7 @@ static NSString* const TOOLBAR_PRIVATE_BROWSING_IDENTIFIER = @"ToolbarPrivateBro
 static NSString* const TOOLBAR_DOWNLOADS_IDENTIFIER = @"ToolbarDownloadsIdentifier";
 static NSString* const TOOLBAR_NEW_TAB_IDENTIFIER = @"ToolbarNewTabIdentifier";
 static NSString* const TOOLBAR_TAB_OVERVIEW_IDENTIFIER = @"ToolbarTabOverviewIdentifier";
+static constexpr CGFloat TAB_ICON_SIZE = 16;
 
 static constexpr CGFloat PRIVATE_BROWSING_BADGE_HEIGHT = 22;
 static constexpr CGFloat PRIVATE_BROWSING_BADGE_HORIZONTAL_PADDING = 10;
@@ -630,6 +633,40 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 
 @end
 
+@interface PageHostViewController : NSViewController
+- (void)showTab:(Tab*)tab;
+@end
+
+@implementation PageHostViewController
+
+- (void)loadView
+{
+    self.view = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 1000, 800)];
+}
+
+- (void)showTab:(Tab*)tab
+{
+    for (NSViewController* child in self.childViewControllers.copy) {
+        [child.view removeFromSuperview];
+        [child removeFromParentViewController];
+    }
+
+    [self addChildViewController:tab];
+    tab.view.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:tab.view];
+
+    // The content pane extends behind the tool bar when the window has a full height sidebar, so
+    // pin the tab's view to the safe area to keep web content below the tool bar.
+    [NSLayoutConstraint activateConstraints:@[
+        [tab.view.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [tab.view.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [tab.view.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
+        [tab.view.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+    ]];
+}
+
+@end
+
 @interface BrowserWindowController () <NSToolbarDelegate, NSSearchFieldDelegate, AutocompleteObserver>
 {
     WebView::IsPrivate m_is_private;
@@ -648,7 +685,12 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 
 @property (nonatomic, assign) BOOL already_requested_close;
 
-@property (nonatomic, strong) BrowserWindow* parent;
+@property (nonatomic, strong) Tab* parent;
+
+@property (nonatomic, strong, readwrite) NSMutableArray<Tab*>* tabs;
+@property (nonatomic, strong, readwrite) Tab* selected_tab;
+@property (nonatomic, strong) PageHostViewController* page_host;
+@property (nonatomic, strong) NSTitlebarAccessoryViewController* bookmarks_bar_controller;
 
 @property (nonatomic, strong) NSToolbar* toolbar;
 @property (nonatomic, strong) NSArray* toolbar_identifiers;
@@ -791,7 +833,7 @@ private:
     return self;
 }
 
-- (instancetype)initAsChild:(BrowserWindow*)parent
+- (instancetype)initAsChild:(Tab*)parent
                   pageIndex:(u64)page_index
 {
     if (self = [self init:[parent isPrivate]]) {
@@ -863,25 +905,105 @@ private:
 {
     [self restoreLocationFieldForEditing];
     [self tab].preferred_first_responder = self.location_toolbar_item.view;
+    [(BrowserWindow*)self.window setPreferred_first_responder:self.location_toolbar_item.view];
     [self.window makeFirstResponder:self.location_toolbar_item.view];
 }
 
 - (void)focusWebViewWhenActivated
 {
     [self tab].preferred_first_responder = [self tab].web_view;
+    [(BrowserWindow*)self.window setPreferred_first_responder:[self tab].web_view];
 }
 
 - (void)focusWebView
 {
     [self tab].preferred_first_responder = [self tab].web_view;
+    [(BrowserWindow*)self.window setPreferred_first_responder:[self tab].web_view];
     [self.window makeFirstResponder:[self tab].web_view];
 }
 
 #pragma mark - Private methods
 
-- (BrowserWindow*)tab
+- (Tab*)tab
 {
-    return (BrowserWindow*)[self window];
+    return self.selected_tab;
+}
+
+- (void)selectTab:(Tab*)tab
+{
+    if (tab != self.selected_tab || ![self.tabs containsObject:tab])
+        return;
+
+    [self.page_host showTab:tab];
+    self.window.toolbar = self.toolbar;
+    [(BrowserWindow*)self.window setPreferred_first_responder:tab.preferred_first_responder];
+    [self updateTabChrome];
+
+    auto* delegate = (ApplicationDelegate*)NSApp.delegate;
+    [delegate setActiveTab:tab];
+}
+
+- (void)closeTab:(Tab*)tab
+{
+    if (tab == self.selected_tab)
+        [self.window close];
+}
+
+- (void)updateTabChrome
+{
+    auto* tab = self.selected_tab;
+    if (tab == nil)
+        return;
+
+    self.window.title = tab.windowTitle;
+
+    static constexpr CGFloat TITLE_FONT_SIZE = 12;
+    auto* title_font = [NSFont systemFontOfSize:TITLE_FONT_SIZE];
+    auto* favicon_attachment = [[NSTextAttachment alloc] init];
+    favicon_attachment.image = tab.tabIcon;
+
+    // By default, the image attachment adapts to the surrounding font and color attributes. Use
+    // a clear color to prevent the favicon from being tinted.
+    [favicon_attachment setBounds:CGRectMake(0, (title_font.capHeight - TAB_ICON_SIZE) / 2.0, TAB_ICON_SIZE, TAB_ICON_SIZE)];
+    auto* favicon = (NSMutableAttributedString*)[NSMutableAttributedString attributedStringWithAttachment:favicon_attachment];
+    [favicon addAttribute:NSForegroundColorAttributeName value:NSColor.clearColor range:NSMakeRange(0, favicon.length)];
+    auto* attributes = @{ NSForegroundColorAttributeName : NSColor.textColor, NSFontAttributeName : title_font };
+    auto* title = [[NSMutableAttributedString alloc] initWithAttributedString:favicon];
+    [title appendAttributedString:[[NSAttributedString alloc] initWithString:@"  " attributes:attributes]];
+    [title appendAttributedString:[[NSAttributedString alloc] initWithString:tab.displayTitle attributes:attributes]];
+    [self.window.tab setAttributedTitle:title];
+    if ([self.window.tab respondsToSelector:@selector(setToolTip:)])
+        [(id)self.window.tab setToolTip:tab.displayTitle];
+
+    auto& view = tab.web_view.view;
+    if (view.audio_play_state() == Web::HTML::AudioPlayState::Paused && view.page_mute_state() == Web::HTML::MuteState::Unmuted) {
+        [self.window.tab setAccessoryView:nil];
+    } else {
+        auto* button = [NSButton buttonWithImage:tab.iconForPageMuteState target:tab action:@selector(togglePageMuteState:)];
+        button.toolTip = tab.toolTipForPageMuteState;
+        [self.window.tab setAccessoryView:button];
+    }
+}
+
+- (void)tabChromeDidChange:(NSNotification*)notification
+{
+    if (notification.object == self.selected_tab)
+        [self updateTabChrome];
+}
+
+- (BookmarksBar*)bookmarksBar
+{
+    return (BookmarksBar*)self.bookmarks_bar_controller.view;
+}
+
+- (void)rebuildBookmarksBar
+{
+    [self.bookmarksBar rebuild];
+}
+
+- (void)updateBookmarksBarDisplay:(bool)show_bookmarks_bar
+{
+    self.bookmarks_bar_controller.hidden = !show_bookmarks_bar;
 }
 
 - (LocationSearchField*)locationSearchField
@@ -893,7 +1015,7 @@ private:
 {
     auto* delegate = (ApplicationDelegate*)[NSApp delegate];
 
-    self.tab.titlebarAppearsTransparent = NO;
+    self.window.titlebarAppearsTransparent = NO;
 
     [delegate createNewTab:WebView::Application::settings().new_tab_page_url()
                    fromTab:[self tab]
@@ -901,7 +1023,7 @@ private:
                activateTab:Web::HTML::ActivateTab::Yes
                tabLocation:TabLocation::end()];
 
-    self.tab.titlebarAppearsTransparent = YES;
+    self.window.titlebarAppearsTransparent = YES;
 }
 
 - (void)setLocationFieldText:(StringView)url display:(LocationFieldDisplay)display
@@ -1083,9 +1205,9 @@ private:
 
 - (void)showTabOverview:(id)sender
 {
-    self.tab.titlebarAppearsTransparent = NO;
+    self.window.titlebarAppearsTransparent = NO;
     [self.window toggleTabOverview:sender];
-    self.tab.titlebarAppearsTransparent = YES;
+    self.window.titlebarAppearsTransparent = YES;
 }
 
 - (void)showPrivateSessionPopover:(id)sender
@@ -1452,11 +1574,31 @@ private:
 
 - (IBAction)showWindow:(id)sender
 {
-    self.window = self.parent
-        ? [[BrowserWindow alloc] initAsChild:self.parent pageIndex:m_page_index]
-        : [[BrowserWindow alloc] init:m_is_private];
+    auto* tab = self.parent
+        ? [[Tab alloc] initAsChild:self.parent pageIndex:m_page_index]
+        : [[Tab alloc] init:m_is_private];
+    self.tabs = [NSMutableArray arrayWithObject:tab];
+    self.selected_tab = tab;
+
+    self.window = [[BrowserWindow alloc] init:m_is_private];
 
     [self.window setDelegate:self];
+
+    self.page_host = [[PageHostViewController alloc] initWithNibName:nil bundle:nil];
+    self.window.contentViewController = self.page_host;
+    [self.page_host showTab:tab];
+
+    auto* bookmarks_bar = [[BookmarksBar alloc] init:tab];
+    self.bookmarks_bar_controller = [[NSTitlebarAccessoryViewController alloc] init];
+    self.bookmarks_bar_controller.view = bookmarks_bar;
+    self.bookmarks_bar_controller.layoutAttribute = NSLayoutAttributeBottom;
+    [self updateBookmarksBarDisplay:WebView::Application::settings().show_bookmarks_bar()];
+    [self.window addTitlebarAccessoryViewController:self.bookmarks_bar_controller];
+
+    auto* notification_center = NSNotificationCenter.defaultCenter;
+    [notification_center addObserver:self selector:@selector(tabChromeDidChange:) name:TabTitleDidChangeNotification object:tab];
+    [notification_center addObserver:self selector:@selector(tabChromeDidChange:) name:TabFaviconDidChangeNotification object:tab];
+    [notification_center addObserver:self selector:@selector(tabChromeDidChange:) name:TabAudioStateDidChangeNotification object:tab];
 
     [self.window setToolbar:self.toolbar];
     [self.window setToolbarStyle:NSWindowToolbarStyleUnified];
@@ -1466,6 +1608,8 @@ private:
     [[self locationSearchField] setZoomAction:view.reset_zoom_action()];
 
     [self.window makeKeyAndOrderFront:sender];
+
+    [self updateTabChrome];
 
     [self focusLocationToolbarItem];
     [self updateDownloadsButton];
@@ -1537,7 +1681,7 @@ private:
 
 - (void)windowDidMove:(NSNotification*)notification
 {
-    auto position = Ladybird::ns_point_to_gfx_point([[self tab] frame].origin);
+    auto position = Ladybird::ns_point_to_gfx_point([self.window frame].origin);
     [[[self tab] web_view] setWindowPosition:position];
 }
 
@@ -1575,7 +1719,7 @@ private:
 {
     if (m_fullscreen_requested_for_web_content) {
         [self.toolbar setVisible:NO];
-        [[self tab] updateBookmarksBarDisplay:NO];
+        [self updateBookmarksBarDisplay:NO];
 
         m_fullscreen_should_restore_tab_bar = [[self.window tabGroup] isTabBarVisible];
         if (m_fullscreen_should_restore_tab_bar) {
@@ -1600,7 +1744,7 @@ private:
 {
     if (exchange(m_fullscreen_requested_for_web_content, false)) {
         [self.toolbar setVisible:YES];
-        [[self tab] updateBookmarksBarDisplay:WebView::Application::settings().show_bookmarks_bar()];
+        [self updateBookmarksBarDisplay:WebView::Application::settings().show_bookmarks_bar()];
 
         if (m_fullscreen_should_restore_tab_bar && ![[self.window tabGroup] isTabBarVisible]) {
             [self.window toggleTabBar:nil];

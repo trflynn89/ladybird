@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/OwnPtr.h>
 #include <LibWebView/Application.h>
+#include <LibWebView/Settings.h>
 
 #import <Application/Application.h>
 #import <Application/ApplicationDelegate.h>
@@ -13,16 +15,33 @@
 #import <Interface/InfoBar.h>
 #import <Interface/LadybirdWebView.h>
 #import <Interface/Menu.h>
+#import <Interface/Tab.h>
 #import <Utilities/Conversions.h>
 
 #if !__has_feature(objc_arc)
 #    error "This project requires ARC"
 #endif
 
+class ApplicationSettingsObserver final : public WebView::SettingsObserver {
+public:
+    explicit ApplicationSettingsObserver(ApplicationDelegate* delegate)
+        : m_delegate(delegate)
+    {
+    }
+
+private:
+    virtual void show_bookmarks_bar_changed() override;
+
+    __weak ApplicationDelegate* m_delegate { nil };
+};
+
 @interface ApplicationDelegate ()
+{
+    OwnPtr<ApplicationSettingsObserver> m_settings_observer;
+}
 
 @property (nonatomic, strong) NSMutableArray<BrowserWindowController*>* managed_tabs;
-@property (nonatomic, weak) BrowserWindow* active_tab;
+@property (nonatomic, weak) Tab* active_tab;
 
 @property (nonatomic, strong) NSMenu* bookmarks_menu;
 
@@ -40,6 +59,13 @@
 - (NSMenuItem*)createHelpMenu;
 
 @end
+
+void ApplicationSettingsObserver::show_bookmarks_bar_changed()
+{
+    auto show_bookmarks_bar = WebView::Application::settings().show_bookmarks_bar();
+    for (BrowserWindowController* controller in m_delegate.managed_tabs)
+        [controller updateBookmarksBarDisplay:show_bookmarks_bar];
+}
 
 @implementation ApplicationDelegate
 
@@ -60,6 +86,7 @@
         [[NSApp mainMenu] addItem:[self createHelpMenu]];
 
         self.managed_tabs = [[NSMutableArray alloc] init];
+        m_settings_observer = make<ApplicationSettingsObserver>(self);
 
         // Reduce the tooltip delay, as the default delay feels quite long.
         [[NSUserDefaults standardUserDefaults] setObject:@100 forKey:@"NSInitialToolTipDelay"];
@@ -70,8 +97,8 @@
 
 #pragma mark - Public methods
 
-- (nonnull BrowserWindowController*)createNewTab:(Web::HTML::ActivateTab)activate_tab
-                                         fromTab:(nullable BrowserWindow*)tab
+- (nonnull Tab*)createNewTab:(Web::HTML::ActivateTab)activate_tab
+                     fromTab:(nullable Tab*)tab
 {
     auto is_private = tab ? [tab isPrivate] : WebView::IsPrivate::No;
     auto* controller = [[BrowserWindowController alloc] init:is_private];
@@ -80,14 +107,14 @@
                                 activateTab:activate_tab
                                     fromTab:tab];
 
-    return controller;
+    return controller.selected_tab;
 }
 
-- (BrowserWindowController*)createNewTab:(Optional<URL::URL> const&)url
-                                 fromTab:(BrowserWindow*)tab
-                               isPrivate:(WebView::IsPrivate)is_private
-                             activateTab:(Web::HTML::ActivateTab)activate_tab
-                             tabLocation:(TabLocation)tab_location
+- (Tab*)createNewTab:(Optional<URL::URL> const&)url
+             fromTab:(Tab*)tab
+           isPrivate:(WebView::IsPrivate)is_private
+         activateTab:(Web::HTML::ActivateTab)activate_tab
+         tabLocation:(TabLocation)tab_location
 {
     auto* controller = [[BrowserWindowController alloc] init:is_private];
 
@@ -97,32 +124,32 @@
                                 tabLocation:tab_location];
 
     if (url.has_value()) {
-        [controller loadURL:*url];
+        [controller.selected_tab loadURL:*url];
 
         if (*url != WebView::Application::settings().new_tab_page_url())
             [controller focusWebView];
     }
 
-    return controller;
+    return controller.selected_tab;
 }
 
-- (nonnull BrowserWindowController*)createChildTab:(Optional<URL::URL> const&)url
-                                           fromTab:(nonnull BrowserWindow*)tab
-                                       activateTab:(Web::HTML::ActivateTab)activate_tab
-                                         pageIndex:(u64)page_index
+- (nonnull Tab*)createChildTab:(Optional<URL::URL> const&)url
+                       fromTab:(nonnull Tab*)tab
+                   activateTab:(Web::HTML::ActivateTab)activate_tab
+                     pageIndex:(u64)page_index
 {
-    auto* controller = [self createChildTab:activate_tab fromTab:tab pageIndex:page_index];
+    auto* child_tab = [self createChildTab:activate_tab fromTab:tab pageIndex:page_index];
 
     if (url.has_value()) {
-        [controller loadURL:*url];
+        [child_tab loadURL:*url];
     }
 
-    [controller focusWebView];
+    [(BrowserWindowController*)child_tab.view.window.windowController focusWebView];
 
-    return controller;
+    return child_tab;
 }
 
-- (void)setActiveTab:(BrowserWindow*)tab
+- (void)setActiveTab:(Tab*)tab
 {
     if (tab == self.activeTab)
         return;
@@ -136,7 +163,7 @@
     WebView::Application::the().update_bookmark_action_for_current_web_view();
 }
 
-- (BrowserWindow*)activeTab
+- (Tab*)activeTab
 {
     return self.active_tab;
 }
@@ -148,7 +175,10 @@
 
 - (NSUInteger)tabCount
 {
-    return self.managed_tabs.count;
+    NSUInteger count = 0;
+    for (BrowserWindowController* controller in self.managed_tabs)
+        count += controller.tabs.count;
+    return count;
 }
 
 - (void)restartPrivateBrowsingSession
@@ -167,8 +197,7 @@
     Ladybird::repopulate_application_menu(self.bookmarks_menu, WebView::Application::the().bookmarks_menu());
 
     for (BrowserWindowController* controller in self.managed_tabs) {
-        auto* tab = (BrowserWindow*)[controller window];
-        [tab rebuildBookmarksBar];
+        [controller rebuildBookmarksBar];
     }
 }
 
@@ -230,21 +259,21 @@
            tabLocation:TabLocation::end()];
 }
 
-- (nonnull BrowserWindowController*)createChildTab:(Web::HTML::ActivateTab)activate_tab
-                                           fromTab:(nonnull BrowserWindow*)tab
-                                         pageIndex:(u64)page_index
+- (nonnull Tab*)createChildTab:(Web::HTML::ActivateTab)activate_tab
+                       fromTab:(nonnull Tab*)tab
+                     pageIndex:(u64)page_index
 {
     auto* controller = [[BrowserWindowController alloc] initAsChild:tab pageIndex:page_index];
     [self initializeBrowserWindowController:controller
                                 activateTab:activate_tab
                                     fromTab:tab];
 
-    return controller;
+    return controller.selected_tab;
 }
 
 - (void)initializeBrowserWindowController:(BrowserWindowController*)controller
                               activateTab:(Web::HTML::ActivateTab)activate_tab
-                                  fromTab:(nullable BrowserWindow*)tab
+                                  fromTab:(nullable Tab*)tab
 {
     [self initializeBrowserWindowController:controller
                                 activateTab:activate_tab
@@ -254,7 +283,7 @@
 
 - (void)initializeBrowserWindowController:(BrowserWindowController*)controller
                               activateTab:(Web::HTML::ActivateTab)activate_tab
-                                  fromTab:(nullable BrowserWindow*)tab
+                                  fromTab:(nullable Tab*)tab
                               tabLocation:(TabLocation)tab_location
 {
     Optional<NSUInteger> insertion_index;
@@ -265,11 +294,11 @@
         tab_for_location = nil;
 
     if (tab_for_location) {
-        tab_group = [tab_for_location tabGroup];
+        tab_group = tab_for_location.view.window.tabGroup;
 
         if (tab_location.is_after_tab()) {
             auto* windows = [tab_group windows];
-            auto tab_index = [windows indexOfObject:tab_for_location];
+            auto tab_index = [windows indexOfObject:tab_for_location.view.window];
             if (tab_index != NSNotFound)
                 insertion_index = tab_index + 1;
         }
@@ -285,7 +314,7 @@
 
         // FIXME: Can we create the tabbed window above without it becoming active in the first place?
         if (activate_tab == Web::HTML::ActivateTab::No) {
-            [tab_for_location orderFront:nil];
+            [tab_for_location.view.window orderFront:nil];
         }
     }
 
@@ -467,18 +496,16 @@
     if (browser_options.devtools_port.has_value())
         [self onDevtoolsEnabled];
 
-    BrowserWindow* tab = nil;
+    Tab* tab = nil;
 
     for (auto const& url : browser_options.urls) {
         auto activate_tab = tab == nil ? Web::HTML::ActivateTab::Yes : Web::HTML::ActivateTab::No;
 
-        auto* controller = [self createNewTab:url
-                                      fromTab:tab
-                                    isPrivate:WebView::IsPrivate::No
-                                  activateTab:activate_tab
-                                  tabLocation:TabLocation::end()];
-
-        tab = (BrowserWindow*)[controller window];
+        tab = [self createNewTab:url
+                         fromTab:tab
+                       isPrivate:WebView::IsPrivate::No
+                     activateTab:activate_tab
+                     tabLocation:TabLocation::end()];
     }
 }
 
@@ -494,8 +521,7 @@
 - (void)applicationDidChangeScreenParameters:(NSNotification*)notification
 {
     for (BrowserWindowController* controller in self.managed_tabs) {
-        auto* tab = (BrowserWindow*)[controller window];
-        [[tab web_view] handleDisplayRefreshRateChange];
+        [controller.selected_tab.web_view handleDisplayRefreshRateChange];
     }
 }
 

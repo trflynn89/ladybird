@@ -19,6 +19,7 @@
 #import <Interface/BrowserWindow.h>
 #import <Interface/BrowserWindowController.h>
 #import <Interface/LadybirdWebView.h>
+#import <Interface/Tab.h>
 
 #if !__has_feature(objc_arc)
 #    error "This project requires ARC"
@@ -51,9 +52,10 @@ Vector<WebView::ViewImplementation&> Application::active_window_web_views() cons
 {
     Vector<WebView::ViewImplementation&> web_views;
 
-    auto add_window = [&](id window) {
-        if ([window isKindOfClass:[BrowserWindow class]])
-            web_views.append([[(BrowserWindow*)window web_view] view]);
+    auto add_window = [&](NSWindow* window) {
+        auto* controller = (BrowserWindowController*)window.windowController;
+        if ([controller isKindOfClass:BrowserWindowController.class])
+            web_views.append(controller.selected_tab.web_view.view);
     };
 
     auto* active_window = [NSApp keyWindow];
@@ -76,12 +78,13 @@ Optional<WebView::ViewImplementation&> Application::open_blank_new_tab(Web::HTML
 {
     ApplicationDelegate* delegate = [NSApp delegate];
 
-    auto* controller = [delegate createNewTab:activate_tab fromTab:[delegate activeTab]];
+    auto* tab = [delegate createNewTab:activate_tab fromTab:[delegate activeTab]];
+    auto* controller = (BrowserWindowController*)tab.view.window.windowController;
+
     if (activate_tab == Web::HTML::ActivateTab::Yes)
         [controller focusWebView];
     else
         [controller focusWebViewWhenActivated];
-    auto* tab = (BrowserWindow*)[controller window];
 
     return [[tab web_view] view];
 }
@@ -110,12 +113,11 @@ void Application::open_urls_in_new_tabs(ReadonlySpan<URL::URL> urls) const
 
     for (auto const& url : urls) {
         auto location = previous_tab ? TabLocation::after_tab(previous_tab) : TabLocation::end();
-        auto* controller = [delegate createNewTab:url
-                                          fromTab:active_tab
-                                        isPrivate:is_private
-                                      activateTab:Web::HTML::ActivateTab::No
-                                      tabLocation:location];
-        previous_tab = (BrowserWindow*)[controller window];
+        previous_tab = [delegate createNewTab:url
+                                      fromTab:active_tab
+                                    isPrivate:is_private
+                                  activateTab:Web::HTML::ActivateTab::No
+                                  tabLocation:location];
     }
 }
 
@@ -154,7 +156,7 @@ void Application::display_download_confirmation_dialog(StringView download_name,
 
     __block auto* ns_path = Ladybird::string_to_ns_string(path.string());
 
-    [dialog beginSheetModalForWindow:[delegate activeTab]
+    [dialog beginSheetModalForWindow:[delegate activeTab].view.window
                    completionHandler:^(NSModalResponse response) {
                        if (response == NSModalResponseContinue) {
                            [[NSWorkspace sharedWorkspace] selectFile:ns_path inFileViewerRootedAtPath:@""];
@@ -169,7 +171,7 @@ void Application::display_error_dialog(StringView error_message) const
     auto* dialog = [[NSAlert alloc] init];
     [dialog setMessageText:Ladybird::string_to_ns_string(error_message)];
 
-    [dialog beginSheetModalForWindow:[delegate activeTab]
+    [dialog beginSheetModalForWindow:[delegate activeTab].view.window
                    completionHandler:nil];
 }
 
@@ -351,7 +353,7 @@ static NSAlert* create_bookmark_dialog(NSString* title, NSView* first_responder,
 
 template<typename PromiseType, typename ResolveCallback>
 static NonnullRefPtr<PromiseType> display_add_or_edit_bookmark_dialog(
-    BrowserWindow* parent,
+    NSWindow* parent,
     NSString* title,
     Optional<URL::URL const&> current_url,
     Optional<String const&> current_title,
@@ -414,7 +416,7 @@ NonnullRefPtr<Application::AddBookmarkPromise> Application::display_add_bookmark
         copied_target_folder_id = *target_folder_id;
 
     return display_add_or_edit_bookmark_dialog<AddBookmarkPromise>(
-        [delegate activeTab], @"Add Bookmark", current_url, current_title, current_favicon,
+        [delegate activeTab].view.window, @"Add Bookmark", current_url, current_title, current_favicon,
         [target_folder_id = move(copied_target_folder_id)](AddBookmarkPromise& promise, WebView::BookmarkItem::Bookmark bookmark) {
             promise.resolve(AddBookmarkDialogResult {
                 .bookmark = move(bookmark),
@@ -427,7 +429,7 @@ NonnullRefPtr<Application::BookmarkPromise> Application::display_edit_bookmark_d
 {
     ApplicationDelegate* delegate = [NSApp delegate];
     return display_add_or_edit_bookmark_dialog<BookmarkPromise>(
-        [delegate activeTab], @"Edit Bookmark", current_bookmark.url, current_bookmark.title, current_bookmark.favicon_base64_png,
+        [delegate activeTab].view.window, @"Edit Bookmark", current_bookmark.url, current_bookmark.title, current_bookmark.favicon_base64_png,
         [](BookmarkPromise& promise, WebView::BookmarkItem::Bookmark bookmark) {
             promise.resolve(move(bookmark));
         });
@@ -435,7 +437,7 @@ NonnullRefPtr<Application::BookmarkPromise> Application::display_edit_bookmark_d
 
 template<typename PromiseType>
 static NonnullRefPtr<PromiseType> display_add_or_edit_bookmark_folder_dialog(
-    BrowserWindow* parent,
+    NSWindow* parent,
     NSString* title,
     Optional<String const&> current_title)
 {
@@ -470,13 +472,13 @@ static NonnullRefPtr<PromiseType> display_add_or_edit_bookmark_folder_dialog(
 NonnullRefPtr<Application::BookmarkFolderPromise> Application::display_add_bookmark_folder_dialog(Optional<String const&> default_title) const
 {
     ApplicationDelegate* delegate = [NSApp delegate];
-    return display_add_or_edit_bookmark_folder_dialog<BookmarkFolderPromise>([delegate activeTab], @"Add Folder", default_title);
+    return display_add_or_edit_bookmark_folder_dialog<BookmarkFolderPromise>([delegate activeTab].view.window, @"Add Folder", default_title);
 }
 
 NonnullRefPtr<Application::BookmarkFolderPromise> Application::display_edit_bookmark_folder_dialog(WebView::BookmarkItem::Folder const& current_folder) const
 {
     ApplicationDelegate* delegate = [NSApp delegate];
-    return display_add_or_edit_bookmark_folder_dialog<BookmarkFolderPromise>([delegate activeTab], @"Edit Folder", current_folder.title);
+    return display_add_or_edit_bookmark_folder_dialog<BookmarkFolderPromise>([delegate activeTab].view.window, @"Edit Folder", current_folder.title);
 }
 
 void Application::on_devtools_enabled() const

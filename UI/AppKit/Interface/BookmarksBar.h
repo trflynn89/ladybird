@@ -13,11 +13,11 @@
 #import <Cocoa/Cocoa.h>
 
 @class BookmarkFolderPopover;
-@class BrowserWindow;
+@class Tab;
 
 @interface BookmarksBar : NSView
 
-- (instancetype)init:(BrowserWindow*)tab;
+- (instancetype)init:(Tab*)tab;
 
 - (void)rebuild;
 
