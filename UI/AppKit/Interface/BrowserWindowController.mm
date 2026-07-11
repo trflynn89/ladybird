@@ -1298,7 +1298,7 @@ private:
 
 - (void)splitViewDidResizeSubviews:(NSNotification*)notification
 {
-    if (!self.vertical_tabs_presentation || m_is_applying_sidebar_settings)
+    if (!self.vertical_tabs_presentation || m_is_applying_sidebar_settings || m_fullscreen_requested_for_web_content || self.sidebar_item.isCollapsed)
         return;
     if (!WebView::Application::settings().tab_settings().vertical_tabs_expanded)
         return;
@@ -2222,12 +2222,15 @@ private:
 - (void)windowWillEnterFullScreen:(NSNotification*)notification
 {
     if (m_fullscreen_requested_for_web_content) {
-        [self.toolbar setVisible:NO];
+        [self.window.toolbar setVisible:NO];
         [self updateBookmarksBarDisplay:NO];
 
-        m_fullscreen_should_restore_tab_bar = [[self.window tabGroup] isTabBarVisible];
-        if (m_fullscreen_should_restore_tab_bar) {
-            [self.window toggleTabBar:nil];
+        if (self.vertical_tabs_presentation) {
+            self.sidebar_item.animator.collapsed = YES;
+        } else {
+            m_fullscreen_should_restore_tab_bar = [[self.window tabGroup] isTabBarVisible];
+            if (m_fullscreen_should_restore_tab_bar)
+                [self.window toggleTabBar:nil];
         }
     }
 }
@@ -2247,10 +2250,13 @@ private:
 - (void)windowDidExitFullScreen:(NSNotification*)notification
 {
     if (exchange(m_fullscreen_requested_for_web_content, false)) {
-        [self.toolbar setVisible:YES];
+        [self.window.toolbar setVisible:YES];
         [self updateBookmarksBarDisplay:WebView::Application::settings().show_bookmarks_bar()];
 
-        if (m_fullscreen_should_restore_tab_bar && ![[self.window tabGroup] isTabBarVisible]) {
+        if (self.vertical_tabs_presentation) {
+            self.sidebar_item.animator.collapsed = NO;
+            [self applyTabSettings];
+        } else if (m_fullscreen_should_restore_tab_bar && ![[self.window tabGroup] isTabBarVisible]) {
             [self.window toggleTabBar:nil];
         }
     }
