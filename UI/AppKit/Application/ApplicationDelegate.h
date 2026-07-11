@@ -64,6 +64,7 @@ private:
 - (nullable Tab*)activeTab;
 
 - (void)removeTab:(nonnull BrowserWindowController*)controller;
+- (void)moveTabToNewWindow:(nonnull Tab*)tab;
 - (NSUInteger)tabCount;
 
 - (void)restartPrivateBrowsingSession;

@@ -18,8 +18,10 @@
 @interface BrowserWindowController : NSWindowController <NSWindowDelegate>
 
 - (instancetype)init:(WebView::IsPrivate)is_private;
+- (instancetype)initWithTab:(Tab*)tab;
 - (instancetype)initAsChild:(Tab*)parent pageIndex:(u64)page_index;
 
+- (Tab*)createTabForHosting;
 - (WebView::IsPrivate)isPrivate;
 - (void)loadURL:(URL::URL const&)url;
 - (void)onLoadStart;
@@ -37,9 +39,15 @@
 
 - (void)selectTab:(Tab*)tab;
 - (void)closeTab:(Tab*)tab;
+- (void)closeOtherTabs:(Tab*)tab;
 - (void)webViewDidCloseForTab:(Tab*)tab;
 - (void)addTab:(Tab*)tab atIndex:(NSUInteger)index;
 - (void)removeTab:(Tab*)tab;
+- (void)detachTabForTransfer:(Tab*)tab;
+- (void)closeShellAfterTransfer;
+- (void)presentVerticalTabs:(BOOL)vertical;
+
+@property (nonatomic, assign, readonly, getter=isVerticalTabsPresentation) BOOL vertical_tabs_presentation;
 
 @property (nonatomic, strong, readonly) NSArray<Tab*>* tabs;
 @property (nonatomic, strong, readonly) Tab* selected_tab;
