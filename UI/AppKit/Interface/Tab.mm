@@ -165,6 +165,22 @@ static NSImage* tab_loading_spinner_icon(NSUInteger frame)
     [self.web_view handleDisplayRefreshRateChange];
 }
 
+- (BOOL)needsBeforeUnloadCheck
+{
+    return [self.web_view needsBeforeUnloadCheck];
+}
+
+- (void)requestClose
+{
+    self.already_requested_close = YES;
+    [self.web_view requestClose];
+}
+
+- (Function<void()>)prepareForImmediateClose
+{
+    return [self.web_view prepareForImmediateClose];
+}
+
 - (void)find:(id)sender
 {
     [self.search_panel find:sender];
