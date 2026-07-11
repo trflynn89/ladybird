@@ -93,8 +93,6 @@ static Optional<WebView::Menu&> find_bookmark_folder_by_id(WebView::Menu& menu, 
 
 @interface BookmarksBar ()
 
-@property (nonatomic, weak) Tab* tab;
-
 @property (nonatomic, strong) NSStackView* bookmark_items;
 @property (nonatomic, strong) BookmarkFolderPopover* bookmark_folder_popover;
 @property (nonatomic, weak) NSButton* active_bookmark_folder_button;

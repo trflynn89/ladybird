@@ -48,5 +48,6 @@ extern NSNotificationName const TabAudioStateDidChangeNotification;
 @property (nonatomic, weak) NSResponder* preferred_first_responder;
 @property (nonatomic, strong) NSToolbar* toolbar;
 @property (nonatomic, strong) BrowserWindowController* toolbar_controller;
+@property (nonatomic, weak) BrowserWindowController* browser_window_controller;
 
 @end

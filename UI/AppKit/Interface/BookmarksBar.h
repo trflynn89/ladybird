@@ -32,5 +32,6 @@
 
 @property (nonatomic, strong, readonly) NSString* selected_bookmark_menu_item_id;
 @property (nonatomic, strong, readonly) NSString* selected_bookmark_menu_target_folder_id;
+@property (nonatomic, weak) Tab* tab;
 
 @end

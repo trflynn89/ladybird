@@ -18,6 +18,7 @@
 - (void)setBookmarkAction:(WebView::Action&)action;
 - (void)setZoomAction:(WebView::Action&)action;
 - (BOOL)handleContextMenuEvent:(NSEvent*)event;
+- (void)setPreferredDisplayWidth:(CGFloat)width;
 
 @property (nonatomic, copy) void (^willBeginEditing)(void);
 @property (nonatomic, copy) NSString* (^copyLinkTextProvider)(void);
