@@ -19,6 +19,7 @@
 
 @property (nonatomic, copy) NSArray<Tab*>* tabs;
 @property (nonatomic, assign, getter=isExpanded) BOOL expanded;
+@property (nonatomic, assign) BOOL draws_background;
 @property (nonatomic, copy) void (^on_select_tab)(Tab*);
 @property (nonatomic, copy) void (^on_close_tab)(Tab*);
 @property (nonatomic, copy) void (^on_close_other_tabs)(Tab*);

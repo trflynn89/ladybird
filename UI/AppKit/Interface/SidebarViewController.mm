@@ -340,6 +340,7 @@ static NSUserInterfaceItemIdentifier const SIDEBAR_TAB_CELL_IDENTIFIER = @"Sideb
     if (self = [super initWithNibName:nil bundle:nil]) {
         self.tabs = tabs;
         self.expanded = YES;
+        self.draws_background = YES;
     }
     return self;
 }
@@ -365,13 +366,20 @@ static NSUserInterfaceItemIdentifier const SIDEBAR_TAB_CELL_IDENTIFIER = @"Sideb
     [self.table_view addTableColumn:column];
     scroll_view.documentView = self.table_view;
 
-    // The sidebar extends behind the title bar when the window has a full height sidebar, so pin
-    // the scroll view to the safe area to keep tab rows below the window controls.
-    auto* container = [[NSView alloc] initWithFrame:NSZeroRect];
+    NSView* container;
+    if (self.draws_background) {
+        auto* effect_view = [[NSVisualEffectView alloc] initWithFrame:NSZeroRect];
+        effect_view.material = NSVisualEffectMaterialWindowBackground;
+        effect_view.blendingMode = NSVisualEffectBlendingModeWithinWindow;
+        effect_view.state = NSVisualEffectStateFollowsWindowActiveState;
+        container = effect_view;
+    } else {
+        container = [[NSView alloc] initWithFrame:NSZeroRect];
+    }
     scroll_view.translatesAutoresizingMaskIntoConstraints = NO;
     [container addSubview:scroll_view];
     [NSLayoutConstraint activateConstraints:@[
-        [scroll_view.topAnchor constraintEqualToAnchor:container.safeAreaLayoutGuide.topAnchor],
+        [scroll_view.topAnchor constraintEqualToAnchor:container.topAnchor],
         [scroll_view.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
         [scroll_view.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
         [scroll_view.bottomAnchor constraintEqualToAnchor:container.bottomAnchor],
@@ -500,6 +508,8 @@ static NSUserInterfaceItemIdentifier const SIDEBAR_TAB_CELL_IDENTIFIER = @"Sideb
 
 - (void)setExpanded:(BOOL)expanded
 {
+    if (_expanded == expanded)
+        return;
     _expanded = expanded;
     [self reloadTabs];
 }

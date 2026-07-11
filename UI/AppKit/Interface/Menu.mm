@@ -275,6 +275,9 @@ static void initialize_native_icon(WebView::Action& action, id control)
         set_control_image(control, @"line.horizontal.star.fill.line.horizontal");
         [control setKeyEquivalent:@"B"];
         break;
+    case WebView::ActionID::ToggleVerticalTabsExpanded:
+        set_control_image(control, @"sidebar.leading");
+        break;
     case WebView::ActionID::BookmarkItem:
         if (auto icon = action.base64_png_icon(); icon.has_value())
             [control setImage:Ladybird::image_from_base64_png(*icon, NSMakeSize(MENU_ICON_SIZE, MENU_ICON_SIZE))];

@@ -40,6 +40,7 @@ static NSString* const TOOLBAR_PRIVATE_BROWSING_IDENTIFIER = @"ToolbarPrivateBro
 static NSString* const TOOLBAR_DOWNLOADS_IDENTIFIER = @"ToolbarDownloadsIdentifier";
 static NSString* const TOOLBAR_NEW_TAB_IDENTIFIER = @"ToolbarNewTabIdentifier";
 static NSString* const TOOLBAR_TAB_OVERVIEW_IDENTIFIER = @"ToolbarTabOverviewIdentifier";
+static NSString* const TOOLBAR_TOGGLE_SIDEBAR_IDENTIFIER = @"ToolbarToggleSidebarIdentifier";
 static constexpr CGFloat TAB_ICON_SIZE = 16;
 
 static constexpr CGFloat PRIVATE_BROWSING_BADGE_HEIGHT = 22;
@@ -716,6 +717,7 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 @property (nonatomic, strong) NSToolbarItem* downloads_toolbar_item;
 @property (nonatomic, strong) NSToolbarItem* new_tab_toolbar_item;
 @property (nonatomic, strong) NSToolbarItem* tab_overview_toolbar_item;
+@property (nonatomic, strong) NSToolbarItem* toggle_sidebar_toolbar_item;
 
 @property (nonatomic, strong) NSPopover* private_session_popover;
 
@@ -740,6 +742,7 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 - (void)updateLocationToolbarItemWidth;
 - (void)adoptToolbarForTab:(Tab*)tab;
 - (void)setTabOverviewVisible:(BOOL)visible forTab:(Tab*)tab;
+- (void)setSidebarToggleVisible:(BOOL)visible forTab:(Tab*)tab;
 
 @end
 
@@ -780,6 +783,7 @@ private:
 @synthesize downloads_toolbar_item = _downloads_toolbar_item;
 @synthesize new_tab_toolbar_item = _new_tab_toolbar_item;
 @synthesize tab_overview_toolbar_item = _tab_overview_toolbar_item;
+@synthesize toggle_sidebar_toolbar_item = _toggle_sidebar_toolbar_item;
 
 - (instancetype)init:(WebView::IsPrivate)is_private
 {
@@ -1012,6 +1016,7 @@ private:
     [self.page_host showTab:tab];
     self.window.toolbar = tab.toolbar;
     [self setTabOverviewVisible:!self.vertical_tabs_presentation forTab:tab];
+    [self setSidebarToggleVisible:self.vertical_tabs_presentation forTab:tab];
     [self updateLocationToolbarItemWidth];
     [(BrowserWindow*)self.window setPreferred_first_responder:tab.preferred_first_responder];
     if (tab.preferred_first_responder)
@@ -1177,8 +1182,10 @@ private:
     self.vertical_tabs_presentation = vertical;
     if (vertical && self.window.tabGroup.isTabBarVisible)
         [self.window toggleTabBar:nil];
-    for (Tab* tab in self.tabs)
+    for (Tab* tab in self.tabs) {
         [self setTabOverviewVisible:!vertical forTab:tab];
+        [self setSidebarToggleVisible:vertical forTab:tab];
+    }
 
     if (!vertical) {
         auto window_frame = self.window.frame;
@@ -1201,7 +1208,7 @@ private:
     self.sidebar_view_controller = [[SidebarViewController alloc] initWithTabs:self.tabs];
     self.split_view_controller = [[NSSplitViewController alloc] initWithNibName:nil bundle:nil];
     self.contentViewController = self.split_view_controller;
-    self.sidebar_item = [NSSplitViewItem sidebarWithViewController:self.sidebar_view_controller];
+    self.sidebar_item = [NSSplitViewItem splitViewItemWithViewController:self.sidebar_view_controller];
     self.sidebar_item.minimumThickness = 232;
     self.sidebar_item.maximumThickness = 232;
     self.sidebar_item.canCollapse = NO;
@@ -1234,7 +1241,32 @@ private:
                                                tabLocation:TabLocation::end()];
     };
     [self.sidebar_view_controller selectTab:self.selected_tab];
+    [self applyTabSettings];
     [self.window setFrame:window_frame display:YES];
+}
+
+- (void)applyTabSettings
+{
+    if (!self.vertical_tabs_presentation)
+        return;
+    auto window_frame = self.window.frame;
+    auto expanded = WebView::Application::settings().tab_settings().vertical_tabs_expanded;
+    self.sidebar_view_controller.expanded = expanded;
+    self.sidebar_item.minimumThickness = expanded ? 232 : 52;
+    self.sidebar_item.maximumThickness = expanded ? 232 : 52;
+    [self.window setFrame:window_frame display:YES];
+}
+
+- (void)setSidebarToggleVisible:(BOOL)visible forTab:(Tab*)tab
+{
+    auto* toolbar = tab.toolbar;
+    auto index = [toolbar.items indexOfObjectPassingTest:^BOOL(NSToolbarItem* item, NSUInteger, BOOL*) {
+        return [item.itemIdentifier isEqualToString:TOOLBAR_TOGGLE_SIDEBAR_IDENTIFIER];
+    }];
+    if (!visible && index != NSNotFound)
+        [toolbar removeItemAtIndex:index];
+    else if (visible && index == NSNotFound)
+        [toolbar insertItemWithItemIdentifier:TOOLBAR_TOGGLE_SIDEBAR_IDENTIFIER atIndex:0];
 }
 
 - (void)setTabOverviewVisible:(BOOL)visible forTab:(Tab*)tab
@@ -1911,6 +1943,16 @@ private:
     return _tab_overview_toolbar_item;
 }
 
+- (NSToolbarItem*)toggle_sidebar_toolbar_item
+{
+    if (!_toggle_sidebar_toolbar_item) {
+        auto* button = Ladybird::create_application_button(WebView::Application::the().toggle_vertical_tabs_expanded_action());
+        _toggle_sidebar_toolbar_item = [[NSToolbarItem alloc] initWithItemIdentifier:TOOLBAR_TOGGLE_SIDEBAR_IDENTIFIER];
+        _toggle_sidebar_toolbar_item.view = button;
+    }
+    return _toggle_sidebar_toolbar_item;
+}
+
 - (NSArray*)toolbar_identifiers
 {
     if (!_toolbar_identifiers) {
@@ -1976,6 +2018,7 @@ private:
 
     [self.window setToolbar:tab.toolbar];
     [self setTabOverviewVisible:YES forTab:tab];
+    [self setSidebarToggleVisible:NO forTab:tab];
     [self.window setToolbarStyle:NSWindowToolbarStyleUnified];
 
     auto& view = [[[self tab] web_view] view];
@@ -2192,6 +2235,9 @@ private:
     }
     if ([identifier isEqual:TOOLBAR_TAB_OVERVIEW_IDENTIFIER]) {
         return self.tab_overview_toolbar_item;
+    }
+    if ([identifier isEqual:TOOLBAR_TOGGLE_SIDEBAR_IDENTIFIER]) {
+        return self.toggle_sidebar_toolbar_item;
     }
 
     return nil;

@@ -259,8 +259,11 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
 - (void)tabSettingsChanged
 {
     auto vertical_tabs_enabled = WebView::Application::settings().tab_settings().vertical_tabs_enabled;
-    if (exchange(m_vertical_tabs_enabled, vertical_tabs_enabled) == vertical_tabs_enabled)
+    if (exchange(m_vertical_tabs_enabled, vertical_tabs_enabled) == vertical_tabs_enabled) {
+        for (BrowserWindowController* controller in self.managed_tabs)
+            [controller applyTabSettings];
         return;
+    }
 
     if (vertical_tabs_enabled)
         [self convertWindowsToVerticalTabs];
