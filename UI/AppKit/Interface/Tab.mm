@@ -302,18 +302,18 @@ static NSImage* tab_loading_spinner_icon(NSUInteger frame)
 - (void)onLoadStart
 {
     [self setTabLoading:YES];
-    [[self browserWindowController] onLoadStart];
+    [self.toolbar_controller onLoadStart];
 }
 
 - (void)onLoadFinish
 {
     [self setTabLoading:NO];
-    [[self browserWindowController] onLoadFinish];
+    [self.toolbar_controller onLoadFinish];
 }
 
 - (void)onURLChange:(URL::URL const&)url
 {
-    [[self browserWindowController] onURLChange:url];
+    [self.toolbar_controller onURLChange:url];
 }
 
 - (void)onTitleChange:(Utf16String const&)title
@@ -333,7 +333,7 @@ static NSImage* tab_loading_spinner_icon(NSUInteger frame)
         self.favicon = [Tab defaultFavicon];
     }
     [self notifyFaviconChanged];
-    [[self browserWindowController] onFaviconChange:favicon];
+    [self.toolbar_controller onFaviconChange:favicon];
 }
 
 - (void)onAudioPlayStateChange:(Web::HTML::AudioPlayState)play_state
