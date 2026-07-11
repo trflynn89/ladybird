@@ -750,6 +750,8 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 - (void)adoptToolbarForTab:(Tab*)tab;
 - (void)setTabOverviewVisible:(BOOL)visible forTab:(Tab*)tab;
 - (void)setSidebarToggleVisible:(BOOL)visible forTab:(Tab*)tab;
+- (void)updateSidebarToggleForTab:(Tab*)tab sidebarOnRight:(BOOL)sidebar_on_right;
+- (void)updateSidebarToggleForTab:(Tab*)tab sidebarOnRight:(BOOL)sidebar_on_right;
 
 @end
 
@@ -1024,6 +1026,10 @@ private:
     self.window.toolbar = tab.toolbar;
     [self setTabOverviewVisible:!self.vertical_tabs_presentation forTab:tab];
     [self setSidebarToggleVisible:self.vertical_tabs_presentation forTab:tab];
+    if (self.vertical_tabs_presentation) {
+        auto const& settings = WebView::Application::settings().tab_settings();
+        [self updateSidebarToggleForTab:tab sidebarOnRight:settings.vertical_tabs_position == WebView::VerticalTabsPosition::Right];
+    }
     [self updateLocationToolbarItemWidth];
     [(BrowserWindow*)self.window setPreferred_first_responder:tab.preferred_first_responder];
     if (tab.preferred_first_responder)
@@ -1124,8 +1130,12 @@ private:
     [notification_center addObserver:self selector:@selector(tabChromeDidChange:) name:TabAudioStateDidChangeNotification object:tab];
     self.sidebar_view_controller.tabs = self.tabs;
     [self.sidebar_view_controller reloadTabs];
-    if (self.vertical_tabs_presentation)
+    if (self.vertical_tabs_presentation) {
         [self setTabOverviewVisible:NO forTab:tab];
+        [self setSidebarToggleVisible:YES forTab:tab];
+        auto const& settings = WebView::Application::settings().tab_settings();
+        [self updateSidebarToggleForTab:tab sidebarOnRight:settings.vertical_tabs_position == WebView::VerticalTabsPosition::Right];
+    }
 }
 
 - (void)removeTab:(Tab*)tab
@@ -1269,6 +1279,14 @@ private:
     auto window_frame = self.window.frame;
     auto const& settings = WebView::Application::settings().tab_settings();
     auto expanded = settings.vertical_tabs_expanded;
+    auto sidebar_on_right = settings.vertical_tabs_position == WebView::VerticalTabsPosition::Right;
+    auto sidebar_index = [self.split_view_controller.splitViewItems indexOfObjectIdenticalTo:self.sidebar_item];
+    if ((sidebar_on_right && sidebar_index == 0) || (!sidebar_on_right && sidebar_index == 1)) {
+        [self.split_view_controller removeSplitViewItem:self.sidebar_item];
+        [self.split_view_controller insertSplitViewItem:self.sidebar_item atIndex:sidebar_on_right ? 1 : 0];
+    }
+    for (Tab* tab in self.tabs)
+        [self updateSidebarToggleForTab:tab sidebarOnRight:sidebar_on_right];
     self.sidebar_view_controller.expanded = expanded;
     m_is_applying_sidebar_settings = true;
     if (!self.sidebar_width_persistence_timer.valid) {
@@ -1279,7 +1297,10 @@ private:
     self.sidebar_item.minimumThickness = sidebar_width;
     self.sidebar_item.maximumThickness = sidebar_width;
     [self.split_view_controller.view layoutSubtreeIfNeeded];
-    [self.split_view_controller.splitView setPosition:sidebar_width ofDividerAtIndex:0];
+    auto divider_position = sidebar_on_right
+        ? NSWidth(self.split_view_controller.splitView.bounds) - sidebar_width - self.split_view_controller.splitView.dividerThickness
+        : sidebar_width;
+    [self.split_view_controller.splitView setPosition:divider_position ofDividerAtIndex:0];
     [self.window setFrame:window_frame display:YES];
     dispatch_async(dispatch_get_main_queue(), ^{
         if (!self.vertical_tabs_presentation || self.split_view_controller == nil) {
@@ -1291,9 +1312,31 @@ private:
         self.sidebar_item.maximumThickness = expanded ? SIDEBAR_MAX_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH;
         [self.split_view_controller.view layoutSubtreeIfNeeded];
         auto sidebar_width = expanded ? self.vertical_tabs_expanded_width : SIDEBAR_COLLAPSED_WIDTH;
-        [self.split_view_controller.splitView setPosition:sidebar_width ofDividerAtIndex:0];
+        auto divider_position = sidebar_on_right
+            ? NSWidth(self.split_view_controller.splitView.bounds) - sidebar_width - self.split_view_controller.splitView.dividerThickness
+            : sidebar_width;
+        [self.split_view_controller.splitView setPosition:divider_position ofDividerAtIndex:0];
         self->m_is_applying_sidebar_settings = false;
     });
+}
+
+- (void)updateSidebarToggleForTab:(Tab*)tab sidebarOnRight:(BOOL)sidebar_on_right
+{
+    auto* toolbar = tab.toolbar;
+    auto index = [toolbar.items indexOfObjectPassingTest:^BOOL(NSToolbarItem* item, NSUInteger, BOOL*) {
+        return [item.itemIdentifier isEqualToString:TOOLBAR_TOGGLE_SIDEBAR_IDENTIFIER];
+    }];
+    if (index != NSNotFound) {
+        auto desired_index = sidebar_on_right ? toolbar.items.count - 1 : 0;
+        if (index != desired_index) {
+            [toolbar removeItemAtIndex:index];
+            [toolbar insertItemWithItemIdentifier:TOOLBAR_TOGGLE_SIDEBAR_IDENTIFIER atIndex:sidebar_on_right ? toolbar.items.count : 0];
+        }
+    }
+
+    auto* button = (NSButton*)tab.toolbar_controller.toggle_sidebar_toolbar_item.view;
+    [button setImage:[NSImage imageWithSystemSymbolName:sidebar_on_right ? @"sidebar.trailing" : @"sidebar.leading"
+                               accessibilityDescription:@"Toggle vertical tabs"]];
 }
 
 - (void)splitViewDidResizeSubviews:(NSNotification*)notification
@@ -2316,7 +2359,9 @@ private:
 
 - (NSArray*)toolbarAllowedItemIdentifiers:(NSToolbar*)toolbar
 {
-    return self.toolbar_identifiers;
+    return [self.toolbar_identifiers arrayByAddingObjectsFromArray:@[
+        TOOLBAR_TOGGLE_SIDEBAR_IDENTIFIER,
+    ]];
 }
 
 - (NSArray*)toolbarDefaultItemIdentifiers:(NSToolbar*)toolbar

@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <LibWebView/Application.h>
+#include <LibWebView/Settings.h>
+
 #import <Interface/Event.h>
 #import <Interface/LadybirdWebView.h>
 #import <Interface/Menu.h>
@@ -276,7 +279,7 @@ static void initialize_native_icon(WebView::Action& action, id control)
         [control setKeyEquivalent:@"B"];
         break;
     case WebView::ActionID::ToggleVerticalTabsExpanded:
-        set_control_image(control, @"sidebar.leading");
+        set_control_image(control, WebView::Application::settings().tab_settings().vertical_tabs_position == WebView::VerticalTabsPosition::Right ? @"sidebar.trailing" : @"sidebar.leading");
         break;
     case WebView::ActionID::BookmarkItem:
         if (auto icon = action.base64_png_icon(); icon.has_value())
