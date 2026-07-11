@@ -1249,6 +1249,20 @@ private:
         [toolbar insertItemWithItemIdentifier:TOOLBAR_TAB_OVERVIEW_IDENTIFIER atIndex:toolbar.items.count];
 }
 
+- (void)selectNextTab
+{
+    auto index = [self.tabs indexOfObjectIdenticalTo:self.selected_tab];
+    if (index != NSNotFound && self.tabs.count > 1)
+        [self selectTab:self.tabs[(index + 1) % self.tabs.count]];
+}
+
+- (void)selectPreviousTab
+{
+    auto index = [self.tabs indexOfObjectIdenticalTo:self.selected_tab];
+    if (index != NSNotFound && self.tabs.count > 1)
+        [self selectTab:self.tabs[(index + self.tabs.count - 1) % self.tabs.count]];
+}
+
 - (void)updateTabChrome
 {
     auto* tab = self.selected_tab;

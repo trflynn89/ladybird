@@ -635,6 +635,14 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
     auto* menu = [[NSMenuItem alloc] init];
     auto* submenu = [[NSMenu alloc] initWithTitle:@"Window"];
 
+    auto* next_tab = [[NSMenuItem alloc] initWithTitle:@"Show Next Tab" action:@selector(selectNextTab:) keyEquivalent:@"\t"];
+    next_tab.keyEquivalentModifierMask = NSEventModifierFlagControl;
+    [submenu addItem:next_tab];
+
+    auto* previous_tab = [[NSMenuItem alloc] initWithTitle:@"Show Previous Tab" action:@selector(selectPreviousTab:) keyEquivalent:@"\t"];
+    previous_tab.keyEquivalentModifierMask = NSEventModifierFlagControl | NSEventModifierFlagShift;
+    [submenu addItem:previous_tab];
+
     [NSApp setWindowsMenu:submenu];
 
     [menu setSubmenu:submenu];
