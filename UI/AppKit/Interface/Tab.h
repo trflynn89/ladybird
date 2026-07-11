@@ -15,6 +15,7 @@
 
 @class LadybirdWebView;
 @class BookmarksBar;
+@class BrowserWindowController;
 
 extern NSNotificationName const TabTitleDidChangeNotification;
 extern NSNotificationName const TabFaviconDidChangeNotification;
@@ -40,5 +41,7 @@ extern NSNotificationName const TabAudioStateDidChangeNotification;
 
 @property (nonatomic, strong, readonly) LadybirdWebView* web_view;
 @property (nonatomic, weak) NSResponder* preferred_first_responder;
+@property (nonatomic, strong) NSToolbar* toolbar;
+@property (nonatomic, strong) BrowserWindowController* toolbar_controller;
 
 @end
