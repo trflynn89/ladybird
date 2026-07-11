@@ -12,8 +12,8 @@
 
 #import <Application/Application.h>
 #import <Application/ApplicationDelegate.h>
-#import <Interface/Tab.h>
-#import <Interface/TabController.h>
+#import <Interface/BrowserWindow.h>
+#import <Interface/BrowserWindowController.h>
 #import <Utilities/ApplicationIcon.h>
 
 #if !__has_feature(objc_arc)
@@ -23,7 +23,7 @@
 static void open_urls_from_client(Vector<URL::URL> const& urls, WebView::NewWindow new_window)
 {
     ApplicationDelegate* delegate = [NSApp delegate];
-    Tab* tab = new_window == WebView::NewWindow::Yes ? nil : [delegate activeTab];
+    BrowserWindow* tab = new_window == WebView::NewWindow::Yes ? nil : [delegate activeTab];
 
     for (auto [i, url] : enumerate(urls)) {
         auto activate_tab = i == 0 ? Web::HTML::ActivateTab::Yes : Web::HTML::ActivateTab::No;
@@ -34,7 +34,7 @@ static void open_urls_from_client(Vector<URL::URL> const& urls, WebView::NewWind
                                       activateTab:activate_tab
                                       tabLocation:TabLocation::end()];
 
-        tab = (Tab*)[controller window];
+        tab = (BrowserWindow*)[controller window];
     }
 }
 

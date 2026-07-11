@@ -17,10 +17,10 @@
 
 #import <Application/ApplicationDelegate.h>
 #import <Interface/BookmarksBar.h>
+#import <Interface/BrowserWindow.h>
+#import <Interface/BrowserWindowController.h>
 #import <Interface/LadybirdWebView.h>
 #import <Interface/SearchPanel.h>
-#import <Interface/Tab.h>
-#import <Interface/TabController.h>
 #import <Utilities/Conversions.h>
 
 #if !__has_feature(objc_arc)
@@ -44,17 +44,17 @@ static NSString* window_frame_autosave_name()
 
 class TabSettingsObserver final : public WebView::SettingsObserver {
 public:
-    explicit TabSettingsObserver(Tab* tab)
+    explicit TabSettingsObserver(BrowserWindow* tab)
         : m_tab(tab)
     {
     }
 
 private:
-    // These are forward-declared so that they may access non-public Tab methods.
+    // These are forward-declared so that they may access non-public BrowserWindow methods.
     virtual void show_bookmarks_bar_changed() override;
     virtual void config_variable_changed(WebView::ConfigVariableID variable) override;
 
-    __weak Tab* m_tab { nil };
+    __weak BrowserWindow* m_tab { nil };
 };
 
 static NSImage* tab_loading_spinner_icon(NSUInteger frame)
@@ -90,7 +90,7 @@ static NSImage* tab_loading_spinner_icon(NSUInteger frame)
     return image;
 }
 
-@interface Tab () <LadybirdWebViewObserver>
+@interface BrowserWindow () <LadybirdWebViewObserver>
 {
     BOOL m_loading;
     NSUInteger m_loading_spinner_frame;
@@ -107,7 +107,7 @@ static NSImage* tab_loading_spinner_icon(NSUInteger frame)
 
 @end
 
-@implementation Tab
+@implementation BrowserWindow
 
 @dynamic title;
 
@@ -132,7 +132,7 @@ static NSImage* tab_loading_spinner_icon(NSUInteger frame)
     return [self initWithWebView:web_view];
 }
 
-- (instancetype)initAsChild:(Tab*)parent
+- (instancetype)initAsChild:(BrowserWindow*)parent
                   pageIndex:(u64)page_index
 {
     auto* web_view = [[LadybirdWebView alloc] initAsChild:self parent:[parent web_view] pageIndex:page_index];
@@ -163,7 +163,7 @@ static NSImage* tab_loading_spinner_icon(NSUInteger frame)
             [self setRestorable:NO];
         }
 
-        self.favicon = [Tab defaultFavicon];
+        self.favicon = [BrowserWindow defaultFavicon];
         [self setPageTitle:@"New Tab"];
         [self updateTabTitleAndFavicon];
 
@@ -232,9 +232,9 @@ static NSImage* tab_loading_spinner_icon(NSUInteger frame)
 
 #pragma mark - Private methods
 
-- (TabController*)tabController
+- (BrowserWindowController*)browserWindowController
 {
-    return (TabController*)[self windowController];
+    return (BrowserWindowController*)[self windowController];
 }
 
 - (NSImage*)tabIcon
@@ -281,11 +281,11 @@ static NSImage* tab_loading_spinner_icon(NSUInteger frame)
     m_loading_spinner_frame = 0;
 
     if (m_loading) {
-        __weak Tab* weak_self = self;
+        __weak BrowserWindow* weak_self = self;
         m_loading_spinner_timer = [NSTimer timerWithTimeInterval:0.08
                                                          repeats:YES
                                                            block:^(NSTimer*) {
-                                                               Tab* strong_self = weak_self;
+                                                               BrowserWindow* strong_self = weak_self;
                                                                if (strong_self == nil)
                                                                    return;
                                                                [strong_self updateLoadingSpinner];
@@ -400,7 +400,7 @@ static NSImage* tab_loading_spinner_icon(NSUInteger frame)
                                   activateTab:activate_tab
                                   tabLocation:TabLocation::end()];
 
-    auto* tab = (Tab*)[controller window];
+    auto* tab = (BrowserWindow*)[controller window];
     return [[tab web_view] handle];
 }
 
@@ -415,25 +415,25 @@ static NSImage* tab_loading_spinner_icon(NSUInteger frame)
                                     activateTab:activate_tab
                                       pageIndex:page_index];
 
-    auto* tab = (Tab*)[controller window];
+    auto* tab = (BrowserWindow*)[controller window];
     return [[tab web_view] handle];
 }
 
 - (void)onLoadStart
 {
     [self setTabLoading:YES];
-    [[self tabController] onLoadStart];
+    [[self browserWindowController] onLoadStart];
 }
 
 - (void)onLoadFinish
 {
     [self setTabLoading:NO];
-    [[self tabController] onLoadFinish];
+    [[self browserWindowController] onLoadFinish];
 }
 
 - (void)onURLChange:(URL::URL const&)url
 {
-    [[self tabController] onURLChange:url];
+    [[self browserWindowController] onURLChange:url];
 }
 
 - (void)onTitleChange:(Utf16String const&)title
@@ -451,11 +451,11 @@ static NSImage* tab_loading_spinner_icon(NSUInteger frame)
         [favicon setResizingMode:NSImageResizingModeStretch];
         self.favicon = favicon;
     } else {
-        self.favicon = [Tab defaultFavicon];
+        self.favicon = [BrowserWindow defaultFavicon];
     }
 
     [self updateTabTitleAndFavicon];
-    [[self tabController] onFaviconChange:favicon];
+    [[self browserWindowController] onFaviconChange:favicon];
 }
 
 - (BookmarksBar*)bookmarksBar
@@ -497,12 +497,12 @@ static NSImage* tab_loading_spinner_icon(NSUInteger frame)
 
 - (void)onEnterFullscreenWindow
 {
-    [[self tabController] onEnterFullscreenWindow];
+    [[self browserWindowController] onEnterFullscreenWindow];
 }
 
 - (void)onExitFullscreenWindow
 {
-    [[self tabController] onExitFullscreenWindow];
+    [[self browserWindowController] onExitFullscreenWindow];
 }
 
 - (void)onFindInPageResult:(size_t)current_match_index
