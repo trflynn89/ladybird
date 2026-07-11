@@ -38,6 +38,11 @@ extern NSNotificationName const TabAudioStateDidChangeNotification;
 - (void)loadURL:(URL::URL const&)url;
 - (void)prepareForPresentation;
 - (BookmarksBar*)bookmarksBar;
+- (BOOL)needsBeforeUnloadCheck;
+- (void)requestClose;
+- (Function<void()>)prepareForImmediateClose;
+
+@property (nonatomic, assign) BOOL already_requested_close;
 
 @property (nonatomic, strong, readonly) LadybirdWebView* web_view;
 @property (nonatomic, weak) NSResponder* preferred_first_responder;

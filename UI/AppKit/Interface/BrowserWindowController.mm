@@ -683,8 +683,6 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
     Function<void()> m_pending_immediate_close;
 }
 
-@property (nonatomic, assign) BOOL already_requested_close;
-
 @property (nonatomic, strong) Tab* parent;
 
 @property (nonatomic, strong, readwrite) NSMutableArray<Tab*>* tabs;
@@ -1668,19 +1666,18 @@ private:
         return [(Application*)NSApp confirmCancelActiveDownloads];
     };
 
-    if (![[[self tab] web_view] needsBeforeUnloadCheck]) {
+    if (![[self tab] needsBeforeUnloadCheck]) {
         if (!confirm_canceling_downloads())
             return false;
 
-        m_pending_immediate_close = [[[self tab] web_view] prepareForImmediateClose];
+        m_pending_immediate_close = [[self tab] prepareForImmediateClose];
         return true;
     }
 
     // Prevent closing on first request so WebContent can cleanly shutdown (e.g. asking if the user is sure they want
     // to leave, closing WebSocket connections, etc.)
-    if (!self.already_requested_close) {
-        self.already_requested_close = true;
-        [[[self tab] web_view] requestClose];
+    if (![self tab].already_requested_close) {
+        [[self tab] requestClose];
         return false;
     }
 
