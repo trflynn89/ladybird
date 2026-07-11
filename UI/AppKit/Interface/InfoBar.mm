@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#import <Interface/BrowserWindow.h>
 #import <Interface/InfoBar.h>
-#import <Interface/Tab.h>
 
 #if !__has_feature(objc_arc)
 #    error "This project requires ARC"
@@ -48,7 +48,7 @@ static constexpr CGFloat const INFO_BAR_HEIGHT = 40;
 - (void)showWithMessage:(NSString*)message
       dismissButtonTitle:(NSString*)title
     dismissButtonClicked:(InfoBarDismissed)on_dismissed
-               activeTab:(Tab*)tab
+               activeTab:(BrowserWindow*)tab
 {
     [self.text_label setStringValue:message];
 
@@ -77,14 +77,14 @@ static constexpr CGFloat const INFO_BAR_HEIGHT = 40;
     [self setHidden:YES];
 }
 
-- (void)tabBecameActive:(Tab*)tab
+- (void)tabBecameActive:(BrowserWindow*)tab
 {
     if (![self isHidden]) {
         [self attachToTab:tab];
     }
 }
 
-- (void)attachToTab:(Tab*)tab
+- (void)attachToTab:(BrowserWindow*)tab
 {
     [self removeFromSuperview];
 

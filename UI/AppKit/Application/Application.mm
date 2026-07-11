@@ -16,9 +16,9 @@
 #import <Application/Application.h>
 #import <Application/ApplicationDelegate.h>
 #import <Interface/BookmarksBar.h>
+#import <Interface/BrowserWindow.h>
+#import <Interface/BrowserWindowController.h>
 #import <Interface/LadybirdWebView.h>
-#import <Interface/Tab.h>
-#import <Interface/TabController.h>
 
 #if !__has_feature(objc_arc)
 #    error "This project requires ARC"
@@ -52,8 +52,8 @@ Vector<WebView::ViewImplementation&> Application::active_window_web_views() cons
     Vector<WebView::ViewImplementation&> web_views;
 
     auto add_window = [&](id window) {
-        if ([window isKindOfClass:[Tab class]])
-            web_views.append([[(Tab*)window web_view] view]);
+        if ([window isKindOfClass:[BrowserWindow class]])
+            web_views.append([[(BrowserWindow*)window web_view] view]);
     };
 
     auto* active_window = [NSApp keyWindow];
@@ -81,7 +81,7 @@ Optional<WebView::ViewImplementation&> Application::open_blank_new_tab(Web::HTML
         [controller focusWebView];
     else
         [controller focusWebViewWhenActivated];
-    auto* tab = (Tab*)[controller window];
+    auto* tab = (BrowserWindow*)[controller window];
 
     return [[tab web_view] view];
 }
@@ -115,7 +115,7 @@ void Application::open_urls_in_new_tabs(ReadonlySpan<URL::URL> urls) const
                                         isPrivate:is_private
                                       activateTab:Web::HTML::ActivateTab::No
                                       tabLocation:location];
-        previous_tab = (Tab*)[controller window];
+        previous_tab = (BrowserWindow*)[controller window];
     }
 }
 
@@ -351,7 +351,7 @@ static NSAlert* create_bookmark_dialog(NSString* title, NSView* first_responder,
 
 template<typename PromiseType, typename ResolveCallback>
 static NonnullRefPtr<PromiseType> display_add_or_edit_bookmark_dialog(
-    Tab* parent,
+    BrowserWindow* parent,
     NSString* title,
     Optional<URL::URL const&> current_url,
     Optional<String const&> current_title,
@@ -435,7 +435,7 @@ NonnullRefPtr<Application::BookmarkPromise> Application::display_edit_bookmark_d
 
 template<typename PromiseType>
 static NonnullRefPtr<PromiseType> display_add_or_edit_bookmark_folder_dialog(
-    Tab* parent,
+    BrowserWindow* parent,
     NSString* title,
     Optional<String const&> current_title)
 {

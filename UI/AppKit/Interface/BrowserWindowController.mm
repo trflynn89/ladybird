@@ -16,12 +16,12 @@
 #import <Application/Application.h>
 #import <Application/ApplicationDelegate.h>
 #import <Interface/Autocomplete.h>
+#import <Interface/BrowserWindow.h>
+#import <Interface/BrowserWindowController.h>
 #import <Interface/LadybirdWebView.h>
 #import <Interface/LocationSearchField.h>
 #import <Interface/Menu.h>
 #import <Interface/Palette.h>
-#import <Interface/Tab.h>
-#import <Interface/TabController.h>
 #import <Utilities/Conversions.h>
 
 #if !__has_feature(objc_arc)
@@ -630,7 +630,7 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 
 @end
 
-@interface TabController () <NSToolbarDelegate, NSSearchFieldDelegate, AutocompleteObserver>
+@interface BrowserWindowController () <NSToolbarDelegate, NSSearchFieldDelegate, AutocompleteObserver>
 {
     WebView::IsPrivate m_is_private;
     u64 m_page_index;
@@ -648,7 +648,7 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 
 @property (nonatomic, assign) BOOL already_requested_close;
 
-@property (nonatomic, strong) Tab* parent;
+@property (nonatomic, strong) BrowserWindow* parent;
 
 @property (nonatomic, strong) NSToolbar* toolbar;
 @property (nonatomic, strong) NSArray* toolbar_identifiers;
@@ -685,7 +685,7 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 
 class DownloadsObserver final : public WebView::FileDownloaderObserver {
 public:
-    explicit DownloadsObserver(TabController* controller)
+    explicit DownloadsObserver(BrowserWindowController* controller)
         : m_controller(controller)
     {
     }
@@ -706,10 +706,10 @@ private:
         [m_controller downloadRemoved:download_id];
     }
 
-    __weak TabController* m_controller { nil };
+    __weak BrowserWindowController* m_controller { nil };
 };
 
-@implementation TabController
+@implementation BrowserWindowController
 
 @synthesize toolbar_identifiers = _toolbar_identifiers;
 @synthesize navigate_back_toolbar_item = _navigate_back_toolbar_item;
@@ -724,7 +724,7 @@ private:
 - (instancetype)init:(WebView::IsPrivate)is_private
 {
     if (self = [super init]) {
-        __weak TabController* weak_self = self;
+        __weak BrowserWindowController* weak_self = self;
 
         self.toolbar = [[NSToolbar alloc] initWithIdentifier:TOOLBAR_IDENTIFIER];
         [self.toolbar setDelegate:self];
@@ -750,7 +750,7 @@ private:
         m_downloads_observer = make<DownloadsObserver>(self);
 
         m_omnibox->on_display_change = [weak_self](WebView::Omnibox::Display const& display) {
-            TabController* self = weak_self;
+            BrowserWindowController* self = weak_self;
             if (self == nil)
                 return;
 
@@ -758,7 +758,7 @@ private:
         };
 
         m_omnibox->on_suggestions_change = [weak_self] {
-            TabController* self = weak_self;
+            BrowserWindowController* self = weak_self;
             if (self == nil)
                 return;
 
@@ -772,7 +772,7 @@ private:
         };
 
         m_omnibox->on_selection_change = [weak_self] {
-            TabController* self = weak_self;
+            BrowserWindowController* self = weak_self;
             if (self == nil)
                 return;
 
@@ -780,7 +780,7 @@ private:
         };
 
         m_omnibox->on_commit = [weak_self](String input) {
-            TabController* self = weak_self;
+            BrowserWindowController* self = weak_self;
             if (self == nil)
                 return;
 
@@ -791,7 +791,7 @@ private:
     return self;
 }
 
-- (instancetype)initAsChild:(Tab*)parent
+- (instancetype)initAsChild:(BrowserWindow*)parent
                   pageIndex:(u64)page_index
 {
     if (self = [self init:[parent isPrivate]]) {
@@ -879,9 +879,9 @@ private:
 
 #pragma mark - Private methods
 
-- (Tab*)tab
+- (BrowserWindow*)tab
 {
-    return (Tab*)[self window];
+    return (BrowserWindow*)[self window];
 }
 
 - (LocationSearchField*)locationSearchField
@@ -1095,14 +1095,14 @@ private:
 
     if (!self.private_session_popover) {
         auto* content_view_controller = [[PrivateSessionPopoverViewController alloc] init];
-        __weak TabController* weak_self = self;
+        __weak BrowserWindowController* weak_self = self;
         [content_view_controller setOnCancel:^{
-            TabController* self = weak_self;
+            BrowserWindowController* self = weak_self;
             if (self != nil)
                 [self.private_session_popover close];
         }];
         [content_view_controller setOnConfirm:^{
-            TabController* self = weak_self;
+            BrowserWindowController* self = weak_self;
             if (self == nil)
                 return;
 
@@ -1144,9 +1144,9 @@ private:
 
     if (!self.downloads_popover) {
         auto* content_view_controller = [[DownloadsPopoverViewController alloc] init];
-        __weak TabController* weak_self = self;
+        __weak BrowserWindowController* weak_self = self;
         [content_view_controller setOnCancelDownload:^(u64 id) {
-            TabController* self = weak_self;
+            BrowserWindowController* self = weak_self;
             if (self == nil)
                 return;
 
@@ -1156,7 +1156,7 @@ private:
             [self updateDownloadsPopover];
         }];
         [content_view_controller setOnOpenAllDownloads:^{
-            TabController* self = weak_self;
+            BrowserWindowController* self = weak_self;
             if (self == nil)
                 return;
 
@@ -1323,7 +1323,7 @@ private:
         [location_search_field setPlaceholderString:@"Enter web address"];
         [location_search_field setTextColor:[NSColor textColor]];
         [location_search_field setDelegate:self];
-        __weak TabController* weak_self = self;
+        __weak BrowserWindowController* weak_self = self;
         [location_search_field setWillBeginEditing:^{
             [weak_self restoreLocationFieldForEditing];
         }];
@@ -1364,9 +1364,9 @@ private:
         [button setAction:@selector(toggleDownloadsPopover:)];
         [button setToolTip:@"Downloads"];
 
-        __weak TabController* weak_self = self;
+        __weak BrowserWindowController* weak_self = self;
         [button setOnReadyToAnchorPopover:^{
-            TabController* self = weak_self;
+            BrowserWindowController* self = weak_self;
             if (self != nil)
                 [self downloadsButtonReadyToAnchorPopover];
         }];
@@ -1453,8 +1453,8 @@ private:
 - (IBAction)showWindow:(id)sender
 {
     self.window = self.parent
-        ? [[Tab alloc] initAsChild:self.parent pageIndex:m_page_index]
-        : [[Tab alloc] init:m_is_private];
+        ? [[BrowserWindow alloc] initAsChild:self.parent pageIndex:m_page_index]
+        : [[BrowserWindow alloc] init:m_is_private];
 
     [self.window setDelegate:self];
 

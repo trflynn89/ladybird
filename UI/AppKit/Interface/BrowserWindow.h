@@ -15,10 +15,10 @@
 @class BookmarksBar;
 @class LadybirdWebView;
 
-@interface Tab : LadybirdWebViewWindow
+@interface BrowserWindow : LadybirdWebViewWindow
 
 - (instancetype)init:(WebView::IsPrivate)is_private;
-- (instancetype)initAsChild:(Tab*)parent
+- (instancetype)initAsChild:(BrowserWindow*)parent
                   pageIndex:(u64)page_index;
 
 - (WebView::IsPrivate)isPrivate;

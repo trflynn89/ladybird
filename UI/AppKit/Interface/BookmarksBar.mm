@@ -11,10 +11,10 @@
 
 #import <Interface/BookmarkFolder.h>
 #import <Interface/BookmarksBar.h>
+#import <Interface/BrowserWindow.h>
 #import <Interface/Event.h>
 #import <Interface/LadybirdWebView.h>
 #import <Interface/Menu.h>
-#import <Interface/Tab.h>
 #import <Utilities/Conversions.h>
 
 #if !__has_feature(objc_arc)
@@ -93,7 +93,7 @@ static Optional<WebView::Menu&> find_bookmark_folder_by_id(WebView::Menu& menu, 
 
 @interface BookmarksBar ()
 
-@property (nonatomic, weak) Tab* tab;
+@property (nonatomic, weak) BrowserWindow* tab;
 
 @property (nonatomic, strong) NSStackView* bookmark_items;
 @property (nonatomic, strong) BookmarkFolderPopover* bookmark_folder_popover;
@@ -118,7 +118,7 @@ static Optional<WebView::Menu&> find_bookmark_folder_by_id(WebView::Menu& menu, 
 @synthesize bookmark_context_menu = _bookmark_context_menu;
 @synthesize bookmark_folder_context_menu = _bookmark_folder_context_menu;
 
-- (instancetype)init:(Tab*)tab
+- (instancetype)init:(BrowserWindow*)tab
 {
     if (self = [super init]) {
         self.tab = tab;

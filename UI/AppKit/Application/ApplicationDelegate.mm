@@ -8,11 +8,11 @@
 
 #import <Application/Application.h>
 #import <Application/ApplicationDelegate.h>
+#import <Interface/BrowserWindow.h>
+#import <Interface/BrowserWindowController.h>
 #import <Interface/InfoBar.h>
 #import <Interface/LadybirdWebView.h>
 #import <Interface/Menu.h>
-#import <Interface/Tab.h>
-#import <Interface/TabController.h>
 #import <Utilities/Conversions.h>
 
 #if !__has_feature(objc_arc)
@@ -21,8 +21,8 @@
 
 @interface ApplicationDelegate ()
 
-@property (nonatomic, strong) NSMutableArray<TabController*>* managed_tabs;
-@property (nonatomic, weak) Tab* active_tab;
+@property (nonatomic, strong) NSMutableArray<BrowserWindowController*>* managed_tabs;
+@property (nonatomic, weak) BrowserWindow* active_tab;
 
 @property (nonatomic, strong) NSMenu* bookmarks_menu;
 
@@ -70,31 +70,31 @@
 
 #pragma mark - Public methods
 
-- (nonnull TabController*)createNewTab:(Web::HTML::ActivateTab)activate_tab
-                               fromTab:(nullable Tab*)tab
+- (nonnull BrowserWindowController*)createNewTab:(Web::HTML::ActivateTab)activate_tab
+                                         fromTab:(nullable BrowserWindow*)tab
 {
     auto is_private = tab ? [tab isPrivate] : WebView::IsPrivate::No;
-    auto* controller = [[TabController alloc] init:is_private];
+    auto* controller = [[BrowserWindowController alloc] init:is_private];
 
-    [self initializeTabController:controller
-                      activateTab:activate_tab
-                          fromTab:tab];
+    [self initializeBrowserWindowController:controller
+                                activateTab:activate_tab
+                                    fromTab:tab];
 
     return controller;
 }
 
-- (TabController*)createNewTab:(Optional<URL::URL> const&)url
-                       fromTab:(Tab*)tab
-                     isPrivate:(WebView::IsPrivate)is_private
-                   activateTab:(Web::HTML::ActivateTab)activate_tab
-                   tabLocation:(TabLocation)tab_location
+- (BrowserWindowController*)createNewTab:(Optional<URL::URL> const&)url
+                                 fromTab:(BrowserWindow*)tab
+                               isPrivate:(WebView::IsPrivate)is_private
+                             activateTab:(Web::HTML::ActivateTab)activate_tab
+                             tabLocation:(TabLocation)tab_location
 {
-    auto* controller = [[TabController alloc] init:is_private];
+    auto* controller = [[BrowserWindowController alloc] init:is_private];
 
-    [self initializeTabController:controller
-                      activateTab:activate_tab
-                          fromTab:tab
-                      tabLocation:tab_location];
+    [self initializeBrowserWindowController:controller
+                                activateTab:activate_tab
+                                    fromTab:tab
+                                tabLocation:tab_location];
 
     if (url.has_value()) {
         [controller loadURL:*url];
@@ -106,10 +106,10 @@
     return controller;
 }
 
-- (nonnull TabController*)createChildTab:(Optional<URL::URL> const&)url
-                                 fromTab:(nonnull Tab*)tab
-                             activateTab:(Web::HTML::ActivateTab)activate_tab
-                               pageIndex:(u64)page_index
+- (nonnull BrowserWindowController*)createChildTab:(Optional<URL::URL> const&)url
+                                           fromTab:(nonnull BrowserWindow*)tab
+                                       activateTab:(Web::HTML::ActivateTab)activate_tab
+                                         pageIndex:(u64)page_index
 {
     auto* controller = [self createChildTab:activate_tab fromTab:tab pageIndex:page_index];
 
@@ -122,7 +122,7 @@
     return controller;
 }
 
-- (void)setActiveTab:(Tab*)tab
+- (void)setActiveTab:(BrowserWindow*)tab
 {
     if (tab == self.activeTab)
         return;
@@ -136,12 +136,12 @@
     WebView::Application::the().update_bookmark_action_for_current_web_view();
 }
 
-- (Tab*)activeTab
+- (BrowserWindow*)activeTab
 {
     return self.active_tab;
 }
 
-- (void)removeTab:(TabController*)controller
+- (void)removeTab:(BrowserWindowController*)controller
 {
     [self.managed_tabs removeObject:controller];
 }
@@ -153,7 +153,7 @@
 
 - (void)restartPrivateBrowsingSession
 {
-    for (TabController* controller in [self.managed_tabs copy]) {
+    for (BrowserWindowController* controller in [self.managed_tabs copy]) {
         if ([controller isPrivate] == WebView::IsPrivate::Yes)
             [[controller window] close];
     }
@@ -166,8 +166,8 @@
 {
     Ladybird::repopulate_application_menu(self.bookmarks_menu, WebView::Application::the().bookmarks_menu());
 
-    for (TabController* controller in self.managed_tabs) {
-        auto* tab = (Tab*)[controller window];
+    for (BrowserWindowController* controller in self.managed_tabs) {
+        auto* tab = (BrowserWindow*)[controller window];
         [tab rebuildBookmarksBar];
     }
 }
@@ -202,11 +202,11 @@
 {
     auto* current_tab = [NSApp keyWindow];
 
-    if (![current_tab isKindOfClass:[Tab class]]) {
+    if (![current_tab isKindOfClass:[BrowserWindow class]]) {
         return;
     }
 
-    auto* controller = (TabController*)[current_tab windowController];
+    auto* controller = (BrowserWindowController*)[current_tab windowController];
     [controller focusLocationToolbarItem];
 }
 
@@ -230,32 +230,32 @@
            tabLocation:TabLocation::end()];
 }
 
-- (nonnull TabController*)createChildTab:(Web::HTML::ActivateTab)activate_tab
-                                 fromTab:(nonnull Tab*)tab
-                               pageIndex:(u64)page_index
+- (nonnull BrowserWindowController*)createChildTab:(Web::HTML::ActivateTab)activate_tab
+                                           fromTab:(nonnull BrowserWindow*)tab
+                                         pageIndex:(u64)page_index
 {
-    auto* controller = [[TabController alloc] initAsChild:tab pageIndex:page_index];
-    [self initializeTabController:controller
-                      activateTab:activate_tab
-                          fromTab:tab];
+    auto* controller = [[BrowserWindowController alloc] initAsChild:tab pageIndex:page_index];
+    [self initializeBrowserWindowController:controller
+                                activateTab:activate_tab
+                                    fromTab:tab];
 
     return controller;
 }
 
-- (void)initializeTabController:(TabController*)controller
-                    activateTab:(Web::HTML::ActivateTab)activate_tab
-                        fromTab:(nullable Tab*)tab
+- (void)initializeBrowserWindowController:(BrowserWindowController*)controller
+                              activateTab:(Web::HTML::ActivateTab)activate_tab
+                                  fromTab:(nullable BrowserWindow*)tab
 {
-    [self initializeTabController:controller
-                      activateTab:activate_tab
-                          fromTab:tab
-                      tabLocation:TabLocation::end()];
+    [self initializeBrowserWindowController:controller
+                                activateTab:activate_tab
+                                    fromTab:tab
+                                tabLocation:TabLocation::end()];
 }
 
-- (void)initializeTabController:(TabController*)controller
-                    activateTab:(Web::HTML::ActivateTab)activate_tab
-                        fromTab:(nullable Tab*)tab
-                    tabLocation:(TabLocation)tab_location
+- (void)initializeBrowserWindowController:(BrowserWindowController*)controller
+                              activateTab:(Web::HTML::ActivateTab)activate_tab
+                                  fromTab:(nullable BrowserWindow*)tab
+                              tabLocation:(TabLocation)tab_location
 {
     Optional<NSUInteger> insertion_index;
     NSWindowTabGroup* tab_group = nil;
@@ -467,7 +467,7 @@
     if (browser_options.devtools_port.has_value())
         [self onDevtoolsEnabled];
 
-    Tab* tab = nil;
+    BrowserWindow* tab = nil;
 
     for (auto const& url : browser_options.urls) {
         auto activate_tab = tab == nil ? Web::HTML::ActivateTab::Yes : Web::HTML::ActivateTab::No;
@@ -478,7 +478,7 @@
                                   activateTab:activate_tab
                                   tabLocation:TabLocation::end()];
 
-        tab = (Tab*)[controller window];
+        tab = (BrowserWindow*)[controller window];
     }
 }
 
@@ -493,8 +493,8 @@
 
 - (void)applicationDidChangeScreenParameters:(NSNotification*)notification
 {
-    for (TabController* controller in self.managed_tabs) {
-        auto* tab = (Tab*)[controller window];
+    for (BrowserWindowController* controller in self.managed_tabs) {
+        auto* tab = (BrowserWindow*)[controller window];
         [[tab web_view] handleDisplayRefreshRateChange];
     }
 }
@@ -504,7 +504,7 @@
     SEL action = [menu action];
 
     if (action == @selector(closeCurrentTab:)) {
-        return [[NSApp keyWindow] isKindOfClass:[Tab class]];
+        return [[NSApp keyWindow] isKindOfClass:[BrowserWindow class]];
     }
 
     return YES;

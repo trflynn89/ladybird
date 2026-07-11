@@ -12,12 +12,12 @@
 
 #import <Cocoa/Cocoa.h>
 
-@class Tab;
+@class BrowserWindow;
 
-@interface TabController : NSWindowController <NSWindowDelegate>
+@interface BrowserWindowController : NSWindowController <NSWindowDelegate>
 
 - (instancetype)init:(WebView::IsPrivate)is_private;
-- (instancetype)initAsChild:(Tab*)parent
+- (instancetype)initAsChild:(BrowserWindow*)parent
                   pageIndex:(u64)page_index;
 
 - (WebView::IsPrivate)isPrivate;

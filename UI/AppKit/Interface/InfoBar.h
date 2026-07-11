@@ -8,7 +8,7 @@
 
 #import <Cocoa/Cocoa.h>
 
-@class Tab;
+@class BrowserWindow;
 
 using InfoBarDismissed = void (^)(void);
 
@@ -17,9 +17,9 @@ using InfoBarDismissed = void (^)(void);
 - (void)showWithMessage:(NSString*)message
       dismissButtonTitle:(NSString*)title
     dismissButtonClicked:(InfoBarDismissed)on_dismissed
-               activeTab:(Tab*)tab;
+               activeTab:(BrowserWindow*)tab;
 - (void)hide;
 
-- (void)tabBecameActive:(Tab*)tab;
+- (void)tabBecameActive:(BrowserWindow*)tab;
 
 @end

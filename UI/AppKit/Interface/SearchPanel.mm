@@ -6,9 +6,9 @@
 
 #include <Interface/LadybirdWebViewBridge.h>
 
+#import <Interface/BrowserWindow.h>
 #import <Interface/LadybirdWebView.h>
 #import <Interface/SearchPanel.h>
-#import <Interface/Tab.h>
 #import <Utilities/Conversions.h>
 
 #if !__has_feature(objc_arc)
@@ -149,9 +149,9 @@ static constexpr CGFloat const SEARCH_FIELD_WIDTH = 300;
 
 #pragma mark - Private methods
 
-- (Tab*)tab
+- (BrowserWindow*)tab
 {
-    return (Tab*)[self window];
+    return (BrowserWindow*)[self window];
 }
 
 - (void)setPasteBoardContents:(NSString*)query
