@@ -46,6 +46,7 @@
 - (void)detachTabForTransfer:(Tab*)tab;
 - (void)closeShellAfterTransfer;
 - (void)presentVerticalTabs:(BOOL)vertical;
+- (void)applyTabSettings;
 - (void)selectNextTab;
 - (void)selectPreviousTab;
 
