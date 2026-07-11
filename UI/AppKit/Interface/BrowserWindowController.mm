@@ -23,6 +23,7 @@
 #import <Interface/LocationSearchField.h>
 #import <Interface/Menu.h>
 #import <Interface/Palette.h>
+#import <Interface/SidebarViewController.h>
 #import <Interface/Tab.h>
 #import <Utilities/Conversions.h>
 
@@ -656,6 +657,7 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 
     [self addChildViewController:tab];
     tab.view.translatesAutoresizingMaskIntoConstraints = NO;
+    tab.view.frame = self.view.bounds;
     [self.view addSubview:tab.view];
 
     // The content pane extends behind the tool bar when the window has a full height sidebar, so
@@ -666,6 +668,7 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
         [tab.view.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
         [tab.view.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
     ]];
+    [self.view layoutSubtreeIfNeeded];
 }
 
 @end
@@ -689,10 +692,17 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 }
 
 @property (nonatomic, strong) Tab* parent;
+@property (nonatomic, weak) Tab* toolbar_tab;
 
 @property (nonatomic, strong, readwrite) NSMutableArray<Tab*>* tabs;
 @property (nonatomic, strong, readwrite) Tab* selected_tab;
 @property (nonatomic, strong) PageHostViewController* page_host;
+@property (nonatomic, strong) Tab* initial_tab;
+@property (nonatomic, strong) NSSplitViewController* split_view_controller;
+@property (nonatomic, strong) NSSplitViewItem* sidebar_item;
+@property (nonatomic, strong) NSSplitViewItem* content_item;
+@property (nonatomic, strong) SidebarViewController* sidebar_view_controller;
+@property (nonatomic, assign, readwrite, getter=isVerticalTabsPresentation) BOOL vertical_tabs_presentation;
 @property (nonatomic, strong) NSTitlebarAccessoryViewController* bookmarks_bar_controller;
 
 @property (nonatomic, strong) NSToolbar* toolbar;
@@ -728,6 +738,8 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 - (BOOL)shouldCloseTab:(Tab*)tab;
 - (void)definitelyCloseTab:(Tab*)tab;
 - (void)updateLocationToolbarItemWidth;
+- (void)adoptToolbarForTab:(Tab*)tab;
+- (void)setTabOverviewVisible:(BOOL)visible forTab:(Tab*)tab;
 
 @end
 
@@ -857,7 +869,34 @@ private:
     return self;
 }
 
+- (instancetype)initWithTab:(Tab*)tab
+{
+    if (self = [self init:tab.isPrivate])
+        self.initial_tab = tab;
+    return self;
+}
+
 #pragma mark - Public methods
+
+- (Tab*)createTabForHosting
+{
+    auto* tab = self.initial_tab;
+    self.initial_tab = nil;
+    if (tab == nil) {
+        tab = self.parent
+            ? [[Tab alloc] initAsChild:self.parent pageIndex:m_page_index]
+            : [[Tab alloc] init:m_is_private];
+    }
+
+    self.toolbar_tab = tab;
+    if (tab.toolbar == nil) {
+        tab.toolbar = self.toolbar;
+        tab.toolbar_controller = self;
+    } else if (tab.toolbar_controller != self) {
+        [self adoptToolbarForTab:tab];
+    }
+    return tab;
+}
 
 - (WebView::IsPrivate)isPrivate
 {
@@ -912,42 +951,45 @@ private:
 
 - (void)focusLocationToolbarItem
 {
-    if (self.selected_tab.toolbar_controller != self) {
-        [self.selected_tab.toolbar_controller focusLocationToolbarItem];
+    auto* tab = [self tab];
+    if (tab.toolbar_controller != self) {
+        [tab.toolbar_controller focusLocationToolbarItem];
         return;
     }
     [self restoreLocationFieldForEditing];
-    [self tab].preferred_first_responder = self.location_toolbar_item.view;
+    tab.preferred_first_responder = self.location_toolbar_item.view;
     [(BrowserWindow*)[self tabWindow] setPreferred_first_responder:self.location_toolbar_item.view];
     [[self tabWindow] makeFirstResponder:self.location_toolbar_item.view];
 }
 
 - (void)focusWebViewWhenActivated
 {
-    if (self.selected_tab.toolbar_controller != self) {
-        [self.selected_tab.toolbar_controller focusWebViewWhenActivated];
+    auto* tab = [self tab];
+    if (tab.toolbar_controller != self) {
+        [tab.toolbar_controller focusWebViewWhenActivated];
         return;
     }
-    [self tab].preferred_first_responder = [self tab].web_view;
-    [(BrowserWindow*)[self tabWindow] setPreferred_first_responder:[self tab].web_view];
+    tab.preferred_first_responder = tab.web_view;
+    [(BrowserWindow*)[self tabWindow] setPreferred_first_responder:tab.web_view];
 }
 
 - (void)focusWebView
 {
-    if (self.selected_tab.toolbar_controller != self) {
-        [self.selected_tab.toolbar_controller focusWebView];
+    auto* tab = [self tab];
+    if (tab.toolbar_controller != self) {
+        [tab.toolbar_controller focusWebView];
         return;
     }
-    [self tab].preferred_first_responder = [self tab].web_view;
-    [(BrowserWindow*)[self tabWindow] setPreferred_first_responder:[self tab].web_view];
-    [[self tabWindow] makeFirstResponder:[self tab].web_view];
+    tab.preferred_first_responder = tab.web_view;
+    [(BrowserWindow*)[self tabWindow] setPreferred_first_responder:tab.web_view];
+    [[self tabWindow] makeFirstResponder:tab.web_view];
 }
 
 #pragma mark - Private methods
 
 - (Tab*)tab
 {
-    return self.selected_tab;
+    return self.selected_tab ?: self.toolbar_tab;
 }
 
 - (NSWindow*)tabWindow
@@ -969,6 +1011,7 @@ private:
     self.selected_tab = tab;
     [self.page_host showTab:tab];
     self.window.toolbar = tab.toolbar;
+    [self setTabOverviewVisible:!self.vertical_tabs_presentation forTab:tab];
     [self updateLocationToolbarItemWidth];
     [(BrowserWindow*)self.window setPreferred_first_responder:tab.preferred_first_responder];
     if (tab.preferred_first_responder)
@@ -977,6 +1020,7 @@ private:
     [tab prepareForPresentation];
     [tab.web_view handleVisibility:(self.window.occlusionState & NSWindowOcclusionStateVisible) != 0];
     [self updateTabChrome];
+    [self.sidebar_view_controller selectTab:tab];
 
     auto* delegate = (ApplicationDelegate*)NSApp.delegate;
     if (self.window.isMainWindow)
@@ -1010,6 +1054,18 @@ private:
     [self removeTab:tab];
     if (request_close)
         Core::deferred_invoke(AK::move(request_close));
+}
+
+- (void)closeOtherTabs:(Tab*)tab
+{
+    if (![self.tabs containsObject:tab])
+        return;
+
+    [self selectTab:tab];
+    for (Tab* other_tab in [self.tabs copy]) {
+        if (other_tab != tab)
+            [self closeTab:other_tab];
+    }
 }
 
 - (void)webViewDidCloseForTab:(Tab*)tab
@@ -1054,6 +1110,10 @@ private:
     [notification_center addObserver:self selector:@selector(tabChromeDidChange:) name:TabTitleDidChangeNotification object:tab];
     [notification_center addObserver:self selector:@selector(tabChromeDidChange:) name:TabFaviconDidChangeNotification object:tab];
     [notification_center addObserver:self selector:@selector(tabChromeDidChange:) name:TabAudioStateDidChangeNotification object:tab];
+    self.sidebar_view_controller.tabs = self.tabs;
+    [self.sidebar_view_controller reloadTabs];
+    if (self.vertical_tabs_presentation)
+        [self setTabOverviewVisible:NO forTab:tab];
 }
 
 - (void)removeTab:(Tab*)tab
@@ -1067,6 +1127,8 @@ private:
     if (tab.browser_window_controller == self)
         tab.browser_window_controller = nil;
     [(NSMutableArray<Tab*>*)self.tabs removeObjectAtIndex:index];
+    self.sidebar_view_controller.tabs = self.tabs;
+    [self.sidebar_view_controller reloadTabs];
 
     if (self.tabs.count == 0) {
         [self.page_host showTab:nil];
@@ -1085,6 +1147,106 @@ private:
 
     if (m_close_all_tabs)
         [self closeTab:self.selected_tab];
+}
+
+- (void)detachTabForTransfer:(Tab*)tab
+{
+    auto index = [self.tabs indexOfObjectIdenticalTo:tab];
+    if (index == NSNotFound)
+        return;
+    [NSNotificationCenter.defaultCenter removeObserver:self name:nil object:tab];
+    if (tab.browser_window_controller == self)
+        tab.browser_window_controller = nil;
+    if (tab == self.selected_tab) {
+        [self.page_host showTab:nil];
+        self.selected_tab = nil;
+    }
+    [(NSMutableArray<Tab*>*)self.tabs removeObjectAtIndex:index];
+}
+
+- (void)closeShellAfterTransfer
+{
+    m_allow_window_close = true;
+    [self.window close];
+}
+
+- (void)presentVerticalTabs:(BOOL)vertical
+{
+    if (self.vertical_tabs_presentation == vertical)
+        return;
+    self.vertical_tabs_presentation = vertical;
+    if (vertical && self.window.tabGroup.isTabBarVisible)
+        [self.window toggleTabBar:nil];
+    for (Tab* tab in self.tabs)
+        [self setTabOverviewVisible:!vertical forTab:tab];
+
+    if (!vertical) {
+        auto window_frame = self.window.frame;
+
+        // Remove the sidebar before the content item so that dismantling the split view cannot
+        // trigger a layout pass over sidebar rows at a degenerate width.
+        [self.split_view_controller removeSplitViewItem:self.sidebar_item];
+        [self.split_view_controller removeSplitViewItem:self.content_item];
+        self.contentViewController = self.page_host;
+        self.split_view_controller = nil;
+        self.sidebar_view_controller = nil;
+        self.sidebar_item = nil;
+        self.content_item = nil;
+        self.window.tabbingMode = NSWindowTabbingModeAutomatic;
+        [self.window setFrame:window_frame display:YES];
+        return;
+    }
+
+    auto window_frame = self.window.frame;
+    self.sidebar_view_controller = [[SidebarViewController alloc] initWithTabs:self.tabs];
+    self.split_view_controller = [[NSSplitViewController alloc] initWithNibName:nil bundle:nil];
+    self.contentViewController = self.split_view_controller;
+    self.sidebar_item = [NSSplitViewItem sidebarWithViewController:self.sidebar_view_controller];
+    self.sidebar_item.minimumThickness = 232;
+    self.sidebar_item.maximumThickness = 232;
+    self.sidebar_item.canCollapse = NO;
+    self.content_item = [NSSplitViewItem splitViewItemWithViewController:self.page_host];
+    [self.split_view_controller addSplitViewItem:self.sidebar_item];
+    [self.split_view_controller addSplitViewItem:self.content_item];
+    self.window.tabbingMode = NSWindowTabbingModeDisallowed;
+
+    __weak BrowserWindowController* weak_self = self;
+    self.sidebar_view_controller.on_select_tab = ^(Tab* tab) {
+        [weak_self selectTab:tab];
+    };
+    self.sidebar_view_controller.on_close_tab = ^(Tab* tab) {
+        [weak_self closeTab:tab];
+    };
+    self.sidebar_view_controller.on_close_other_tabs = ^(Tab* tab) {
+        [weak_self closeOtherTabs:tab];
+    };
+    self.sidebar_view_controller.on_move_tab_to_new_window = ^(Tab* tab) {
+        [(ApplicationDelegate*)NSApp.delegate moveTabToNewWindow:tab];
+    };
+    self.sidebar_view_controller.on_new_tab = ^{
+        BrowserWindowController* self = weak_self;
+        if (self == nil)
+            return;
+        [(ApplicationDelegate*)NSApp.delegate createNewTab:WebView::Application::settings().new_tab_page_url()
+                                                   fromTab:self.selected_tab
+                                                 isPrivate:self.isPrivate
+                                               activateTab:Web::HTML::ActivateTab::Yes
+                                               tabLocation:TabLocation::end()];
+    };
+    [self.sidebar_view_controller selectTab:self.selected_tab];
+    [self.window setFrame:window_frame display:YES];
+}
+
+- (void)setTabOverviewVisible:(BOOL)visible forTab:(Tab*)tab
+{
+    auto* toolbar = tab.toolbar;
+    auto index = [toolbar.items indexOfObjectPassingTest:^BOOL(NSToolbarItem* item, NSUInteger, BOOL*) {
+        return [item.itemIdentifier isEqualToString:TOOLBAR_TAB_OVERVIEW_IDENTIFIER];
+    }];
+    if (!visible && index != NSNotFound)
+        [toolbar removeItemAtIndex:index];
+    else if (visible && index == NSNotFound)
+        [toolbar insertItemWithItemIdentifier:TOOLBAR_TAB_OVERVIEW_IDENTIFIER atIndex:toolbar.items.count];
 }
 
 - (void)updateTabChrome
@@ -1180,10 +1342,12 @@ private:
         }];
     }
     tab.toolbar_controller = self;
+    self.toolbar_tab = tab;
 }
 
 - (void)tabChromeDidChange:(NSNotification*)notification
 {
+    [self.sidebar_view_controller reloadTab:notification.object];
     if (notification.object == self.selected_tab)
         [self updateTabChrome];
 }
@@ -1771,21 +1935,17 @@ private:
 
 - (IBAction)showWindow:(id)sender
 {
-    auto* tab = self.parent
-        ? [[Tab alloc] initAsChild:self.parent pageIndex:m_page_index]
-        : [[Tab alloc] init:m_is_private];
+    auto* tab = [self createTabForHosting];
     self.tabs = [NSMutableArray arrayWithObject:tab];
     self.selected_tab = tab;
     tab.browser_window_controller = self;
-    tab.toolbar = self.toolbar;
-    tab.toolbar_controller = self;
 
     self.window = [[BrowserWindow alloc] init:m_is_private];
 
     [self.window setDelegate:self];
 
     self.page_host = [[PageHostViewController alloc] initWithNibName:nil bundle:nil];
-    self.window.contentViewController = self.page_host;
+    self.contentViewController = self.page_host;
     [self.page_host showTab:tab];
 
     auto* bookmarks_bar = [[BookmarksBar alloc] init:tab];
@@ -1801,6 +1961,7 @@ private:
     [notification_center addObserver:self selector:@selector(tabChromeDidChange:) name:TabAudioStateDidChangeNotification object:tab];
 
     [self.window setToolbar:tab.toolbar];
+    [self setTabOverviewVisible:YES forTab:tab];
     [self.window setToolbarStyle:NSWindowToolbarStyleUnified];
 
     auto& view = [[[self tab] web_view] view];
@@ -1893,6 +2054,8 @@ private:
     }
     [(NSMutableArray<Tab*>*)self.tabs removeAllObjects];
     self.selected_tab = nil;
+    self.initial_tab = nil;
+    self.sidebar_view_controller.tabs = @[];
     self.tab_awaiting_close_all_confirmation = nil;
     m_close_all_tabs = false;
 

@@ -30,6 +30,7 @@ public:
     }
 
 private:
+    virtual void tab_settings_changed() override;
     virtual void show_bookmarks_bar_changed() override;
 
     __weak ApplicationDelegate* m_delegate { nil };
@@ -38,6 +39,7 @@ private:
 @interface ApplicationDelegate ()
 {
     OwnPtr<ApplicationSettingsObserver> m_settings_observer;
+    bool m_vertical_tabs_enabled;
 }
 
 @property (nonatomic, strong) NSMutableArray<BrowserWindowController*>* managed_tabs;
@@ -57,8 +59,23 @@ private:
 - (NSMenuItem*)createDebugMenu;
 - (NSMenuItem*)createWindowMenu;
 - (NSMenuItem*)createHelpMenu;
+- (void)tabSettingsChanged;
+- (void)convertWindowsToVerticalTabs;
+- (void)convertWindowsToHorizontalTabs;
+- (Tab*)initializeBrowserWindowController:(BrowserWindowController*)controller
+                               activateTab:(Web::HTML::ActivateTab)activate_tab
+                                   fromTab:(nullable Tab*)tab;
+- (Tab*)initializeBrowserWindowController:(BrowserWindowController*)controller
+                               activateTab:(Web::HTML::ActivateTab)activate_tab
+                                   fromTab:(nullable Tab*)tab
+                               tabLocation:(TabLocation)tab_location;
 
 @end
+
+void ApplicationSettingsObserver::tab_settings_changed()
+{
+    [m_delegate tabSettingsChanged];
+}
 
 void ApplicationSettingsObserver::show_bookmarks_bar_changed()
 {
@@ -86,6 +103,7 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
         [[NSApp mainMenu] addItem:[self createHelpMenu]];
 
         self.managed_tabs = [[NSMutableArray alloc] init];
+        m_vertical_tabs_enabled = WebView::Application::settings().tab_settings().vertical_tabs_enabled;
         m_settings_observer = make<ApplicationSettingsObserver>(self);
 
         // Reduce the tooltip delay, as the default delay feels quite long.
@@ -103,11 +121,9 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
     auto is_private = tab ? [tab isPrivate] : WebView::IsPrivate::No;
     auto* controller = [[BrowserWindowController alloc] init:is_private];
 
-    [self initializeBrowserWindowController:controller
-                                activateTab:activate_tab
-                                    fromTab:tab];
-
-    return controller.selected_tab;
+    return [self initializeBrowserWindowController:controller
+                                       activateTab:activate_tab
+                                           fromTab:tab];
 }
 
 - (Tab*)createNewTab:(Optional<URL::URL> const&)url
@@ -118,19 +134,19 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
 {
     auto* controller = [[BrowserWindowController alloc] init:is_private];
 
-    [self initializeBrowserWindowController:controller
-                                activateTab:activate_tab
-                                    fromTab:tab
-                                tabLocation:tab_location];
+    auto* new_tab = [self initializeBrowserWindowController:controller
+                                                activateTab:activate_tab
+                                                    fromTab:tab
+                                                tabLocation:tab_location];
 
     if (url.has_value()) {
-        [controller.selected_tab loadURL:*url];
+        [new_tab loadURL:*url];
 
         if (*url != WebView::Application::settings().new_tab_page_url())
-            [controller focusWebView];
+            [new_tab.toolbar_controller focusWebView];
     }
 
-    return controller.selected_tab;
+    return new_tab;
 }
 
 - (nonnull Tab*)createChildTab:(Optional<URL::URL> const&)url
@@ -171,6 +187,21 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
 - (void)removeTab:(BrowserWindowController*)controller
 {
     [self.managed_tabs removeObject:controller];
+}
+
+- (void)moveTabToNewWindow:(Tab*)tab
+{
+    auto* source = tab.browser_window_controller;
+    if (!source.isVerticalTabsPresentation || source.tabs.count <= 1)
+        return;
+
+    [source removeTab:tab];
+
+    auto* destination = [[BrowserWindowController alloc] initWithTab:tab];
+    [destination showWindow:nil];
+    [destination presentVerticalTabs:YES];
+    [self.managed_tabs addObject:destination];
+    [destination.window makeKeyAndOrderFront:nil];
 }
 
 - (NSUInteger)tabCount
@@ -225,6 +256,96 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
     }
 }
 
+- (void)tabSettingsChanged
+{
+    auto vertical_tabs_enabled = WebView::Application::settings().tab_settings().vertical_tabs_enabled;
+    if (exchange(m_vertical_tabs_enabled, vertical_tabs_enabled) == vertical_tabs_enabled)
+        return;
+
+    if (vertical_tabs_enabled)
+        [self convertWindowsToVerticalTabs];
+    else
+        [self convertWindowsToHorizontalTabs];
+}
+
+- (void)convertWindowsToVerticalTabs
+{
+    auto* converted_controllers = [NSMutableSet<BrowserWindowController*> set];
+
+    for (BrowserWindowController* candidate in [self.managed_tabs copy]) {
+        if (candidate.isVerticalTabsPresentation || [converted_controllers containsObject:candidate])
+            continue;
+
+        auto* windows = candidate.window.tabbedWindows ?: @[ candidate.window ];
+        auto* selected_window = candidate.window.tabGroup.selectedWindow ?: candidate.window;
+        auto* survivor = (BrowserWindowController*)selected_window.windowController;
+        auto* selected_tab = survivor.selected_tab;
+        auto* ordered_tabs = [NSMutableArray<Tab*> array];
+
+        for (NSWindow* window in windows) {
+            auto* controller = (BrowserWindowController*)window.windowController;
+            if (![controller isKindOfClass:BrowserWindowController.class])
+                continue;
+            [converted_controllers addObject:controller];
+            [ordered_tabs addObjectsFromArray:controller.tabs];
+        }
+
+        for (NSWindow* window in windows) {
+            auto* controller = (BrowserWindowController*)window.windowController;
+            if (![controller isKindOfClass:BrowserWindowController.class])
+                continue;
+            for (Tab* tab in [controller.tabs copy])
+                [controller detachTabForTransfer:tab];
+            if (controller != survivor) {
+                [window.tabGroup removeWindow:window];
+                [controller closeShellAfterTransfer];
+            }
+        }
+
+        for (Tab* tab in ordered_tabs)
+            [survivor addTab:tab atIndex:survivor.tabs.count];
+
+        [survivor presentVerticalTabs:YES];
+        [survivor selectTab:selected_tab];
+        [survivor.window makeKeyAndOrderFront:nil];
+    }
+}
+
+- (void)convertWindowsToHorizontalTabs
+{
+    for (BrowserWindowController* survivor in [self.managed_tabs copy]) {
+        if (!survivor.isVerticalTabsPresentation)
+            continue;
+
+        NSArray<Tab*>* ordered_tabs = [survivor.tabs copy];
+        auto* selected_tab = survivor.selected_tab;
+        for (Tab* tab in ordered_tabs)
+            [survivor detachTabForTransfer:tab];
+
+        [survivor addTab:selected_tab atIndex:0];
+        [survivor presentVerticalTabs:NO];
+        [survivor selectTab:selected_tab];
+
+        auto* tab_group = survivor.window.tabGroup;
+        NSUInteger insertion_index = 0;
+
+        for (Tab* tab in ordered_tabs) {
+            if (tab == selected_tab) {
+                ++insertion_index;
+                continue;
+            }
+
+            auto* controller = [[BrowserWindowController alloc] initWithTab:tab];
+            [controller showWindow:nil];
+            [self.managed_tabs addObject:controller];
+            [tab_group insertWindow:controller.window atIndex:insertion_index++];
+        }
+
+        tab_group.selectedWindow = survivor.window;
+        [survivor.window makeKeyAndOrderFront:nil];
+    }
+}
+
 #pragma mark - Private methods
 
 - (void)openLocation:(id)sender
@@ -264,28 +385,69 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
                      pageIndex:(u64)page_index
 {
     auto* controller = [[BrowserWindowController alloc] initAsChild:tab pageIndex:page_index];
-    [self initializeBrowserWindowController:controller
-                                activateTab:activate_tab
-                                    fromTab:tab];
-
-    return controller.selected_tab;
+    return [self initializeBrowserWindowController:controller
+                                       activateTab:activate_tab
+                                           fromTab:tab];
 }
 
-- (void)initializeBrowserWindowController:(BrowserWindowController*)controller
-                              activateTab:(Web::HTML::ActivateTab)activate_tab
-                                  fromTab:(nullable Tab*)tab
+- (Tab*)initializeBrowserWindowController:(BrowserWindowController*)controller
+                               activateTab:(Web::HTML::ActivateTab)activate_tab
+                                   fromTab:(nullable Tab*)tab
 {
-    [self initializeBrowserWindowController:controller
-                                activateTab:activate_tab
-                                    fromTab:tab
-                                tabLocation:TabLocation::end()];
+    return [self initializeBrowserWindowController:controller
+                                       activateTab:activate_tab
+                                           fromTab:tab
+                                       tabLocation:TabLocation::end()];
 }
 
-- (void)initializeBrowserWindowController:(BrowserWindowController*)controller
-                              activateTab:(Web::HTML::ActivateTab)activate_tab
-                                  fromTab:(nullable Tab*)tab
-                              tabLocation:(TabLocation)tab_location
+- (Tab*)initializeBrowserWindowController:(BrowserWindowController*)controller
+                               activateTab:(Web::HTML::ActivateTab)activate_tab
+                                   fromTab:(nullable Tab*)tab
+                               tabLocation:(TabLocation)tab_location
 {
+    if (m_vertical_tabs_enabled) {
+        // Resolve the destination window by searching the managed windows, as the destination tab
+        // may not be its window's selected tab, in which case its view is not installed anywhere.
+        BrowserWindowController* destination = nil;
+
+        auto* destination_tab = tab_location.is_after_tab() ? tab_location.tab() : tab;
+        if (destination_tab && [destination_tab isPrivate] == [controller isPrivate]) {
+            for (BrowserWindowController* candidate in self.managed_tabs) {
+                if ([candidate.tabs indexOfObjectIdenticalTo:destination_tab] != NSNotFound) {
+                    destination = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (destination) {
+            auto* new_tab = [controller createTabForHosting];
+            auto insertion_index = destination.tabs.count;
+            if (tab_location.is_after_tab()) {
+                auto index = [destination.tabs indexOfObjectIdenticalTo:destination_tab];
+                if (index != NSNotFound)
+                    insertion_index = index + 1;
+            }
+
+            [destination addTab:new_tab atIndex:insertion_index];
+            if (activate_tab == Web::HTML::ActivateTab::Yes) {
+                [destination selectTab:new_tab];
+                [destination.window makeKeyAndOrderFront:nil];
+                [destination focusLocationToolbarItem];
+            } else {
+                [new_tab.toolbar_controller focusWebViewWhenActivated];
+            }
+            return new_tab;
+        }
+
+        [controller showWindow:nil];
+        [controller presentVerticalTabs:YES];
+        [self.managed_tabs addObject:controller];
+        if (activate_tab == Web::HTML::ActivateTab::Yes)
+            [controller.window orderFrontRegardless];
+        return controller.selected_tab;
+    }
+
     Optional<NSUInteger> insertion_index;
     NSWindowTabGroup* tab_group = nil;
 
@@ -324,6 +486,7 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
     }
 
     [self.managed_tabs addObject:controller];
+    return controller.selected_tab;
 }
 
 - (void)closeCurrentTab:(id)sender
