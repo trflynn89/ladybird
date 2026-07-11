@@ -37,6 +37,9 @@
 
 - (void)selectTab:(Tab*)tab;
 - (void)closeTab:(Tab*)tab;
+- (void)webViewDidCloseForTab:(Tab*)tab;
+- (void)addTab:(Tab*)tab atIndex:(NSUInteger)index;
+- (void)removeTab:(Tab*)tab;
 
 @property (nonatomic, strong, readonly) NSArray<Tab*>* tabs;
 @property (nonatomic, strong, readonly) Tab* selected_tab;

@@ -54,8 +54,10 @@ Vector<WebView::ViewImplementation&> Application::active_window_web_views() cons
 
     auto add_window = [&](NSWindow* window) {
         auto* controller = (BrowserWindowController*)window.windowController;
-        if ([controller isKindOfClass:BrowserWindowController.class])
-            web_views.append(controller.selected_tab.web_view.view);
+        if ([controller isKindOfClass:BrowserWindowController.class]) {
+            for (Tab* tab in controller.tabs)
+                web_views.append(tab.web_view.view);
+        }
     };
 
     auto* active_window = [NSApp keyWindow];

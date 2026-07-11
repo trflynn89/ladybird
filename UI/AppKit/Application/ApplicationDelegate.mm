@@ -144,7 +144,7 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
         [child_tab loadURL:*url];
     }
 
-    [(BrowserWindowController*)child_tab.view.window.windowController focusWebView];
+    [child_tab.toolbar_controller focusWebView];
 
     return child_tab;
 }
@@ -329,7 +329,9 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
 - (void)closeCurrentTab:(id)sender
 {
     auto* current_window = [NSApp keyWindow];
-    [current_window performClose:self];
+    auto* controller = (BrowserWindowController*)current_window.windowController;
+    if ([controller isKindOfClass:BrowserWindowController.class])
+        [controller closeTab:controller.selected_tab];
 }
 
 - (NSMenuItem*)createApplicationMenu

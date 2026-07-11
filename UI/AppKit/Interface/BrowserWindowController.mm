@@ -651,6 +651,9 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
         [child removeFromParentViewController];
     }
 
+    if (tab == nil)
+        return;
+
     [self addChildViewController:tab];
     tab.view.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:tab.view];
@@ -680,6 +683,8 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
     bool m_fullscreen_requested_for_web_content;
     bool m_fullscreen_exit_was_ui_initiated;
     bool m_fullscreen_should_restore_tab_bar;
+    bool m_close_all_tabs;
+    bool m_allow_window_close;
     Function<void()> m_pending_immediate_close;
 }
 
@@ -708,8 +713,7 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 @property (nonatomic, strong) NSPopover* downloads_popover;
 
 @property (nonatomic, strong) Autocomplete* autocomplete;
-
-@property (nonatomic, assign) NSLayoutConstraint* location_toolbar_item_width;
+@property (nonatomic, weak) Tab* tab_awaiting_close_all_confirmation;
 
 - (LocationSearchField*)locationSearchField;
 - (NSWindow*)tabWindow;
@@ -721,6 +725,9 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 - (void)downloadUpdated:(WebView::FileDownloader::Download const&)download;
 - (void)downloadRemoved:(u64)download_id;
 - (void)downloadsButtonReadyToAnchorPopover;
+- (BOOL)shouldCloseTab:(Tab*)tab;
+- (void)definitelyCloseTab:(Tab*)tab;
+- (void)updateLocationToolbarItemWidth;
 
 @end
 
@@ -950,22 +957,134 @@ private:
 
 - (void)selectTab:(Tab*)tab
 {
-    if (tab != self.selected_tab || ![self.tabs containsObject:tab])
+    if (tab == nil || ![self.tabs containsObject:tab])
         return;
 
+    auto* previous_tab = self.selected_tab;
+    if (previous_tab != tab) {
+        [previous_tab.toolbar_controller.autocomplete close];
+        [previous_tab.web_view handleVisibility:NO];
+    }
+
+    self.selected_tab = tab;
     [self.page_host showTab:tab];
     self.window.toolbar = tab.toolbar;
+    [self updateLocationToolbarItemWidth];
     [(BrowserWindow*)self.window setPreferred_first_responder:tab.preferred_first_responder];
+    if (tab.preferred_first_responder)
+        [self.window makeFirstResponder:tab.preferred_first_responder];
+    self.bookmarksBar.tab = tab;
+    [tab prepareForPresentation];
+    [tab.web_view handleVisibility:(self.window.occlusionState & NSWindowOcclusionStateVisible) != 0];
     [self updateTabChrome];
 
     auto* delegate = (ApplicationDelegate*)NSApp.delegate;
-    [delegate setActiveTab:tab];
+    if (self.window.isMainWindow)
+        [delegate setActiveTab:tab];
 }
 
 - (void)closeTab:(Tab*)tab
 {
-    if (tab == self.selected_tab)
+    if (![self.tabs containsObject:tab])
+        return;
+
+    self.tab_awaiting_close_all_confirmation = nil;
+
+    if ([tab needsBeforeUnloadCheck]) {
+        if (!tab.already_requested_close) {
+            if (m_close_all_tabs) {
+                self.tab_awaiting_close_all_confirmation = tab;
+                m_close_all_tabs = false;
+            }
+            [tab requestClose];
+        } else {
+            [self definitelyCloseTab:tab];
+        }
+        return;
+    }
+
+    if (![self shouldCloseTab:tab])
+        return;
+
+    auto request_close = [tab prepareForImmediateClose];
+    [self removeTab:tab];
+    if (request_close)
+        Core::deferred_invoke(AK::move(request_close));
+}
+
+- (void)webViewDidCloseForTab:(Tab*)tab
+{
+    if (![self.tabs containsObject:tab])
+        return;
+
+    m_close_all_tabs = self.tab_awaiting_close_all_confirmation == tab;
+    if (m_close_all_tabs)
+        self.tab_awaiting_close_all_confirmation = nil;
+    [self removeTab:tab];
+}
+
+- (BOOL)shouldCloseTab:(Tab*)tab
+{
+    if (![self.tabs containsObject:tab])
+        return NO;
+
+    auto* delegate = (ApplicationDelegate*)NSApp.delegate;
+    if ([delegate tabCount] > 1 || [(Application*)NSApp confirmCancelActiveDownloads])
+        return YES;
+
+    m_close_all_tabs = false;
+    return NO;
+}
+
+- (void)definitelyCloseTab:(Tab*)tab
+{
+    if ([self shouldCloseTab:tab])
+        [self removeTab:tab];
+}
+
+- (void)addTab:(Tab*)tab atIndex:(NSUInteger)index
+{
+    if ([self.tabs containsObject:tab])
+        return;
+    index = MIN(index, self.tabs.count);
+    [(NSMutableArray<Tab*>*)self.tabs insertObject:tab atIndex:index];
+    tab.browser_window_controller = self;
+
+    auto* notification_center = NSNotificationCenter.defaultCenter;
+    [notification_center addObserver:self selector:@selector(tabChromeDidChange:) name:TabTitleDidChangeNotification object:tab];
+    [notification_center addObserver:self selector:@selector(tabChromeDidChange:) name:TabFaviconDidChangeNotification object:tab];
+    [notification_center addObserver:self selector:@selector(tabChromeDidChange:) name:TabAudioStateDidChangeNotification object:tab];
+}
+
+- (void)removeTab:(Tab*)tab
+{
+    auto index = [self.tabs indexOfObjectIdenticalTo:tab];
+    if (index == NSNotFound)
+        return;
+
+    auto was_selected = tab == self.selected_tab;
+    [NSNotificationCenter.defaultCenter removeObserver:self name:nil object:tab];
+    if (tab.browser_window_controller == self)
+        tab.browser_window_controller = nil;
+    [(NSMutableArray<Tab*>*)self.tabs removeObjectAtIndex:index];
+
+    if (self.tabs.count == 0) {
+        [self.page_host showTab:nil];
+        self.selected_tab = nil;
+        self.tab_awaiting_close_all_confirmation = nil;
+        m_close_all_tabs = false;
+        m_allow_window_close = true;
         [self.window close];
+        return;
+    }
+
+    if (was_selected) {
+        auto next_index = MIN(index, self.tabs.count - 1);
+        [self selectTab:self.tabs[next_index]];
+    }
+
+    if (m_close_all_tabs)
+        [self closeTab:self.selected_tab];
 }
 
 - (void)updateTabChrome
@@ -1002,6 +1121,65 @@ private:
         button.toolTip = tab.toolTipForPageMuteState;
         [self.window.tab setAccessoryView:button];
     }
+}
+
+- (void)updateLocationToolbarItemWidth
+{
+    auto available_width = NSWidth(self.window.frame);
+
+    // Size the location field of the toolbar this window is displaying, which belongs to the
+    // selected tab rather than to this controller.
+    auto* controller = self.selected_tab.toolbar_controller ?: self;
+    [(LocationSearchField*)controller.location_toolbar_item.view setPreferredDisplayWidth:available_width * 0.6];
+}
+
+- (void)adoptToolbarForTab:(Tab*)tab
+{
+    self.toolbar = tab.toolbar;
+    self.toolbar.delegate = self;
+    for (NSToolbarItem* item in self.toolbar.items) {
+        if ([item.itemIdentifier isEqualToString:TOOLBAR_NAVIGATE_BACK_IDENTIFIER])
+            self.navigate_back_toolbar_item = item;
+        else if ([item.itemIdentifier isEqualToString:TOOLBAR_NAVIGATE_FORWARD_IDENTIFIER])
+            self.navigate_forward_toolbar_item = item;
+        else if ([item.itemIdentifier isEqualToString:TOOLBAR_RELOAD_IDENTIFIER])
+            self.reload_toolbar_item = item;
+        else if ([item.itemIdentifier isEqualToString:TOOLBAR_LOCATION_IDENTIFIER])
+            self.location_toolbar_item = item;
+        else if ([item.itemIdentifier isEqualToString:TOOLBAR_PRIVATE_BROWSING_IDENTIFIER])
+            self.private_browsing_toolbar_item = item;
+        else if ([item.itemIdentifier isEqualToString:TOOLBAR_DOWNLOADS_IDENTIFIER])
+            self.downloads_toolbar_item = item;
+        else if ([item.itemIdentifier isEqualToString:TOOLBAR_NEW_TAB_IDENTIFIER])
+            self.new_tab_toolbar_item = item;
+        else if ([item.itemIdentifier isEqualToString:TOOLBAR_TAB_OVERVIEW_IDENTIFIER])
+            self.tab_overview_toolbar_item = item;
+    }
+
+    auto* location_search_field = (LocationSearchField*)self.location_toolbar_item.view;
+    location_search_field.delegate = self;
+    __weak BrowserWindowController* weak_self = self;
+    location_search_field.willBeginEditing = ^{
+        [weak_self restoreLocationFieldForEditing];
+    };
+    self.autocomplete = [[Autocomplete alloc] init:self withToolbarItem:self.location_toolbar_item];
+
+    [(NSControl*)self.private_browsing_toolbar_item.view setTarget:self];
+    [(NSControl*)self.private_browsing_toolbar_item.view setAction:@selector(togglePrivateSessionPopover:)];
+    [(NSControl*)self.new_tab_toolbar_item.view setTarget:self];
+    [(NSControl*)self.new_tab_toolbar_item.view setAction:@selector(createNewTab:)];
+    [(NSControl*)self.tab_overview_toolbar_item.view setTarget:self];
+    [(NSControl*)self.tab_overview_toolbar_item.view setAction:@selector(showTabOverview:)];
+
+    if ([self.downloads_toolbar_item.view isKindOfClass:DownloadsButton.class]) {
+        self.downloads_button = (DownloadsButton*)self.downloads_toolbar_item.view;
+        [self.downloads_button setTarget:self];
+        [self.downloads_button setAction:@selector(toggleDownloadsPopover:)];
+        [self.downloads_button setOnReadyToAnchorPopover:^{
+            [weak_self downloadsButtonReadyToAnchorPopover];
+        }];
+    }
+    tab.toolbar_controller = self;
 }
 
 - (void)tabChromeDidChange:(NSNotification*)notification
@@ -1598,6 +1776,7 @@ private:
         : [[Tab alloc] init:m_is_private];
     self.tabs = [NSMutableArray arrayWithObject:tab];
     self.selected_tab = tab;
+    tab.browser_window_controller = self;
     tab.toolbar = self.toolbar;
     tab.toolbar_controller = self;
 
@@ -1659,6 +1838,15 @@ private:
 
 - (BOOL)windowShouldClose:(NSWindow*)sender
 {
+    if (m_allow_window_close)
+        return YES;
+
+    if (self.tabs.count > 1) {
+        m_close_all_tabs = true;
+        [self closeTab:self.selected_tab];
+        return NO;
+    }
+
     auto* delegate = (ApplicationDelegate*)[NSApp delegate];
     auto confirm_canceling_downloads = [&]() {
         if ([delegate tabCount] > 1)
@@ -1691,6 +1879,23 @@ private:
 
 - (void)windowWillClose:(NSNotification*)notification
 {
+    // Remove only the observations this controller registered itself. A blanket removal would also
+    // sever the NSControl delegate notifications of a location field this controller continues to
+    // service after its tab has been transferred to another window.
+    auto* notification_center = NSNotificationCenter.defaultCenter;
+    for (Tab* tab in self.tabs)
+        [notification_center removeObserver:self name:nil object:tab];
+
+    [self.page_host showTab:nil];
+    for (Tab* tab in self.tabs) {
+        if (tab.browser_window_controller == self)
+            tab.browser_window_controller = nil;
+    }
+    [(NSMutableArray<Tab*>*)self.tabs removeAllObjects];
+    self.selected_tab = nil;
+    self.tab_awaiting_close_all_confirmation = nil;
+    m_close_all_tabs = false;
+
     auto* delegate = (ApplicationDelegate*)[NSApp delegate];
     [delegate removeTab:self];
 
@@ -1714,13 +1919,7 @@ private:
 {
     [self.autocomplete close];
 
-    if (self.location_toolbar_item_width != nil) {
-        self.location_toolbar_item_width.active = NO;
-    }
-
-    auto width = [self window].frame.size.width * 0.6;
-    self.location_toolbar_item_width = [[[self.location_toolbar_item view] widthAnchor] constraintEqualToConstant:width];
-    self.location_toolbar_item_width.active = YES;
+    [self updateLocationToolbarItemWidth];
 
     [[[self tab] web_view] handleResize];
 }

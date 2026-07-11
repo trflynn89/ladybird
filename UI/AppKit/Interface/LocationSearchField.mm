@@ -112,6 +112,7 @@ static NSImage* location_field_globe_icon()
     NSProgressIndicator* m_loading_indicator;
     NSButton* m_bookmark_button;
     NSButton* m_zoom_button;
+    NSLayoutConstraint* m_preferred_width_constraint;
 }
 
 + (Class)cellClass
@@ -254,6 +255,21 @@ static NSImage* location_field_globe_icon()
     [self updateLayerColors];
     [self addSubview:m_zoom_button];
     [self badgeLayoutDidChange];
+}
+
+- (void)setPreferredDisplayWidth:(CGFloat)width
+{
+    // The field moves between windows whose controllers request different widths. A single mutable
+    // constraint owned by the field keeps those requests from accumulating into an unsatisfiable
+    // set, which AppKit treats as a fatal layout error.
+    if (m_preferred_width_constraint == nil) {
+        m_preferred_width_constraint = [[self widthAnchor] constraintEqualToConstant:width];
+        m_preferred_width_constraint.priority = NSLayoutPriorityRequired - 1;
+        m_preferred_width_constraint.active = YES;
+        return;
+    }
+
+    m_preferred_width_constraint.constant = width;
 }
 
 - (void)updateLeadingIcon

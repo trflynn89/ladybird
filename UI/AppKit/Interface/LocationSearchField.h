@@ -17,6 +17,7 @@
 - (void)setShowsPageIcon:(BOOL)showsPageIcon;
 - (void)setBookmarkAction:(WebView::Action&)action;
 - (void)setZoomAction:(WebView::Action&)action;
+- (void)setPreferredDisplayWidth:(CGFloat)width;
 
 @property (nonatomic, copy) void (^willBeginEditing)(void);
 

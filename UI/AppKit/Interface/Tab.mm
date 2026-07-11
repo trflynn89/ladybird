@@ -203,7 +203,7 @@ static NSImage* tab_loading_spinner_icon(NSUInteger frame)
 
 - (BrowserWindowController*)browserWindowController
 {
-    return (BrowserWindowController*)self.view.window.windowController;
+    return self.browser_window_controller ?: (BrowserWindowController*)self.view.window.windowController;
 }
 
 - (BookmarksBar*)bookmarksBar
@@ -306,13 +306,14 @@ static NSImage* tab_loading_spinner_icon(NSUInteger frame)
 
 - (void)onWebViewActivated
 {
-    [[self browserWindowController] selectTab:self];
-    [self.view.window orderFront:nil];
+    auto* controller = [self browserWindowController];
+    [controller selectTab:self];
+    [controller.window orderFront:nil];
 }
 
 - (void)onWebViewClosed
 {
-    [[self browserWindowController] closeTab:self];
+    [[self browserWindowController] webViewDidCloseForTab:self];
 }
 
 - (void)onLoadStart
@@ -359,7 +360,9 @@ static NSImage* tab_loading_spinner_icon(NSUInteger frame)
 
 - (void)onEnterFullscreenWindow
 {
-    [[self browserWindowController] onEnterFullscreenWindow];
+    auto* controller = [self browserWindowController];
+    [controller selectTab:self];
+    [controller onEnterFullscreenWindow];
 }
 
 - (void)onExitFullscreenWindow
