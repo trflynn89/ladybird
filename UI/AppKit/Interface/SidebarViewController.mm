@@ -23,6 +23,7 @@ static constexpr CGFloat const SIDEBAR_ROW_HOVER_ALPHA = 0.08;
 static constexpr CGFloat const SIDEBAR_ROW_SELECTION_ALPHA = 0.18;
 static constexpr CGFloat const SIDEBAR_ROW_INACTIVE_SELECTION_ALPHA = 0.12;
 static NSUserInterfaceItemIdentifier const SIDEBAR_TAB_CELL_IDENTIFIER = @"SidebarTabCell";
+static NSPasteboardType const SIDEBAR_TAB_PASTEBOARD_TYPE = @"org.ladybird.sidebar-tab";
 
 @interface SidebarTabCellView : NSTableCellView
 
@@ -371,6 +372,7 @@ static NSUserInterfaceItemIdentifier const SIDEBAR_TAB_CELL_IDENTIFIER = @"Sideb
 }
 @property (nonatomic, strong) SidebarTableView* table_view;
 @property (nonatomic, weak) Tab* selected_tab;
+@property (nonatomic, weak) Tab* dragged_tab;
 - (NSMenu*)contextMenuForRow:(NSInteger)row;
 @end
 
@@ -401,6 +403,9 @@ static NSUserInterfaceItemIdentifier const SIDEBAR_TAB_CELL_IDENTIFIER = @"Sideb
     self.table_view.dataSource = self;
     self.table_view.delegate = self;
     self.table_view.columnAutoresizingStyle = NSTableViewUniformColumnAutoresizingStyle;
+    self.table_view.draggingDestinationFeedbackStyle = NSTableViewDraggingDestinationFeedbackStyleRegular;
+    [self.table_view registerForDraggedTypes:@[ SIDEBAR_TAB_PASTEBOARD_TYPE ]];
+    [self.table_view setDraggingSourceOperationMask:NSDragOperationMove forLocal:YES];
 
     auto* column = [[NSTableColumn alloc] initWithIdentifier:@"SidebarTabColumn"];
     column.resizingMask = NSTableColumnAutoresizingMask;
@@ -540,6 +545,70 @@ static NSUserInterfaceItemIdentifier const SIDEBAR_TAB_CELL_IDENTIFIER = @"Sideb
     auto row = self.table_view.selectedRow;
     if (row >= 0 && row < (NSInteger)self.tabs.count && self.on_select_tab)
         self.on_select_tab(self.tabs[row]);
+}
+
+- (id<NSPasteboardWriting>)tableView:(NSTableView*)table_view pasteboardWriterForRow:(NSInteger)row
+{
+    if (row < 0 || row >= (NSInteger)self.tabs.count)
+        return nil;
+
+    self.dragged_tab = self.tabs[row];
+    auto* item = [[NSPasteboardItem alloc] init];
+    [item setString:@"" forType:SIDEBAR_TAB_PASTEBOARD_TYPE];
+    return item;
+}
+
+- (NSDragOperation)tableView:(NSTableView*)table_view
+                validateDrop:(id<NSDraggingInfo>)info
+                 proposedRow:(NSInteger)row
+       proposedDropOperation:(NSTableViewDropOperation)operation
+{
+    if (info.draggingSource != table_view || self.dragged_tab == nil)
+        return NSDragOperationNone;
+
+    auto location = [table_view convertPoint:info.draggingLocation fromView:nil];
+    auto hovered_row = [table_view rowAtPoint:location];
+    if (hovered_row < 0) {
+        auto first_row_rect = [table_view rectOfRow:0];
+        row = location.y < NSMinY(first_row_rect) ? 0 : self.tabs.count;
+    } else if (hovered_row >= (NSInteger)self.tabs.count) {
+        row = self.tabs.count;
+    } else {
+        auto hovered_row_rect = [table_view rectOfRow:hovered_row];
+        auto pointer_is_after_midpoint = location.y >= NSMidY(hovered_row_rect);
+        row = hovered_row + pointer_is_after_midpoint;
+    }
+    [table_view setDropRow:row dropOperation:NSTableViewDropAbove];
+    return NSDragOperationMove;
+}
+
+- (BOOL)tableView:(NSTableView*)table_view
+       acceptDrop:(id<NSDraggingInfo>)info
+              row:(NSInteger)row
+    dropOperation:(NSTableViewDropOperation)operation
+{
+    if (info.draggingSource != table_view || self.dragged_tab == nil)
+        return NO;
+
+    auto source_row = [self.tabs indexOfObjectIdenticalTo:self.dragged_tab];
+    if (source_row == NSNotFound)
+        return NO;
+
+    auto destination_row = MIN((NSUInteger)MAX(row, 0), self.tabs.count);
+    if (source_row < destination_row)
+        --destination_row;
+    if (source_row != destination_row && self.on_move_tab)
+        self.on_move_tab(self.dragged_tab, destination_row);
+    self.dragged_tab = nil;
+    return YES;
+}
+
+- (void)tableView:(NSTableView*)table_view
+    draggingSession:(NSDraggingSession*)session
+       endedAtPoint:(NSPoint)screen_point
+          operation:(NSDragOperation)operation
+{
+    self.dragged_tab = nil;
 }
 
 - (void)viewDidLayout

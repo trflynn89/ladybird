@@ -754,6 +754,7 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 - (void)definitelyCloseTab:(Tab*)tab;
 - (void)updateLocationToolbarItemWidth;
 - (void)adoptToolbarForTab:(Tab*)tab;
+- (void)moveTab:(Tab*)tab toIndex:(NSUInteger)index;
 - (void)setTabOverviewVisible:(BOOL)visible forTab:(Tab*)tab;
 - (void)setSidebarToggleVisible:(BOOL)visible forTab:(Tab*)tab;
 - (void)updateSidebarToggleForTab:(Tab*)tab sidebarOnRight:(BOOL)sidebar_on_right;
@@ -1186,6 +1187,24 @@ private:
         [self closeTab:self.selected_tab];
 }
 
+- (void)moveTab:(Tab*)tab toIndex:(NSUInteger)index
+{
+    auto source_index = [self.tabs indexOfObjectIdenticalTo:tab];
+    if (source_index == NSNotFound || source_index == index)
+        return;
+
+    [(NSMutableArray<Tab*>*)self.tabs removeObjectAtIndex:source_index];
+    [(NSMutableArray<Tab*>*)self.tabs insertObject:tab atIndex:MIN(index, self.tabs.count)];
+    self.sidebar_view_controller.tabs = self.tabs;
+    self.sidebar_hover_view_controller.tabs = self.tabs;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self.sidebar_view_controller reloadTabs];
+        [self.sidebar_view_controller selectTab:self.selected_tab];
+        [self.sidebar_hover_view_controller reloadTabs];
+        [self.sidebar_hover_view_controller selectTab:self.selected_tab];
+    });
+}
+
 - (void)detachTabForTransfer:(Tab*)tab
 {
     auto index = [self.tabs indexOfObjectIdenticalTo:tab];
@@ -1260,6 +1279,9 @@ private:
     __weak BrowserWindowController* weak_self = self;
     self.sidebar_view_controller.on_select_tab = ^(Tab* tab) {
         [weak_self selectTab:tab];
+    };
+    self.sidebar_view_controller.on_move_tab = ^(Tab* tab, NSUInteger index) {
+        [weak_self moveTab:tab toIndex:index];
     };
     self.sidebar_view_controller.on_close_tab = ^(Tab* tab) {
         [weak_self closeTab:tab];
@@ -1371,6 +1393,7 @@ private:
             self->m_keep_sidebar_hover_overlay = false;
         });
     };
+    self.sidebar_hover_view_controller.on_move_tab = ^(Tab* tab, NSUInteger index) { [weak_self moveTab:tab toIndex:index]; };
     self.sidebar_hover_view_controller.on_close_tab = ^(Tab* tab) { [weak_self closeTab:tab]; };
     self.sidebar_hover_view_controller.on_close_other_tabs = ^(Tab* tab) { [weak_self closeOtherTabs:tab]; };
     self.sidebar_hover_view_controller.on_move_tab_to_new_window = ^(Tab* tab) { [(ApplicationDelegate*)NSApp.delegate moveTabToNewWindow:tab]; };
