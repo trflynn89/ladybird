@@ -33,6 +33,7 @@ class PageStyleActor;
 class ParentAccessibilityActor;
 class PreferenceActor;
 class ProcessActor;
+class ReflowActor;
 class RootActor;
 class SourceActor;
 class StyleRuleActor;

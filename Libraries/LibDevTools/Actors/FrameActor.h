@@ -22,7 +22,7 @@ class DEVTOOLS_API FrameActor final : public Actor {
 public:
     static constexpr auto base_name = "frame"sv;
 
-    static NonnullRefPtr<FrameActor> create(DevToolsServer&, String name, WeakPtr<TabActor>, WeakPtr<WatcherActor>, WeakPtr<CSSPropertiesActor>, WeakPtr<ConsoleActor>, WeakPtr<InspectorActor>, WeakPtr<StyleSheetsActor>, WeakPtr<ThreadActor>, WeakPtr<AccessibilityActor>);
+    static NonnullRefPtr<FrameActor> create(DevToolsServer&, String name, WeakPtr<TabActor>, WeakPtr<WatcherActor>, WeakPtr<CSSPropertiesActor>, WeakPtr<ConsoleActor>, WeakPtr<InspectorActor>, WeakPtr<StyleSheetsActor>, WeakPtr<ThreadActor>, WeakPtr<AccessibilityActor>, WeakPtr<ReflowActor>);
     virtual ~FrameActor() override;
 
     void send_frame_update_message();
@@ -34,7 +34,7 @@ public:
     JsonObject serialize_target() const;
 
 private:
-    FrameActor(DevToolsServer&, String name, WeakPtr<TabActor>, WeakPtr<WatcherActor>, WeakPtr<CSSPropertiesActor>, WeakPtr<ConsoleActor>, WeakPtr<InspectorActor>, WeakPtr<StyleSheetsActor>, WeakPtr<ThreadActor>, WeakPtr<AccessibilityActor>);
+    FrameActor(DevToolsServer&, String name, WeakPtr<TabActor>, WeakPtr<WatcherActor>, WeakPtr<CSSPropertiesActor>, WeakPtr<ConsoleActor>, WeakPtr<InspectorActor>, WeakPtr<StyleSheetsActor>, WeakPtr<ThreadActor>, WeakPtr<AccessibilityActor>, WeakPtr<ReflowActor>);
 
     void style_sheets_available(JsonObject& response, Vector<Web::CSS::StyleSheetIdentifier> style_sheets);
 
@@ -66,6 +66,7 @@ private:
     WeakPtr<StyleSheetsActor> m_style_sheets;
     WeakPtr<ThreadActor> m_thread;
     WeakPtr<AccessibilityActor> m_accessibility;
+    WeakPtr<ReflowActor> m_reflow;
 
     Optional<PendingNavigationDocumentEvents> m_pending_navigation_document_events_after_target_switch;
     HashMap<u64, NonnullRefPtr<NetworkEventActor>> m_network_events;

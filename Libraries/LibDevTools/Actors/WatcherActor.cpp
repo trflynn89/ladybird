@@ -15,6 +15,7 @@
 #include <LibDevTools/Actors/IndexedDBActor.h>
 #include <LibDevTools/Actors/InspectorActor.h>
 #include <LibDevTools/Actors/NetworkParentActor.h>
+#include <LibDevTools/Actors/ReflowActor.h>
 #include <LibDevTools/Actors/StorageActor.h>
 #include <LibDevTools/Actors/StyleSheetsActor.h>
 #include <LibDevTools/Actors/TabActor.h>
@@ -233,8 +234,9 @@ FrameActor& WatcherActor::create_frame_target()
     auto& inspector = devtools().register_actor<InspectorActor>(m_tab, style_sheets);
     auto& thread = devtools().register_actor<ThreadActor>(m_tab);
     auto& accessibility = devtools().register_actor<AccessibilityActor>(m_tab);
+    auto& reflow = devtools().register_actor<ReflowActor>();
 
-    auto& target = devtools().register_actor<FrameActor>(m_tab, make_weak_ptr<WatcherActor>(), css_properties, console, inspector, style_sheets, thread, accessibility);
+    auto& target = devtools().register_actor<FrameActor>(m_tab, make_weak_ptr<WatcherActor>(), css_properties, console, inspector, style_sheets, thread, accessibility, reflow);
     m_target = target;
     m_thread = thread;
     return target;

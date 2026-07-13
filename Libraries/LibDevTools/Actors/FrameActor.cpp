@@ -14,6 +14,7 @@
 #include <LibDevTools/Actors/FrameActor.h>
 #include <LibDevTools/Actors/InspectorActor.h>
 #include <LibDevTools/Actors/NetworkEventActor.h>
+#include <LibDevTools/Actors/ReflowActor.h>
 #include <LibDevTools/Actors/StyleSheetsActor.h>
 #include <LibDevTools/Actors/TabActor.h>
 #include <LibDevTools/Actors/ThreadActor.h>
@@ -52,12 +53,12 @@ static void set_resources_available_message(JsonObject& message, StringView reso
     message.set("array"sv, move(array));
 }
 
-NonnullRefPtr<FrameActor> FrameActor::create(DevToolsServer& devtools, String name, WeakPtr<TabActor> tab, WeakPtr<WatcherActor> watcher, WeakPtr<CSSPropertiesActor> css_properties, WeakPtr<ConsoleActor> console, WeakPtr<InspectorActor> inspector, WeakPtr<StyleSheetsActor> style_sheets, WeakPtr<ThreadActor> thread, WeakPtr<AccessibilityActor> accessibility)
+NonnullRefPtr<FrameActor> FrameActor::create(DevToolsServer& devtools, String name, WeakPtr<TabActor> tab, WeakPtr<WatcherActor> watcher, WeakPtr<CSSPropertiesActor> css_properties, WeakPtr<ConsoleActor> console, WeakPtr<InspectorActor> inspector, WeakPtr<StyleSheetsActor> style_sheets, WeakPtr<ThreadActor> thread, WeakPtr<AccessibilityActor> accessibility, WeakPtr<ReflowActor> reflow)
 {
-    return adopt_ref(*new FrameActor(devtools, move(name), move(tab), move(watcher), move(css_properties), move(console), move(inspector), move(style_sheets), move(thread), move(accessibility)));
+    return adopt_ref(*new FrameActor(devtools, move(name), move(tab), move(watcher), move(css_properties), move(console), move(inspector), move(style_sheets), move(thread), move(accessibility), move(reflow)));
 }
 
-FrameActor::FrameActor(DevToolsServer& devtools, String name, WeakPtr<TabActor> tab, WeakPtr<WatcherActor> watcher, WeakPtr<CSSPropertiesActor> css_properties, WeakPtr<ConsoleActor> console, WeakPtr<InspectorActor> inspector, WeakPtr<StyleSheetsActor> style_sheets, WeakPtr<ThreadActor> thread, WeakPtr<AccessibilityActor> accessibility)
+FrameActor::FrameActor(DevToolsServer& devtools, String name, WeakPtr<TabActor> tab, WeakPtr<WatcherActor> watcher, WeakPtr<CSSPropertiesActor> css_properties, WeakPtr<ConsoleActor> console, WeakPtr<InspectorActor> inspector, WeakPtr<StyleSheetsActor> style_sheets, WeakPtr<ThreadActor> thread, WeakPtr<AccessibilityActor> accessibility, WeakPtr<ReflowActor> reflow)
     : Actor(devtools, move(name))
     , m_tab(move(tab))
     , m_watcher(move(watcher))
@@ -67,6 +68,7 @@ FrameActor::FrameActor(DevToolsServer& devtools, String name, WeakPtr<TabActor> 
     , m_style_sheets(move(style_sheets))
     , m_thread(move(thread))
     , m_accessibility(move(accessibility))
+    , m_reflow(move(reflow))
 {
     if (auto tab = m_tab.strong_ref()) {
         devtools.delegate().listen_for_console_messages(
@@ -260,6 +262,8 @@ JsonObject FrameActor::serialize_target() const
         target.set("cssPropertiesActor"sv, css_properties->name());
     if (auto inspector = m_inspector.strong_ref())
         target.set("inspectorActor"sv, inspector->name());
+    if (auto reflow = m_reflow.strong_ref())
+        target.set("reflowActor"sv, reflow->name());
     if (auto style_sheets = m_style_sheets.strong_ref())
         target.set("styleSheetsActor"sv, style_sheets->name());
     if (auto thread = m_thread.strong_ref())

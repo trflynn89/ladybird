@@ -19,6 +19,7 @@ set(SOURCES
     Actors/ParentAccessibilityActor.cpp
     Actors/PreferenceActor.cpp
     Actors/ProcessActor.cpp
+    Actors/ReflowActor.cpp
     Actors/RootActor.cpp
     Actors/SourceActor.cpp
     Actors/StyleRuleActor.cpp
