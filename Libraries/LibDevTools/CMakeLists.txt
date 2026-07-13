@@ -3,6 +3,7 @@ set(SOURCES
     Actors/AccessibilityActor.cpp
     Actors/AccessibilityNodeActor.cpp
     Actors/AccessibilityWalkerActor.cpp
+    Actors/CompatibilityActor.cpp
     Actors/ConsoleActor.cpp
     Actors/CookiesActor.cpp
     Actors/CSSPropertiesActor.cpp

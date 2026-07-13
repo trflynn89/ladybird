@@ -37,6 +37,7 @@ private:
     WeakPtr<StyleSheetsActor> m_style_sheets;
     WeakPtr<WalkerActor> m_walker;
     WeakPtr<PageStyleActor> m_page_style;
+    WeakPtr<CompatibilityActor> m_compatibility;
 };
 
 }

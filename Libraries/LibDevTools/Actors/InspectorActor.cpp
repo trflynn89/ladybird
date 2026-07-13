@@ -6,6 +6,7 @@
 
 #include <AK/Debug.h>
 #include <AK/JsonObject.h>
+#include <LibDevTools/Actors/CompatibilityActor.h>
 #include <LibDevTools/Actors/HighlighterActor.h>
 #include <LibDevTools/Actors/InspectorActor.h>
 #include <LibDevTools/Actors/PageStyleActor.h>
@@ -40,6 +41,15 @@ void InspectorActor::handle_message(Message const& message)
             m_page_style = devtools().register_actor<PageStyleActor>(*this);
 
         response.set("pageStyle"sv, m_page_style->serialize_style());
+        send_response(message, move(response));
+        return;
+    }
+
+    if (message.type == "getCompatibility"sv) {
+        if (!m_compatibility)
+            m_compatibility = devtools().register_actor<CompatibilityActor>();
+
+        response.set("compatibility"sv, m_compatibility->serialize_description());
         send_response(message, move(response));
         return;
     }

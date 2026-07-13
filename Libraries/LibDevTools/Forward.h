@@ -14,6 +14,7 @@ class Actor;
 class AccessibilityActor;
 class AccessibilityNodeActor;
 class AccessibilityWalkerActor;
+class CompatibilityActor;
 class Connection;
 class ConsoleActor;
 class CookiesActor;
