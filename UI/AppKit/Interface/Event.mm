@@ -137,7 +137,7 @@ NSEvent* create_context_menu_mouse_event(NSView* view, Gfx::IntPoint position)
 NSEvent* create_context_menu_mouse_event(NSView* view, NSPoint position)
 {
     return [NSEvent mouseEventWithType:NSEventTypeRightMouseUp
-                              location:[view convertPoint:position fromView:nil]
+                              location:[view convertPoint:position toView:nil]
                          modifierFlags:0
                              timestamp:0
                           windowNumber:[[view window] windowNumber]
