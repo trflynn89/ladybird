@@ -20,6 +20,9 @@
 #include <LibCore/System.h>
 #include <LibCore/TimeZoneWatcher.h>
 #include <LibDatabase/Database.h>
+#include <LibDevTools/Client/Runtime.h>
+#include <LibDevTools/Client/RuntimeProvisioner.h>
+#include <LibDevTools/Client/Status.h>
 #include <LibDevTools/DevToolsServer.h>
 #include <LibFileSystem/FileSystem.h>
 #include <LibIPC/TransportHandle.h>
@@ -1313,6 +1316,90 @@ ErrorOr<void> Application::launch_devtools_server()
     return {};
 }
 
+class Application::DevToolsRuntimeDownload final : public FileDownloaderObserver {
+public:
+    explicit DevToolsRuntimeDownload(u64 download_id)
+        : m_id(download_id)
+    {
+    }
+
+    Function<void(ErrorOr<void>)> on_finished;
+
+private:
+    virtual void download_updated(FileDownloader::Download const& download) override
+    {
+        if (!on_finished || download.id != m_id || download.status == FileDownloader::DownloadStatus::InProgress)
+            return;
+
+        if (download.status == FileDownloader::DownloadStatus::Completed)
+            on_finished({});
+        else
+            on_finished(Error::from_string_literal("The DevTools runtime download did not complete"));
+        on_finished = nullptr;
+    }
+
+    u64 m_id { 0 };
+};
+
+DevTools::Client::RuntimeProvisioner& Application::devtools_runtime_provisioner()
+{
+    if (!m_devtools_runtime_provisioner) {
+        m_devtools_runtime_provisioner = make<DevTools::Client::RuntimeProvisioner>();
+
+        m_devtools_runtime_provisioner->on_status_changed = [this](DevTools::Client::Status const& status) {
+            on_devtools_client_status(status);
+        };
+
+        m_devtools_runtime_provisioner->on_runtime_download_requested = [this](URL::URL const& url, LexicalPath const& destination, auto on_complete) {
+            auto download_id = file_downloader().download_file(IsPrivate::No, url, destination);
+            m_devtools_runtime_download = make<DevToolsRuntimeDownload>(download_id);
+
+            m_devtools_runtime_download->on_finished = [this, on_complete = move(on_complete)](ErrorOr<void> result) {
+                Core::deferred_invoke([this]() { m_devtools_runtime_download = nullptr; });
+                on_complete(move(result));
+            };
+        };
+    }
+
+    return *m_devtools_runtime_provisioner;
+}
+
+ErrorOr<void> Application::launch_devtools_client()
+{
+    if (!m_devtools || !m_browser_options.devtools_port.has_value())
+        return Error::from_string_literal("DevTools is not currently enabled");
+
+    auto view = active_web_view();
+    if (!view.has_value())
+        return Error::from_string_literal("There is no active tab to inspect");
+
+    devtools_runtime_provisioner().ensure_ready([this, tab_id = view->view_id()](ErrorOr<void> result) {
+        if (result.is_error() || !m_devtools)
+            return;
+
+        if (!m_devtools_client_host)
+            m_devtools_client_host = DevTools::Client::Host::create();
+
+        if (!m_devtools_client_host->is_running()) {
+            DevTools::Client::Status status;
+            status.stage = DevTools::Client::Stage::Launching;
+            on_devtools_client_status(status);
+        }
+
+        if (auto launch_result = m_devtools_client_host->ensure_running(*m_browser_options.devtools_port); launch_result.is_error()) {
+            DevTools::Client::Status status;
+            status.stage = DevTools::Client::Stage::Failed;
+            status.error = MUST(String::formatted("Failed to launch the DevTools client: {}", launch_result.error()));
+            on_devtools_client_status(status);
+            return;
+        }
+
+        m_devtools->open_toolbox_for_tab(tab_id);
+    });
+
+    return {};
+}
+
 static NonnullRefPtr<Core::Timer> load_page_for_screenshot_and_exit(Core::EventLoop& event_loop, HeadlessWebView& view, URL::URL const& url, u32 screenshot_timeout)
 {
     outln("Taking screenshot after {} seconds", screenshot_timeout);
@@ -2140,6 +2227,7 @@ NonnullRefPtr<Application::BookmarkFolderPromise> Application::display_edit_book
 ErrorOr<void> Application::toggle_devtools_enabled()
 {
     if (m_devtools) {
+        m_devtools_client_host.clear();
         m_devtools.clear();
         on_devtools_disabled();
     } else {
@@ -2976,6 +3064,13 @@ void Application::did_disconnect_devtools_client(DevTools::TabDescription const&
         return;
 
     view->did_disconnect_devtools_client();
+}
+
+void Application::did_connect_devtools_controller() const
+{
+    DevTools::Client::Status status;
+    status.stage = DevTools::Client::Stage::Running;
+    on_devtools_client_status(status);
 }
 
 }

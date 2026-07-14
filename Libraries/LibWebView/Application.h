@@ -255,6 +255,7 @@ public:
     void apply_view_options(Badge<ViewImplementation>, ViewImplementation&);
 
     ErrorOr<void> toggle_devtools_enabled();
+    ErrorOr<void> launch_devtools_client();
     void refresh_tab_list();
 
     Optional<Core::TimeZoneWatcher&> time_zone_watcher();
@@ -281,6 +282,7 @@ protected:
 
     virtual void on_devtools_enabled() const;
     virtual void on_devtools_disabled() const;
+    virtual void on_devtools_client_status(DevTools::Client::Status const&) const { }
 
     Main::Arguments& arguments() { return m_arguments; }
 
@@ -296,6 +298,7 @@ private:
     ErrorOr<void> launch_request_server();
     ErrorOr<void> launch_image_decoder_server();
     ErrorOr<void> launch_devtools_server();
+    DevTools::Client::RuntimeProvisioner& devtools_runtime_provisioner();
     ErrorOr<void> load_content_blocker_lists();
 
     void initialize_actions();
@@ -382,6 +385,7 @@ private:
     virtual void stop_listening_for_navigation_events(DevTools::TabDescription const&) const override;
     virtual void did_connect_devtools_client(DevTools::TabDescription const&) const override;
     virtual void did_disconnect_devtools_client(DevTools::TabDescription const&) const override;
+    virtual void did_connect_devtools_controller() const override;
 
     static Application* s_the;
 
@@ -489,6 +493,11 @@ private:
 #endif
 
     OwnPtr<DevTools::DevToolsServer> m_devtools;
+    OwnPtr<DevTools::Client::RuntimeProvisioner> m_devtools_runtime_provisioner;
+    OwnPtr<DevTools::Client::Host> m_devtools_client_host;
+
+    class DevToolsRuntimeDownload;
+    OwnPtr<DevToolsRuntimeDownload> m_devtools_runtime_download;
 
     mutable HashMap<u64, u64> m_navigation_listener_ids;
 };
