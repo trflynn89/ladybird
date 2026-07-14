@@ -38,6 +38,10 @@ struct FileDownloader::ActiveDownload {
     LexicalPath temporary_destination;
     Core::ElapsedTimer progress_update_timer;
     bool stopped { false };
+
+    URL::URL current_url;
+    Optional<URL::URL> pending_redirect;
+    size_t redirects_remaining { 8 };
 };
 
 Optional<double> FileDownloader::Download::progress() const
@@ -74,6 +78,16 @@ u64 FileDownloader::download_file(IsPrivate is_private, URL::URL const& url, Lex
     if (!active)
         return download_id;
 
+    start_request_for_download(download_id, is_private, url);
+    return download_id;
+}
+
+void FileDownloader::start_request_for_download(u64 download_id, IsPrivate is_private, URL::URL const& url)
+{
+    auto* active = active_download(download_id);
+    if (!active || active->stopped)
+        return;
+
     // FIXME: What other request headers should be set? Perhaps we want to use exactly the same request headers used to
     //        originally fetch the image in WebContent.
     auto request_headers = HTTP::HeaderList::create();
@@ -82,13 +96,10 @@ u64 FileDownloader::download_file(IsPrivate is_private, URL::URL const& url, Lex
     auto request = Application::request_server_client(is_private).start_request("GET"sv, url, *request_headers);
     if (!request) {
         fail_download(download_id, "Unable to start request to download file"_string);
-        return download_id;
+        return;
     }
 
-    auto request_ref = request.release_nonnull();
-    attach_request_to_download(download_id, request_ref);
-
-    return download_id;
+    attach_request_to_download(download_id, request.release_nonnull());
 }
 
 u64 FileDownloader::adopt_download(IsPrivate is_private, URL::URL const& url, LexicalPath destination, Optional<u64> total_size, int request_server_client_id, u64 request_server_request_id, ReadonlyBytes initial_data)
@@ -129,6 +140,21 @@ void FileDownloader::attach_request_to_download(u64 download_id, NonnullRefPtr<R
             if (!download)
                 return;
 
+            if (response_code.has_value() && *response_code >= 300 && *response_code < 400) {
+                if (auto* active = active_download(download_id); active && active->redirects_remaining > 0) {
+                    if (auto location = response_headers->get("Location"sv); location.has_value()) {
+                        if (auto resolved = active->current_url.complete_url(*location); resolved.has_value()) {
+                            active->pending_redirect = resolved.release_value();
+                            --active->redirects_remaining;
+                            return;
+                        }
+                    }
+                }
+
+                fail_download(download_id, status_to_error_string({}, response_code, reason_phrase));
+                return;
+            }
+
             auto extracted_length = response_headers->extract_length();
             if (extracted_length.has<u64>())
                 download->total_size = extracted_length.get<u64>();
@@ -151,12 +177,24 @@ void FileDownloader::attach_request_to_download(u64 download_id, NonnullRefPtr<R
             if (!download)
                 return;
 
-            download->total_size = total_size;
-
-            if (network_error.has_value())
+            if (network_error.has_value()) {
                 fail_download(download_id, status_to_error_string(network_error, {}, {}));
-            else
-                finish_download(download_id);
+                return;
+            }
+
+            if (auto* active = active_download(download_id); active && active->pending_redirect.has_value()) {
+                active->current_url = active->pending_redirect.release_value();
+                download->downloaded_size = 0;
+                download->total_size = {};
+
+                Core::deferred_invoke([this, download_id, is_private = download->is_private, url = active->current_url] {
+                    start_request_for_download(download_id, is_private, url);
+                });
+                return;
+            }
+
+            download->total_size = total_size;
+            finish_download(download_id);
         });
 }
 
@@ -184,6 +222,8 @@ u64 FileDownloader::start_download(IsPrivate is_private, URL::URL const& url, Le
     auto file = file_or_error.release_value();
 
     m_active_downloads.set(download_id, make<ActiveDownload>(move(file), temporary_destination));
+    if (auto* active = active_download(download_id))
+        active->current_url = url;
 
     return download_id;
 }
@@ -207,7 +247,7 @@ void FileDownloader::append_download_data(u64 id, ReadonlyBytes bytes)
         return;
 
     auto* active = active_download(id);
-    if (!active || active->stopped)
+    if (!active || active->stopped || active->pending_redirect.has_value())
         return;
 
     if (auto result = active->file->write_until_depleted(bytes); result.is_error()) {
