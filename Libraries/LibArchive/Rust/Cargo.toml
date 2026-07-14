@@ -1,0 +1,23 @@
+[package]
+name = "libarchive_rust"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = []
+allocator = []
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+# After changing dependencies, regenerate the Flatpak sources:
+#   python3 Meta/CMake/flatpak/generate-cargo-sources.py
+[dependencies]
+lzma-rust2 = { version = "=0.16.5", default-features = false, features = ["std", "xz"] }
+tar = { version = "=0.4.46", default-features = false }
+
+[build-dependencies]
+cbindgen = "0.29"
+
+[lints]
+workspace = true
