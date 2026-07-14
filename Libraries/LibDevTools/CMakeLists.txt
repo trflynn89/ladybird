@@ -14,6 +14,7 @@ set(SOURCES
     Actors/HighlighterActor.cpp
     Actors/IndexedDBActor.cpp
     Actors/InspectorActor.cpp
+    Actors/LadybirdActor.cpp
     Actors/LayoutInspectorActor.cpp
     Actors/NetworkEventActor.cpp
     Actors/NetworkParentActor.cpp

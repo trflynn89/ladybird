@@ -6,6 +6,7 @@
 
 #include <AK/JsonObject.h>
 #include <LibDevTools/Actors/DeviceActor.h>
+#include <LibDevTools/Actors/LadybirdActor.h>
 #include <LibDevTools/Actors/ParentAccessibilityActor.h>
 #include <LibDevTools/Actors/PreferenceActor.h>
 #include <LibDevTools/Actors/ProcessActor.h>
@@ -57,6 +58,8 @@ void RootActor::handle_message(Message const& message)
         for (auto const& actor : devtools().actor_registry()) {
             if (is<DeviceActor>(*actor.value))
                 response.set("deviceActor"sv, actor.key);
+            else if (is<LadybirdActor>(*actor.value))
+                response.set("ladybirdActor"sv, actor.key);
             else if (is<ParentAccessibilityActor>(*actor.value))
                 response.set("parentAccessibilityActor"sv, actor.key);
             else if (is<PreferenceActor>(*actor.value))

@@ -26,6 +26,7 @@ class FrameActor;
 class HighlighterActor;
 class IndexedDBActor;
 class InspectorActor;
+class LadybirdActor;
 class LayoutInspectorActor;
 class NetworkEventActor;
 class NetworkParentActor;

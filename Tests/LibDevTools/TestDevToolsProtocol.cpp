@@ -1213,6 +1213,7 @@ public:
     }
     virtual void did_connect_devtools_client(DevTools::TabDescription const&) const override { ++did_connect_devtools_client_call_count; }
     virtual void did_disconnect_devtools_client(DevTools::TabDescription const&) const override { ++did_disconnect_devtools_client_call_count; }
+    virtual void did_connect_devtools_controller() const override { ++did_connect_devtools_controller_call_count; }
 
     void emit_mutation(WebView::Mutation mutation) const
     {
@@ -1473,6 +1474,7 @@ public:
     mutable size_t stop_listening_for_navigation_events_call_count { 0 };
     mutable size_t did_connect_devtools_client_call_count { 0 };
     mutable size_t did_disconnect_devtools_client_call_count { 0 };
+    mutable size_t did_connect_devtools_controller_call_count { 0 };
     mutable size_t navigate_tab_call_count { 0 };
     mutable size_t reload_tab_call_count { 0 };
     mutable size_t traverse_the_history_by_delta_call_count { 0 };
@@ -2077,6 +2079,7 @@ TEST_CASE(root_actor_and_connection_errors)
     EXPECT_EQ(client.request("root"sv, "connect"sv).get_string("from"sv).value(), "root"sv);
     auto root = client.request("root"sv, "getRoot"sv);
     EXPECT(root.has_string("deviceActor"sv));
+    EXPECT(root.has_string("ladybirdActor"sv));
     EXPECT(root.has_string("parentAccessibilityActor"sv));
     EXPECT(root.has_string("preferenceActor"sv));
 
@@ -2131,6 +2134,33 @@ TEST_CASE(root_actor_and_connection_errors)
     client.send(move(second));
     EXPECT(client.read_message().has_array("workers"sv));
     EXPECT(client.read_message().has_array("addons"sv));
+}
+
+TEST_CASE(ladybird_actor_buffers_and_delivers_toolbox_requests)
+{
+    auto session = create_session();
+    auto& client = *session->client;
+
+    (void)client.read_message();
+    auto root = client.request("root"sv, "getRoot"sv);
+    auto ladybird_actor = actor_from(root, "ladybirdActor"sv);
+
+    session->server->open_toolbox_for_tab(12);
+    EXPECT(!client.has_pending_message());
+
+    EXPECT_EQ(client.request(ladybird_actor, "connect"sv).get_string("from"sv).value(), ladybird_actor);
+    EXPECT_EQ(session->delegate.did_connect_devtools_controller_call_count, 1u);
+
+    auto first_request = client.read_message();
+    EXPECT_EQ(first_request.get_string("from"sv).value(), ladybird_actor);
+    EXPECT_EQ(first_request.get_string("type"sv).value(), "openToolbox"sv);
+    EXPECT_EQ(first_request.get_integer<u64>("tabId"sv).value(), 12u);
+
+    session->server->open_toolbox_for_tab(34);
+    auto second_request = client.read_message();
+    EXPECT_EQ(second_request.get_string("from"sv).value(), ladybird_actor);
+    EXPECT_EQ(second_request.get_string("type"sv).value(), "openToolbox"sv);
+    EXPECT_EQ(second_request.get_integer<u64>("tabId"sv).value(), 34u);
 }
 
 TEST_CASE(connection_accepts_fragmented_packets)

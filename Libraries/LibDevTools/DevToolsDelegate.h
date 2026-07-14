@@ -210,6 +210,7 @@ public:
 
     virtual void did_connect_devtools_client(TabDescription const&) const { }
     virtual void did_disconnect_devtools_client(TabDescription const&) const { }
+    virtual void did_connect_devtools_controller() const { }
 };
 
 }

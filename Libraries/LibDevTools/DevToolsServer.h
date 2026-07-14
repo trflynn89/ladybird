@@ -12,6 +12,8 @@
 #include <AK/NonnullRefPtr.h>
 #include <AK/Optional.h>
 #include <AK/String.h>
+#include <AK/Vector.h>
+#include <AK/WeakPtr.h>
 #include <AK/Weakable.h>
 #include <LibCore/Socket.h>
 #include <LibDevTools/Actors/RootActor.h>
@@ -51,6 +53,8 @@ public:
     }
 
     void refresh_tab_list();
+    void open_toolbox_for_tab(u64 tab_id);
+    void on_controller_connected();
 
 private:
     explicit DevToolsServer(DevToolsDelegate&, NonnullRefPtr<Core::TCPServer>);
@@ -67,9 +71,12 @@ private:
 
     ActorRegistry m_actor_registry;
     RefPtr<RootActor> m_root_actor { nullptr };
+    WeakPtr<LadybirdActor> m_ladybird_actor;
+    Vector<u64> m_pending_toolbox_tabs;
 
     u64 m_server_id { 0 };
     u64 m_actor_count { 0 };
+    bool m_controller_ready { false };
     bool m_is_shutting_down { false };
 };
 

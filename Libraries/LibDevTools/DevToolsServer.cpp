@@ -11,11 +11,13 @@
 #include <LibCore/Socket.h>
 #include <LibCore/TCPServer.h>
 #include <LibDevTools/Actors/DeviceActor.h>
+#include <LibDevTools/Actors/LadybirdActor.h>
 #include <LibDevTools/Actors/ParentAccessibilityActor.h>
 #include <LibDevTools/Actors/PreferenceActor.h>
 #include <LibDevTools/Actors/ProcessActor.h>
 #include <LibDevTools/Actors/TabActor.h>
 #include <LibDevTools/Connection.h>
+#include <LibDevTools/DevToolsDelegate.h>
 #include <LibDevTools/DevToolsServer.h>
 
 namespace DevTools {
@@ -74,6 +76,33 @@ void DevToolsServer::refresh_tab_list()
     m_root_actor->send_tab_list_changed_message();
 }
 
+void DevToolsServer::open_toolbox_for_tab(u64 tab_id)
+{
+    if (m_controller_ready) {
+        if (auto actor = m_ladybird_actor.strong_ref()) {
+            actor->request_toolbox(tab_id);
+            return;
+        }
+    }
+
+    m_pending_toolbox_tabs.append(tab_id);
+}
+
+void DevToolsServer::on_controller_connected()
+{
+    if (!m_controller_ready)
+        m_delegate.did_connect_devtools_controller();
+    m_controller_ready = true;
+
+    auto actor = m_ladybird_actor.strong_ref();
+    if (!actor)
+        return;
+
+    auto pending_toolbox_tabs = move(m_pending_toolbox_tabs);
+    for (auto tab_id : pending_toolbox_tabs)
+        actor->request_toolbox(tab_id);
+}
+
 void DevToolsServer::unregister_actor(String const& name)
 {
     if (m_is_shutting_down)
@@ -111,6 +140,7 @@ ErrorOr<void> DevToolsServer::on_new_client()
     m_root_actor = register_actor<RootActor>();
 
     register_actor<DeviceActor>();
+    m_ladybird_actor = register_actor<LadybirdActor>();
     register_actor<PreferenceActor>();
     register_actor<ProcessActor>(ProcessDescription { .is_parent = true });
     register_actor<ParentAccessibilityActor>();
@@ -153,6 +183,9 @@ void DevToolsServer::close_connection()
             return;
 
         weak_self->m_connection = nullptr;
+        weak_self->m_controller_ready = false;
+        weak_self->m_ladybird_actor = nullptr;
+        weak_self->m_pending_toolbox_tabs.clear();
         weak_self->m_actor_registry.clear();
         weak_self->m_root_actor = nullptr;
     });
