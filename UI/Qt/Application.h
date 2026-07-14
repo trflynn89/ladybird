@@ -117,6 +117,7 @@ private:
 
     virtual void on_devtools_enabled() const override;
     virtual void on_devtools_disabled() const override;
+    virtual void on_devtools_client_status(DevTools::Client::Status const&) const override;
     virtual void on_recently_closed_entries_changed() const override;
 
     OwnPtr<QApplication> m_application;

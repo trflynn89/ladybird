@@ -1110,6 +1110,12 @@ void Application::on_devtools_disabled() const
         m_active_window->on_devtools_disabled();
 }
 
+void Application::on_devtools_client_status(DevTools::Client::Status const& status) const
+{
+    if (m_active_window)
+        m_active_window->on_devtools_client_status(status);
+}
+
 void Application::on_recently_closed_entries_changed() const
 {
     update_reopen_recently_closed_actions();

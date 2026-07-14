@@ -499,6 +499,10 @@ BrowserWindow::BrowserWindow(Vector<URL::URL> const& initial_urls, IsPopupWindow
     main_layout->addWidget(m_tabs_container, 1);
 
     m_devtools_banner = new DevToolsBanner(main_widget);
+    connect(m_devtools_banner, &DevToolsBanner::launch_client_requested, this, [] {
+        if (auto result = WebView::Application::the().launch_devtools_client(); result.is_error())
+            WebView::Application::the().display_error_dialog(MUST(String::formatted("Unable to launch the DevTools client: {}", result.error())));
+    });
     connect(m_devtools_banner, &DevToolsBanner::disable_requested, this, [] {
         MUST(WebView::Application::the().toggle_devtools_enabled());
     });
@@ -554,6 +558,14 @@ void BrowserWindow::on_devtools_enabled()
 void BrowserWindow::on_devtools_disabled()
 {
     m_devtools_banner->hide();
+}
+
+void BrowserWindow::on_devtools_client_status(DevTools::Client::Status const& status)
+{
+    m_devtools_banner->set_status(status);
+
+    if (status.stage == DevTools::Client::Stage::Failed && status.error.has_value())
+        WebView::Application::the().display_error_dialog(*status.error);
 }
 
 Tab& BrowserWindow::new_tab_from_url(URL::URL const& url, Web::HTML::ActivateTab activate_tab, TabLocation location)

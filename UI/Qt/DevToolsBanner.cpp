@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <LibDevTools/Client/Status.h>
 #include <UI/Qt/ChromeStyle.h>
 #include <UI/Qt/DevToolsBanner.h>
 #include <UI/Qt/StringUtils.h>
@@ -31,14 +32,36 @@ DevToolsBanner::DevToolsBanner(QWidget* parent)
     layout->addWidget(m_label);
     layout->addStretch();
 
+    m_launch_client_button = new QPushButton("Launch Client", this);
+    connect(m_launch_client_button, &QPushButton::clicked, this, &DevToolsBanner::launch_client_requested);
+    layout->addWidget(m_launch_client_button);
+
     auto* disable_button = new QPushButton("Disable", this);
     connect(disable_button, &QPushButton::clicked, this, &DevToolsBanner::disable_requested);
     layout->addWidget(disable_button);
 }
 
+void DevToolsBanner::set_idle_text()
+{
+    m_label->setText(qformatted("DevTools is enabled on port {}", m_port));
+}
+
 void DevToolsBanner::set_port(u16 port)
 {
-    m_label->setText(qformatted("DevTools is enabled on port {}", port));
+    m_port = port;
+    set_idle_text();
+    m_launch_client_button->setEnabled(true);
+}
+
+void DevToolsBanner::set_status(DevTools::Client::Status const& status)
+{
+    if (first_is_one_of(status.stage, DevTools::Client::Stage::Running, DevTools::Client::Stage::Failed)) {
+        set_idle_text();
+        m_launch_client_button->setEnabled(true);
+    } else {
+        m_label->setText(qstring_from_ak_string(DevTools::Client::pending_stage_to_string(status.stage)));
+        m_launch_client_button->setEnabled(false);
+    }
 }
 
 bool DevToolsBanner::event(QEvent* event)

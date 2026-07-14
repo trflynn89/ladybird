@@ -8,6 +8,7 @@
 #pragma once
 
 #include <AK/Optional.h>
+#include <LibDevTools/Client/Status.h>
 #include <LibWeb/HTML/ActivateTab.h>
 #include <LibWeb/HTML/AudioPlayState.h>
 #include <LibWebView/Forward.h>
@@ -162,6 +163,7 @@ public:
 
     void on_devtools_enabled();
     void on_devtools_disabled();
+    void on_devtools_client_status(DevTools::Client::Status const&);
 
     void set_window_rect(Optional<Web::DevicePixels> x, Optional<Web::DevicePixels> y, Optional<Web::DevicePixels> width, Optional<Web::DevicePixels> height);
 
