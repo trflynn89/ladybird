@@ -52,4 +52,13 @@ struct Node;
 struct ProcessDescription;
 struct TabDescription;
 
+namespace Client {
+
+class Host;
+class RuntimeProvisioner;
+
+struct Status;
+
+}
+
 }

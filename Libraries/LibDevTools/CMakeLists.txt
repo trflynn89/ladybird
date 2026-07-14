@@ -1,5 +1,7 @@
 set(SOURCES
     Actor.cpp
+    Client/RuntimeProvisioner.cpp
+    Client/Runtime.cpp
     Actors/AccessibilityActor.cpp
     Actors/AccessibilityNodeActor.cpp
     Actors/AccessibilityWalkerActor.cpp
@@ -39,4 +41,4 @@ set(SOURCES
 )
 
 ladybird_lib(LibDevTools devtools EXPLICIT_SYMBOL_EXPORT)
-target_link_libraries(LibDevTools PRIVATE LibCore LibHTTP LibWeb LibURL)
+target_link_libraries(LibDevTools PRIVATE LibArchive LibCore LibCrypto LibFileSystem LibHTTP LibSync LibThreading LibWeb LibURL)
