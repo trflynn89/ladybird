@@ -1,5 +1,6 @@
 set(SOURCES
     TarExtractor.cpp
+    ZipArchive.cpp
 )
 
 ladybird_lib(LibArchive archive)

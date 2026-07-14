@@ -15,6 +15,7 @@ crate-type = ["staticlib", "rlib"]
 [dependencies]
 lzma-rust2 = { version = "=0.16.5", default-features = false, features = ["std", "xz"] }
 tar = { version = "=0.4.46", default-features = false }
+zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [build-dependencies]
 cbindgen = "0.29"
