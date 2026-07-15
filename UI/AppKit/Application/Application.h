@@ -50,6 +50,7 @@ private:
 
     virtual void on_devtools_enabled() const override;
     virtual void on_devtools_disabled() const override;
+    virtual void on_devtools_client_status(DevTools::Client::Status const&) const override;
 };
 
 }

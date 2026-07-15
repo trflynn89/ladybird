@@ -8,6 +8,7 @@
 
 #include <AK/Optional.h>
 #include <AK/StringView.h>
+#include <LibDevTools/Forward.h>
 #include <LibURL/URL.h>
 #include <LibWeb/HTML/ActivateTab.h>
 #include <LibWebView/PrivateBrowsing.h>
@@ -72,5 +73,6 @@ private:
 
 - (void)onDevtoolsEnabled;
 - (void)onDevtoolsDisabled;
+- (void)onDevtoolsClientStatus:(DevTools::Client::Status const&)status;
 
 @end

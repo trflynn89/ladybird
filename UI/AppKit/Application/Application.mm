@@ -495,6 +495,12 @@ void Application::on_devtools_disabled() const
     [delegate onDevtoolsDisabled];
 }
 
+void Application::on_devtools_client_status(DevTools::Client::Status const& status) const
+{
+    ApplicationDelegate* delegate = [NSApp delegate];
+    [delegate onDevtoolsClientStatus:status];
+}
+
 }
 
 @interface Application ()

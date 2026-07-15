@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <LibDevTools/Client/Status.h>
 #include <LibWebView/Application.h>
 
 #import <Application/Application.h>
@@ -172,20 +173,29 @@
     }
 }
 
+static NSString* devtools_enabled_message()
+{
+    auto port = WebView::Application::browser_options().devtools_port.value_or(0);
+    return Ladybird::string_to_ns_string(MUST(String::formatted("DevTools is enabled on port {}", port)));
+}
+
 - (void)onDevtoolsEnabled
 {
     if (!self.info_bar) {
         self.info_bar = [[InfoBar alloc] init];
     }
 
-    auto message = MUST(String::formatted("DevTools is enabled on port {}", WebView::Application::browser_options().devtools_port));
-
-    [self.info_bar showWithMessage:Ladybird::string_to_ns_string(message)
-                dismissButtonTitle:@"Disable"
-              dismissButtonClicked:^{
-                  MUST(WebView::Application::the().toggle_devtools_enabled());
-              }
-                         activeTab:self.active_tab];
+    [self.info_bar showWithMessage:devtools_enabled_message()
+        actionButtonTitle:@"Launch Client"
+        actionButtonClicked:^{
+            if (auto result = WebView::Application::the().launch_devtools_client(); result.is_error())
+                WebView::Application::the().display_error_dialog(MUST(String::formatted("Unable to launch the DevTools client: {}", result.error())));
+        }
+        dismissButtonTitle:@"Disable"
+        dismissButtonClicked:^{
+            MUST(WebView::Application::the().toggle_devtools_enabled());
+        }
+        activeTab:self.active_tab];
 }
 
 - (void)onDevtoolsDisabled
@@ -193,6 +203,23 @@
     if (self.info_bar) {
         [self.info_bar hide];
         self.info_bar = nil;
+    }
+}
+
+- (void)onDevtoolsClientStatus:(DevTools::Client::Status const&)status
+{
+    if (!self.info_bar)
+        return;
+
+    if (first_is_one_of(status.stage, DevTools::Client::Stage::Running, DevTools::Client::Stage::Failed)) {
+        [self.info_bar setMessage:devtools_enabled_message()];
+        [self.info_bar setActionButtonEnabled:YES];
+
+        if (status.stage == DevTools::Client::Stage::Failed && status.error.has_value())
+            WebView::Application::the().display_error_dialog(*status.error);
+    } else {
+        [self.info_bar setMessage:Ladybird::string_to_ns_string(DevTools::Client::pending_stage_to_string(status.stage))];
+        [self.info_bar setActionButtonEnabled:NO];
     }
 }
 
