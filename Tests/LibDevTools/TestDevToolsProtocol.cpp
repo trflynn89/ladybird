@@ -2161,6 +2161,40 @@ TEST_CASE(ladybird_actor_buffers_and_delivers_toolbox_requests)
     EXPECT_EQ(second_request.get_string("from"sv).value(), ladybird_actor);
     EXPECT_EQ(second_request.get_string("type"sv).value(), "openToolbox"sv);
     EXPECT_EQ(second_request.get_integer<u64>("tabId"sv).value(), 34u);
+
+    session->server->inspect_element_for_tab(34, Web::UniqueNodeID { 4 });
+    auto inspection_request = client.read_message();
+    EXPECT_EQ(inspection_request.get_string("from"sv).value(), ladybird_actor);
+    EXPECT_EQ(inspection_request.get_string("type"sv).value(), "inspectElement"sv);
+    EXPECT_EQ(inspection_request.get_integer<u64>("tabId"sv).value(), 34u);
+    EXPECT_EQ(inspection_request.get_string("nodeId"sv).value(), "4"sv);
+}
+
+TEST_CASE(ladybird_actor_resolves_nodes_for_inspection)
+{
+    auto session = create_session();
+    auto& client = *session->client;
+
+    (void)client.read_message();
+    auto root = client.request("root"sv, "getRoot"sv);
+    auto ladybird_actor = actor_from(root, "ladybirdActor"sv);
+
+    auto target = get_frame_target(client, actor_from(get_tab(client), "actor"sv));
+    auto walker = get_walker(client, actor_from(target, "inspectorActor"sv));
+    auto walker_actor = actor_from(walker, "actor"sv);
+
+    JsonObject request;
+    request.set("to"sv, walker_actor);
+    request.set("type"sv, "getNodeFromActor"sv);
+    request.set("actorID"sv, ladybird_actor);
+    JsonArray path;
+    path.must_append("node"sv);
+    path.must_append("5"sv);
+    request.set("path"sv, move(path));
+
+    auto node = client.request(move(request)).get_object("node"sv).release_value();
+    EXPECT_EQ(node.get_object("node"sv)->get_string("nodeName"sv).value(), "DIV"sv);
+    EXPECT_EQ(node.get_array("newParents"sv)->size(), 2u);
 }
 
 TEST_CASE(connection_accepts_fragmented_packets)
@@ -2275,6 +2309,18 @@ TEST_CASE(target_bootstrap_and_lifetime)
     EXPECT_EQ(session->delegate.stop_listening_for_dom_mutations_call_count, 1u);
     EXPECT_EQ(session->delegate.clear_highlighted_dom_node_call_count, 1u);
     EXPECT_EQ(session->delegate.clear_inspected_dom_node_call_count, 1u);
+
+    JsonObject unwatch_targets;
+    unwatch_targets.set("to"sv, watcher_actor);
+    unwatch_targets.set("type"sv, "unwatchTargets"sv);
+    unwatch_targets.set("targetType"sv, "frame"sv);
+    unwatch_targets.set("options"sv, JsonValue {});
+    client.send(move(unwatch_targets));
+    spin_until(session->loop, [&] { return session->delegate.did_disconnect_devtools_client_call_count == 1; });
+
+    auto reopened_target = get_frame_target(client, tab_actor);
+    EXPECT_NE(actor_from(reopened_target, "actor"sv), target_actor);
+    EXPECT_EQ(session->delegate.did_connect_devtools_client_call_count, 2u);
 }
 
 TEST_CASE(storage_cookie_resource)

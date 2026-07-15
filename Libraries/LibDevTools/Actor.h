@@ -38,6 +38,9 @@ public:
     // Use send_response when replying directly to a request received from the client.
     void send_response(Message const&, JsonObject);
 
+    // Use finish_handling_message for one-way requests that do not have a response.
+    void finish_handling_message(Message const&);
+
     // Use send_message when sending an unprompted message to the client.
     void send_message(JsonObject);
 
@@ -112,7 +115,10 @@ private:
     struct PendingResponse {
         Optional<u64> id;
         Optional<JsonObject> response;
+        bool is_complete { false };
     };
+    void flush_pending_responses();
+
     Vector<PendingResponse, 1> m_pending_responses;
     u64 m_next_message_id { 0 };
 };

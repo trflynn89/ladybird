@@ -40,18 +40,44 @@ void Actor::send_response(Message const& message, JsonObject response)
             continue;
 
         pending_response.response = move(response);
+        pending_response.is_complete = true;
 
         if (i != 0)
             return;
     }
 
+    flush_pending_responses();
+}
+
+void Actor::finish_handling_message(Message const& message)
+{
+    for (auto const& [i, pending_response] : enumerate(m_pending_responses)) {
+        if (pending_response.id != message.id)
+            continue;
+
+        pending_response.is_complete = true;
+
+        if (i != 0)
+            return;
+    }
+
+    flush_pending_responses();
+}
+
+void Actor::flush_pending_responses()
+{
+    auto& connection = devtools().connection();
+    if (!connection)
+        return;
+
     size_t number_of_sent_messages = 0;
 
     for (auto const& pending_response : m_pending_responses) {
-        if (!pending_response.response.has_value())
+        if (!pending_response.is_complete)
             break;
 
-        connection->send_message(*pending_response.response);
+        if (pending_response.response.has_value())
+            connection->send_message(*pending_response.response);
         ++number_of_sent_messages;
     }
 
@@ -71,7 +97,7 @@ void Actor::send_message(JsonObject message)
         return;
     }
 
-    m_pending_responses.empend(OptionalNone {}, move(message));
+    m_pending_responses.empend(OptionalNone {}, move(message), true);
 }
 
 // https://firefox-source-docs.mozilla.org/devtools/backend/protocol.html#error-packets

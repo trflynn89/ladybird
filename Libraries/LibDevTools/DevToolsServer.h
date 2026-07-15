@@ -18,6 +18,7 @@
 #include <LibCore/Socket.h>
 #include <LibDevTools/Actors/RootActor.h>
 #include <LibDevTools/Forward.h>
+#include <LibWeb/Forward.h>
 
 namespace DevTools {
 
@@ -54,6 +55,7 @@ public:
 
     void refresh_tab_list();
     void open_toolbox_for_tab(u64 tab_id);
+    void inspect_element_for_tab(u64 tab_id, Web::UniqueNodeID);
     void on_controller_connected();
 
 private:

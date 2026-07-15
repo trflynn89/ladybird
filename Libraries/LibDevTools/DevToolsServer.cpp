@@ -88,6 +88,15 @@ void DevToolsServer::open_toolbox_for_tab(u64 tab_id)
     m_pending_toolbox_tabs.append(tab_id);
 }
 
+void DevToolsServer::inspect_element_for_tab(u64 tab_id, Web::UniqueNodeID node_id)
+{
+    if (!m_controller_ready)
+        return;
+
+    if (auto actor = m_ladybird_actor.strong_ref())
+        actor->request_element_inspection(tab_id, node_id);
+}
+
 void DevToolsServer::on_controller_connected()
 {
     if (!m_controller_ready)

@@ -7,6 +7,7 @@
 #include <AK/JsonArray.h>
 #include <AK/StringUtils.h>
 #include <LibDevTools/Actors/AccessibilityNodeActor.h>
+#include <LibDevTools/Actors/LadybirdActor.h>
 #include <LibDevTools/Actors/LayoutInspectorActor.h>
 #include <LibDevTools/Actors/TabActor.h>
 #include <LibDevTools/Actors/WalkerActor.h>
@@ -142,6 +143,7 @@ void WalkerActor::handle_message(Message const& message)
         if (path->size() == 2) {
             auto const& first = path->at(0);
             auto const& second = path->at(1);
+
             if (first.is_string() && first.as_string() == "rawAccessible"sv
                 && second.is_string() && second.as_string() == "DOMNode"sv) {
 
@@ -166,6 +168,30 @@ void WalkerActor::handle_message(Message const& message)
                     response.set("node"sv, move(node));
                     send_response(message, move(response));
                     return;
+                }
+            }
+
+            if (first.is_string() && first.as_string() == "node"sv && second.is_string()) {
+                auto actor = devtools().actor_registry().find(*actor_id);
+                if (actor == devtools().actor_registry().end() || !is<LadybirdActor>(*actor->value)) {
+                    send_unknown_actor_error(message, actor_id.value());
+                    return;
+                }
+
+                if (auto node_id = second.as_string().to_number<Web::UniqueNodeID::Type>(); node_id.has_value()) {
+                    if (auto node_actor_name = m_dom_node_id_to_actor_map.get({ *node_id }); node_actor_name.has_value()) {
+                        auto dom_node = dom_node_for(this, *node_actor_name);
+                        if (!dom_node.has_value()) {
+                            send_unknown_actor_error(message, *node_actor_name);
+                            return;
+                        }
+
+                        if (auto element = element_node_for_picker_node(dom_node->node); element.has_value()) {
+                            response.set("node"sv, serialize_disconnected_node(*element));
+                            send_response(message, move(response));
+                            return;
+                        }
+                    }
                 }
             }
         }

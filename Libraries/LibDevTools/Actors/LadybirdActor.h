@@ -9,6 +9,7 @@
 #include <AK/NonnullRefPtr.h>
 #include <LibDevTools/Actor.h>
 #include <LibDevTools/Forward.h>
+#include <LibWeb/Forward.h>
 
 namespace DevTools {
 
@@ -20,6 +21,7 @@ public:
     virtual ~LadybirdActor() override;
 
     void request_toolbox(u64 tab_id);
+    void request_element_inspection(u64 tab_id, Web::UniqueNodeID);
 
 private:
     LadybirdActor(DevToolsServer&, String name);

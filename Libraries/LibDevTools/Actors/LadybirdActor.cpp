@@ -41,4 +41,13 @@ void LadybirdActor::request_toolbox(u64 tab_id)
     send_message(move(message));
 }
 
+void LadybirdActor::request_element_inspection(u64 tab_id, Web::UniqueNodeID node_id)
+{
+    JsonObject message;
+    message.set("type"sv, "inspectElement"sv);
+    message.set("tabId"sv, tab_id);
+    message.set("nodeId"sv, String::number(node_id.value()));
+    send_message(move(message));
+}
+
 }

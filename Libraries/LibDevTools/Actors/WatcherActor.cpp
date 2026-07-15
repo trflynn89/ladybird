@@ -184,6 +184,26 @@ void WatcherActor::handle_message(Message const& message)
         }
     }
 
+    if (message.type == "unwatchTargets"sv) {
+        auto target_type = get_required_parameter<String>(message, "targetType"sv);
+        if (!target_type.has_value())
+            return;
+
+        if (target_type == "frame"sv && m_is_watching_frame_targets) {
+            if (auto tab = m_tab.strong_ref())
+                devtools().delegate().did_disconnect_devtools_client(tab->description());
+            m_is_watching_frame_targets = false;
+
+            if (auto target = m_target.strong_ref()) {
+                target->stop_listening();
+                devtools().unregister_actor(target->name());
+            }
+            m_target = nullptr;
+        }
+        finish_handling_message(message);
+        return;
+    }
+
     send_unrecognized_packet_type_error(message);
 }
 

@@ -42,18 +42,35 @@ static constexpr auto CONTROLLER_HTML = R"~~~(
             const { interfaces: Ci } = Components;
 
             const openToolboxes = new Map();
+            const pendingToolboxOpens = new Map();
+            let gDevTools;
             let remoteId;
             let ladybirdActor;
 
+            function toolboxForWindow(toolboxWindow) {
+                return gDevTools.getToolboxes().find(toolbox => toolbox.topWindow === toolboxWindow);
+            }
+
             function discardClosedToolboxes() {
-                for (const [tabId, toolbox] of openToolboxes) {
-                    if (toolbox.closed) {
+                for (const [tabId, toolboxWindow] of openToolboxes) {
+                    if (toolboxWindow.closed && !toolboxForWindow(toolboxWindow)) {
                         openToolboxes.delete(tabId);
                     }
                 }
             }
 
-            function openToolbox(tabId) {
+            async function waitForToolboxDestruction(toolboxWindow) {
+                const toolbox = toolboxForWindow(toolboxWindow);
+                if (!toolbox) {
+                    return;
+                }
+
+                const destroyed = new Promise(resolve => toolbox.once("destroyed", resolve));
+                toolbox.destroy();
+                await destroyed;
+            }
+
+            async function openToolbox(tabId) {
                 const url = `chrome://devtools/content/framework/ladybird-toolbox.html?type=tab&id=${encodeURIComponent(tabId)}&remoteId=${remoteId}`;
 
                 const existingToolbox = openToolboxes.get(tabId);
@@ -62,6 +79,9 @@ static constexpr auto CONTROLLER_HTML = R"~~~(
                     return;
                 }
 
+                if (existingToolbox) {
+                    await waitForToolboxDestruction(existingToolbox);
+                }
                 openToolboxes.delete(tabId);
 
                 const toolbox = Services.ww.openWindow(null, url, "_blank", "chrome,dialog=no,resizable,width=1280,height=850", null);
@@ -70,6 +90,53 @@ static constexpr auto CONTROLLER_HTML = R"~~~(
                 }
 
                 openToolboxes.set(tabId, toolbox);
+            }
+
+            function requestToolbox(tabId) {
+                if (pendingToolboxOpens.has(tabId)) {
+                    return pendingToolboxOpens.get(tabId);
+                }
+
+                const pendingOpen = openToolbox(tabId).finally(() => {
+                    if (pendingToolboxOpens.get(tabId) === pendingOpen) {
+                        pendingToolboxOpens.delete(tabId);
+                    }
+                });
+                pendingToolboxOpens.set(tabId, pendingOpen);
+                return pendingOpen;
+            }
+
+            async function toolboxForTab(tabId) {
+                const toolboxWindow = openToolboxes.get(tabId);
+                if (!toolboxWindow || toolboxWindow.closed) {
+                    throw new Error(`There is no open toolbox for tab ${tabId}`);
+                }
+
+                for (let attempt = 0; attempt < 200; ++attempt) {
+                    const toolbox = gDevTools.getToolboxes().find(candidate => candidate.topWindow === toolboxWindow);
+                    if (toolbox && toolbox.isReady) {
+                        return toolbox;
+                    }
+
+                    await new Promise(resolve => setTimeout(resolve, 25));
+                }
+
+                throw new Error(`The toolbox for tab ${tabId} did not become ready`);
+            }
+
+            async function inspectElement(tabId, nodeId) {
+                const toolbox = await toolboxForTab(tabId);
+                toolbox.topWindow.focus();
+
+                const inspector = await toolbox.selectTool("inspector", "inspect_dom");
+                const nodeFront = await inspector.inspectorFront.walker.getNodeFromActor(ladybirdActor, ["node", nodeId]);
+                if (!nodeFront) {
+                    return;
+                }
+
+                inspector.selection.setNodeFront(nodeFront, {
+                    reason: "browser-context-menu",
+                });
             }
 
             async function connect() {
@@ -81,6 +148,7 @@ static constexpr auto CONTROLLER_HTML = R"~~~(
                 const { require } = ChromeUtils.importESModule("resource://devtools/shared/loader/Loader.sys.mjs");
                 const { DevToolsClient } = require("resource://devtools/client/devtools-client.js");
                 const { remoteClientManager } = require("resource://devtools/client/shared/remote-debugging/remote-client-manager.js");
+                ({ gDevTools } = require("resource://devtools/client/framework/devtools.js"));
 
                 const transport = await DevToolsClient.socketConnect({
                     host: "localhost",
@@ -119,11 +187,14 @@ static constexpr auto CONTROLLER_HTML = R"~~~(
                         return;
                     }
 
-                    try {
-                        openToolbox(packet.tabId);
-                    } catch (error) {
-                        console.error(error);
+                    requestToolbox(packet.tabId).catch(console.error);
+                });
+                client.on("inspectElement", packet => {
+                    if (packet.from !== ladybirdActor || !Number.isSafeInteger(packet.tabId) || typeof packet.nodeId !== "string") {
+                        return;
                     }
+
+                    inspectElement(packet.tabId, packet.nodeId).catch(console.error);
                 });
                 await client.request({ to: ladybirdActor, type: "connect" });
 
