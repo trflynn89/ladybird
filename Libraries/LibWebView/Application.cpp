@@ -2898,7 +2898,7 @@ void Application::listen_for_network_events(DevTools::TabDescription const& desc
     if (!view.has_value())
         return;
 
-    view->on_network_request_started = [on_request_started = move(on_request_started)](u64 request_id, URL::URL const& url, ByteString const& method, Vector<HTTP::Header> const& headers, ByteBuffer request_body, Optional<String> initiator_type, String referrer_policy, bool is_navigation_request) {
+    view->on_network_request_started = [on_request_started = move(on_request_started)](u64 request_id, URL::URL const& url, ByteString const& method, Vector<HTTP::Header> const& headers, ByteBuffer request_body, Optional<String> initiator_type, String referrer_policy, bool is_navigation_request, Web::Fetch::Infrastructure::Request::Priority priority) {
         on_request_started({
             .request_id = request_id,
             .url = url.to_string(),
@@ -2909,6 +2909,7 @@ void Application::listen_for_network_events(DevTools::TabDescription const& desc
             .initiator_type = move(initiator_type),
             .referrer_policy = move(referrer_policy),
             .is_navigation_request = is_navigation_request,
+            .priority = priority,
         });
     };
 
