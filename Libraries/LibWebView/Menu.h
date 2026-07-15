@@ -65,6 +65,7 @@ enum class ActionID {
     OpenProcessesPage,
     OpenSettingsPage,
     ToggleDevTools,
+    InspectElement,
     ViewSource,
 
     OpenInNewTab,

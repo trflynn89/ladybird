@@ -540,6 +540,8 @@ protected:
 
     RefPtr<Action> m_take_visible_screenshot_action;
     RefPtr<Action> m_take_full_screenshot_action;
+    RefPtr<Action> m_inspect_element_action;
+    Gfx::IntPoint m_context_menu_position;
 
     RefPtr<Action> m_open_in_new_tab_action;
     RefPtr<Action> m_open_in_new_window_action;
@@ -641,6 +643,7 @@ protected:
         Hovered,
         Picked,
         Previewed,
+        Inspect,
     };
     void request_node_picker_hit_test(NodePickerRequestType, Web::DevicePixelPoint);
     void did_receive_node_picker_hit_test(u64 request_id, Web::UniqueNodeID);

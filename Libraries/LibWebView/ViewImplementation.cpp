@@ -853,7 +853,7 @@ void ViewImplementation::node_picker_cancel()
 
 void ViewImplementation::request_node_picker_hit_test(NodePickerRequestType type, Web::DevicePixelPoint position)
 {
-    if (!m_node_picker_active)
+    if (!m_node_picker_active && type != NodePickerRequestType::Inspect)
         return;
 
     auto request_id = m_next_node_picker_request_id++;
@@ -864,7 +864,16 @@ void ViewImplementation::request_node_picker_hit_test(NodePickerRequestType type
 void ViewImplementation::did_receive_node_picker_hit_test(u64 request_id, Web::UniqueNodeID node_id)
 {
     auto request_type = m_pending_node_picker_requests.take(request_id);
-    if (!request_type.has_value() || !m_node_picker_active)
+    if (!request_type.has_value())
+        return;
+
+    if (*request_type == NodePickerRequestType::Inspect) {
+        if (node_id != 0)
+            Application::the().inspect_dom_node_with_devtools(view_id(), node_id);
+        return;
+    }
+
+    if (!m_node_picker_active)
         return;
 
     if (*request_type == NodePickerRequestType::Hovered) {
@@ -894,6 +903,8 @@ void ViewImplementation::did_receive_node_picker_hit_test(u64 request_id, Web::U
     case NodePickerRequestType::Previewed:
         event_type = DevTools::DevToolsDelegate::NodePickerEvent::Type::Previewed;
         break;
+    case NodePickerRequestType::Inspect:
+        VERIFY_NOT_REACHED();
     }
 
     m_on_node_picker_event({
@@ -1036,12 +1047,14 @@ void ViewImplementation::set_listen_for_dom_mutations(bool listen_for_dom_mutati
 void ViewImplementation::did_connect_devtools_client()
 {
     m_devtools_connected = true;
+    m_inspect_element_action->set_visible(true);
     client().async_did_connect_devtools_client(page_id());
 }
 
 void ViewImplementation::did_disconnect_devtools_client()
 {
     m_devtools_connected = false;
+    m_inspect_element_action->set_visible(false);
     client().async_did_disconnect_devtools_client(page_id());
 }
 
@@ -2332,6 +2345,11 @@ void ViewImplementation::initialize_context_menus()
         take_and_save_screenshot(ScreenshotType::Full);
     });
 
+    m_inspect_element_action = Action::create("Inspect"sv, ActionID::InspectElement, [this]() {
+        request_node_picker_hit_test(NodePickerRequestType::Inspect, m_context_menu_position.to_type<Web::DevicePixels>());
+    });
+    m_inspect_element_action->set_visible(false);
+
     m_open_in_new_tab_action = Action::create("Open in New Tab"sv, ActionID::OpenInNewTab, [this]() {
         Application::the().open_url_in_new_tab(m_context_menu_url, Web::HTML::ActivateTab::No);
     });
@@ -2439,6 +2457,7 @@ void ViewImplementation::initialize_context_menus()
     m_page_context_menu->add_action(*m_take_full_screenshot_action);
     m_page_context_menu->add_separator();
     m_page_context_menu->add_action(application.view_source_action());
+    m_page_context_menu->add_action(*m_inspect_element_action);
 
     m_link_context_menu = Menu::create("Link Context Menu"sv);
     m_link_context_menu->add_action(*m_look_up_selected_text_action);
@@ -2448,6 +2467,8 @@ void ViewImplementation::initialize_context_menus()
     m_link_context_menu->add_action(*m_download_linked_file_as_action);
     m_link_context_menu->add_separator();
     m_link_context_menu->add_action(*m_copy_url_action);
+    m_link_context_menu->add_separator();
+    m_link_context_menu->add_action(*m_inspect_element_action);
 
     m_selected_text_link_context_menu = Menu::create("Selected Text Link Context Menu"sv);
     m_selected_text_link_context_menu->add_action(*m_look_up_selected_text_action);
@@ -2456,6 +2477,8 @@ void ViewImplementation::initialize_context_menus()
     add_text_edit_actions(*m_selected_text_link_context_menu);
     m_selected_text_link_context_menu->add_separator();
     m_selected_text_link_context_menu->add_action(*m_search_selected_text_action);
+    m_selected_text_link_context_menu->add_separator();
+    m_selected_text_link_context_menu->add_action(*m_inspect_element_action);
 
     m_image_context_menu = Menu::create("Image Context Menu"sv);
     m_image_context_menu->add_action(*m_look_up_selected_text_action);
@@ -2466,6 +2489,8 @@ void ViewImplementation::initialize_context_menus()
     m_image_context_menu->add_separator();
     m_image_context_menu->add_action(*m_copy_image_action);
     m_image_context_menu->add_action(*m_copy_url_action);
+    m_image_context_menu->add_separator();
+    m_image_context_menu->add_action(*m_inspect_element_action);
 
     m_media_context_menu = Menu::create("Media Context Menu"sv);
     m_media_context_menu->add_action(*m_look_up_selected_text_action);
@@ -2484,6 +2509,8 @@ void ViewImplementation::initialize_context_menus()
     m_media_context_menu->add_action(*m_open_in_new_tab_action);
     m_media_context_menu->add_separator();
     m_media_context_menu->add_action(*m_copy_url_action);
+    m_media_context_menu->add_separator();
+    m_media_context_menu->add_action(*m_inspect_element_action);
 
     auto add_bookmark_action = Action::create("Add Bookmark..."sv, ActionID::AddBookmark, []() {
         auto& application = Application::the();
@@ -2620,6 +2647,8 @@ void ViewImplementation::update_look_up_selected_text_action(Optional<Dictionary
 
 void ViewImplementation::did_request_page_context_menu(Badge<WebContentClient>, Gfx::IntPoint content_position, Web::ContextMenuForInputEventsTarget for_input_events_target)
 {
+    m_context_menu_position = content_position;
+
     auto& cut_selection_action = Application::the().cut_selection_action();
     cut_selection_action.set_visible(for_input_events_target == Web::ContextMenuForInputEventsTarget::Yes);
 
@@ -2657,6 +2686,7 @@ void ViewImplementation::did_request_page_context_menu(Badge<WebContentClient>, 
 
 void ViewImplementation::did_request_link_context_menu(Badge<WebContentClient>, Gfx::IntPoint content_position, URL::URL url)
 {
+    m_context_menu_position = content_position;
     m_context_menu_url = move(url);
     update_look_up_selected_text_action(on_request_dictionary_lookup ? selected_text_for_dictionary_lookup() : OptionalNone {}, content_position);
 
@@ -2691,6 +2721,7 @@ void ViewImplementation::download_context_menu_url(PromptForPath prompt_for_path
 
 void ViewImplementation::did_request_image_context_menu(Badge<WebContentClient>, Gfx::IntPoint content_position, URL::URL url, Optional<Gfx::ShareableBitmap> bitmap)
 {
+    m_context_menu_position = content_position;
     m_context_menu_url = move(url);
     m_image_context_menu_bitmap = move(bitmap);
     update_look_up_selected_text_action(on_request_dictionary_lookup ? selected_text_for_dictionary_lookup() : OptionalNone {}, content_position);
@@ -2706,6 +2737,7 @@ void ViewImplementation::did_request_image_context_menu(Badge<WebContentClient>,
 
 void ViewImplementation::did_request_media_context_menu(Badge<WebContentClient>, Gfx::IntPoint content_position, Web::Page::MediaContextMenu menu)
 {
+    m_context_menu_position = content_position;
     m_context_menu_url = move(menu.media_url);
     update_look_up_selected_text_action(on_request_dictionary_lookup ? selected_text_for_dictionary_lookup() : OptionalNone {}, content_position);
 

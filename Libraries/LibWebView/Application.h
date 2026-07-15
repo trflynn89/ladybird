@@ -256,6 +256,7 @@ public:
 
     ErrorOr<void> toggle_devtools_enabled();
     ErrorOr<void> launch_devtools_client();
+    void inspect_dom_node_with_devtools(u64 tab_id, Web::UniqueNodeID);
     void refresh_tab_list();
 
     Optional<Core::TimeZoneWatcher&> time_zone_watcher();

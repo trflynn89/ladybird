@@ -1400,6 +1400,12 @@ ErrorOr<void> Application::launch_devtools_client()
     return {};
 }
 
+void Application::inspect_dom_node_with_devtools(u64 tab_id, Web::UniqueNodeID node_id)
+{
+    if (m_devtools)
+        m_devtools->inspect_element_for_tab(tab_id, node_id);
+}
+
 static NonnullRefPtr<Core::Timer> load_page_for_screenshot_and_exit(Core::EventLoop& event_loop, HeadlessWebView& view, URL::URL const& url, u32 screenshot_timeout)
 {
     outln("Taking screenshot after {} seconds", screenshot_timeout);
