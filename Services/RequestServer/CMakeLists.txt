@@ -1,4 +1,5 @@
 set(SOURCES
+    CacheCoordinator.cpp
     ConnectionFromClient.cpp
     CURL.cpp
     Request.cpp

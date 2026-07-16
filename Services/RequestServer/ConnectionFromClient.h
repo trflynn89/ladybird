@@ -49,11 +49,12 @@ public:
     void request_complete(Badge<Request>, Request const&);
 
 private:
-    ConnectionFromClient(NonnullOwnPtr<IPC::Transport>, IsPrimaryConnection, IsPrivate, ConnectionMap&, Optional<HTTP::DiskCache&>, ByteString alt_svc_cache_path);
+    ConnectionFromClient(NonnullOwnPtr<IPC::Transport>, IsPrimaryConnection, IsPrivate, ConnectionMap&, CacheCoordinator&, ByteString alt_svc_cache_path);
 
     virtual Messages::RequestServer::InitTransportResponse init_transport(int peer_pid) override;
     virtual Messages::RequestServer::ConnectNewClientResponse connect_new_client(IsPrivate) override;
     virtual Messages::RequestServer::ConnectNewClientsResponse connect_new_clients(size_t count, IsPrivate) override;
+    virtual void reset_private_memory_cache() override;
 
     virtual void set_disk_cache_settings(HTTP::DiskCacheSettings) override;
 
@@ -90,9 +91,12 @@ private:
     ErrorOr<IPC::TransportHandle> create_client_socket(IsPrivate);
 
     IsPrivate m_is_private { IsPrivate::No };
+    IsPrimaryConnection m_is_primary_connection { IsPrimaryConnection::No };
 
     ConnectionMap& m_connections;
+    CacheCoordinator& m_cache_coordinator;
     Optional<HTTP::DiskCache&> m_disk_cache;
+    RefPtr<HTTP::MemoryCache> m_memory_cache;
 
     void* m_curl_multi { nullptr };
 

@@ -287,8 +287,14 @@ protected:
     Main::Arguments& arguments() { return m_arguments; }
 
 private:
+    enum class CancelPrivateDownloads {
+        No,
+        Yes,
+    };
+
     ErrorOr<NonnullRefPtr<WebContentClient>> create_web_content_client(Optional<ViewImplementation&>, IsPrivate, u64 initial_page_id, Optional<Web::HTML::CrossProcessId> root_navigable_id = {});
     PrivateBrowsingSession& ensure_private_browsing_session();
+    void dispose_private_browsing_session(CancelPrivateDownloads);
     ErrorOr<void> launch_services();
     void launch_spare_web_content_process();
     ErrorOr<void> launch_compositor_process();

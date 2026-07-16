@@ -18,6 +18,7 @@
 #include <LibWebSocket/ConnectionInfo.h>
 #include <LibWebSocket/Message.h>
 #include <RequestServer/CURL.h>
+#include <RequestServer/CacheCoordinator.h>
 #include <RequestServer/ConnectionFromClient.h>
 #include <RequestServer/Request.h>
 #include <RequestServer/Resolver.h>
@@ -81,18 +82,26 @@ static auto time_curl_call(StringView label, F&& f)
 static constexpr i64 BURST_WINDOW_MS = 100;
 static constexpr u64 BURST_REPORT_THRESHOLD = 5;
 
-ConnectionFromClient::ConnectionFromClient(NonnullOwnPtr<IPC::Transport> transport, IsPrimaryConnection is_primary_connection, IsPrivate is_private, ConnectionMap& connections, Optional<HTTP::DiskCache&> disk_cache, ByteString alt_svc_cache_path)
+ConnectionFromClient::ConnectionFromClient(NonnullOwnPtr<IPC::Transport> transport, IsPrimaryConnection is_primary_connection, IsPrivate is_private, ConnectionMap& connections, CacheCoordinator& cache_coordinator, ByteString alt_svc_cache_path)
     : IPC::ConnectionFromClient<RequestClientEndpoint, RequestServerEndpoint>(*this, move(transport), s_client_ids.allocate())
     , m_is_private(is_private)
+    , m_is_primary_connection(is_primary_connection)
     , m_connections(connections)
-    , m_disk_cache(disk_cache)
+    , m_cache_coordinator(cache_coordinator)
     , m_curl_multi(curl_multi_init())
     , m_resolver(Resolver::default_resolver())
 {
-    if (m_is_private == IsPrivate::No)
+    if (m_is_private == IsPrivate::No) {
+        m_disk_cache = m_cache_coordinator.disk_cache();
         m_alt_svc_cache_path = move(alt_svc_cache_path);
+    } else {
+        m_memory_cache = m_cache_coordinator.private_memory_cache();
+    }
+
+    VERIFY(!m_disk_cache.has_value() || !m_memory_cache);
 
     if (is_primary_connection == IsPrimaryConnection::Yes) {
+        VERIFY(m_is_private == IsPrivate::No);
         VERIFY(g_primary_connection == nullptr);
         g_primary_connection = this;
     }
@@ -176,6 +185,9 @@ Messages::RequestServer::InitTransportResponse ConnectionFromClient::init_transp
 
 Messages::RequestServer::ConnectNewClientResponse ConnectionFromClient::connect_new_client(IsPrivate is_private)
 {
+    if (m_is_primary_connection != IsPrimaryConnection::Yes)
+        return IPC::TransportHandle {};
+
     auto client_socket = create_client_socket(is_private);
     if (client_socket.is_error()) {
         dbgln("Failed to create client socket: {}", client_socket.error());
@@ -187,6 +199,9 @@ Messages::RequestServer::ConnectNewClientResponse ConnectionFromClient::connect_
 
 Messages::RequestServer::ConnectNewClientsResponse ConnectionFromClient::connect_new_clients(size_t count, IsPrivate is_private)
 {
+    if (m_is_primary_connection != IsPrimaryConnection::Yes)
+        return Vector<IPC::TransportHandle> {};
+
     Vector<IPC::TransportHandle> handles;
     handles.ensure_capacity(count);
 
@@ -205,14 +220,23 @@ Messages::RequestServer::ConnectNewClientsResponse ConnectionFromClient::connect
 
 ErrorOr<IPC::TransportHandle> ConnectionFromClient::create_client_socket(IsPrivate is_private)
 {
+    VERIFY(m_is_primary_connection == IsPrimaryConnection::Yes);
+
     auto paired = TRY(IPC::Transport::create_paired());
     auto handle = move(paired.remote_handle);
-    auto disk_cache = is_private == IsPrivate::Yes ? Optional<HTTP::DiskCache&> {} : m_disk_cache;
 
     // Note: A ref is stored in the m_connections map
-    auto client = adopt_ref(*new ConnectionFromClient(move(paired.local), IsPrimaryConnection::No, is_private, m_connections, disk_cache, m_alt_svc_cache_path.value_or({})));
+    auto client = adopt_ref(*new ConnectionFromClient(move(paired.local), IsPrimaryConnection::No, is_private, m_connections, m_cache_coordinator, m_alt_svc_cache_path.value_or({})));
 
     return handle;
+}
+
+void ConnectionFromClient::reset_private_memory_cache()
+{
+    if (m_is_primary_connection != IsPrimaryConnection::Yes)
+        return;
+
+    m_cache_coordinator.reset_private_memory_cache({});
 }
 
 void ConnectionFromClient::set_disk_cache_settings(HTTP::DiskCacheSettings disk_cache_settings)
@@ -289,7 +313,7 @@ void ConnectionFromClient::start_request(u64 request_id, ByteString method, URL:
         }
     }
 
-    auto request = Request::fetch(request_id, m_disk_cache, cache_mode, *this, m_curl_multi, m_resolver, move(url), move(method), HTTP::HeaderList::create(move(request_headers)), move(request_body), include_credentials, m_alt_svc_cache_path, proxy_data, keep_alive_for_transfer);
+    auto request = Request::fetch(request_id, m_disk_cache, m_memory_cache, cache_mode, *this, m_curl_multi, m_resolver, move(url), move(method), HTTP::HeaderList::create(move(request_headers)), move(request_body), include_credentials, m_alt_svc_cache_path, proxy_data, keep_alive_for_transfer);
     m_active_requests.set(request_id, move(request));
 }
 
@@ -342,6 +366,8 @@ void ConnectionFromClient::release_request_for_transfer(u64 request_id)
 
 void ConnectionFromClient::start_revalidation_request(Badge<Request>, ByteString method, URL::URL url, NonnullRefPtr<HTTP::HeaderList> request_headers, ByteBuffer request_body, HTTP::Cookie::IncludeCredentials include_credentials, Core::ProxyData proxy_data)
 {
+    VERIFY(!m_memory_cache);
+
     note_event_tick("ipc-start-revalidation"sv);
     auto request_id = m_next_revalidation_request_id++;
 

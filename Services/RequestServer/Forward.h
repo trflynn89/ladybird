@@ -8,6 +8,7 @@
 
 namespace RequestServer {
 
+class CacheCoordinator;
 class ConnectionFromClient;
 class Request;
 class RequestPipe;

@@ -139,6 +139,11 @@ void RequestClient::ensure_connection(URL::URL const& url, RequestServer::CacheL
     async_ensure_connection(request_id, url, cache_level);
 }
 
+void RequestClient::reset_private_memory_cache()
+{
+    async_reset_private_memory_cache();
+}
+
 bool RequestClient::set_certificate(Badge<Request>, Request& request, ByteString certificate, ByteString key)
 {
     if (!m_requests.contains(request.id()))

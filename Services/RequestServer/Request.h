@@ -16,6 +16,7 @@
 #include <LibDNS/Resolver.h>
 #include <LibHTTP/Cache/CacheMode.h>
 #include <LibHTTP/Cache/CacheRequest.h>
+#include <LibHTTP/Cache/MemoryCache.h>
 #include <LibHTTP/Cookie/IncludeCredentials.h>
 #include <LibHTTP/HeaderList.h>
 #include <LibIPC/File.h>
@@ -24,6 +25,7 @@
 #include <LibURL/URL.h>
 #include <RequestServer/CacheLevel.h>
 #include <RequestServer/Forward.h>
+#include <RequestServer/IsPrivate.h>
 #include <RequestServer/RequestPipe.h>
 #include <RequestServer/RequestType.h>
 
@@ -36,6 +38,7 @@ public:
     static NonnullOwnPtr<Request> fetch(
         u64 request_id,
         Optional<HTTP::DiskCache&> disk_cache,
+        RefPtr<HTTP::MemoryCache> memory_cache,
         HTTP::CacheMode cache_mode,
         ConnectionFromClient& client,
         void* curl_multi,
@@ -102,6 +105,7 @@ private:
     enum class State : u8 {
         Init,              // Decide whether to service this request from cache or the network.
         ReadCache,         // Read the cached response from disk.
+        ReadMemoryCache,   // Read the cached response from memory.
         WaitForCache,      // Wait for an existing cache entry to complete before proceeding.
         FailedCacheOnly,   // An only-if-cached request failed to find a cache entry.
         ServeSubstitution, // Serve content from a local file substitution.
@@ -120,6 +124,8 @@ private:
             return "Init"sv;
         case State::ReadCache:
             return "ReadCache"sv;
+        case State::ReadMemoryCache:
+            return "ReadMemoryCache"sv;
         case State::WaitForCache:
             return "WaitForCache"sv;
         case State::FailedCacheOnly:
@@ -146,6 +152,7 @@ private:
         u64 request_id,
         RequestType type,
         Optional<HTTP::DiskCache&> disk_cache,
+        RefPtr<HTTP::MemoryCache> memory_cache,
         HTTP::CacheMode cache_mode,
         ConnectionFromClient& client,
         void* curl_multi,
@@ -171,6 +178,7 @@ private:
 
     void handle_initial_state();
     void handle_read_cache_state();
+    void handle_read_memory_cache_state();
     void handle_failed_cache_only_state();
     void handle_serve_substitution_state();
     void handle_dns_lookup_state();
@@ -190,6 +198,10 @@ private:
     void transfer_headers_to_client_if_needed();
     void send_headers_to_client(Optional<IPC::File> javascript_bytecode = {}, u64 javascript_bytecode_size = 0, Optional<u64> javascript_bytecode_cache_vary_key = {});
     ErrorOr<void> write_queued_bytes_without_blocking();
+    ErrorOr<void> write_memory_cache_body_without_blocking();
+
+    void prepare_memory_cache_candidate();
+    void append_to_memory_cache_candidate(ReadonlyBytes);
 
     virtual bool is_revalidation_request() const override;
     ErrorOr<void> revalidation_failed();
@@ -204,7 +216,9 @@ private:
     State m_state { State::Init };
 
     Optional<HTTP::DiskCache&> m_disk_cache;
+    RefPtr<HTTP::MemoryCache> m_memory_cache;
     HTTP::CacheMode m_cache_mode { HTTP::CacheMode::Default };
+    IsPrivate m_is_private { IsPrivate::No };
     ConnectionFromClient* m_client { nullptr };
 
     void* m_curl_multi_handle { nullptr };
@@ -234,6 +248,11 @@ private:
 
     NonnullRefPtr<HTTP::HeaderList> m_response_headers;
     bool m_sent_response_headers_to_client { false };
+
+    Optional<HTTP::MemoryCache::Entry> m_memory_cache_entry;
+    Optional<ByteBuffer> m_memory_cache_candidate;
+    Optional<u64> m_memory_cache_vary_key;
+    size_t m_memory_cache_body_offset { 0 };
 
     AllocatingMemoryStream m_response_buffer;
     RefPtr<Core::Notifier> m_client_writer_notifier;
