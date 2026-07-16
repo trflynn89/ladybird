@@ -47,6 +47,7 @@ public:
     bool stop_request(Badge<Request>, Request&);
     void release_request_for_transfer(Badge<Request>, Request&);
     void ensure_connection(URL::URL const&, RequestServer::CacheLevel);
+    void reset_private_memory_cache();
     int request_server_client_id() const { return m_request_server_client_id; }
 
     bool set_certificate(Badge<Request>, Request&, ByteString, ByteString);

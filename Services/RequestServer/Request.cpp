@@ -366,6 +366,7 @@ static void mark_lifecycle_event(Request const* request, Optional<MonotonicTime>
 NonnullOwnPtr<Request> Request::fetch(
     u64 request_id,
     Optional<HTTP::DiskCache&> disk_cache,
+    RefPtr<HTTP::MemoryCache> memory_cache,
     HTTP::CacheMode cache_mode,
     ConnectionFromClient& client,
     void* curl_multi,
@@ -379,7 +380,7 @@ NonnullOwnPtr<Request> Request::fetch(
     Core::ProxyData proxy_data,
     bool keep_alive_for_transfer)
 {
-    auto request = adopt_own(*new Request { request_id, RequestType::Fetch, disk_cache, cache_mode, client, curl_multi, resolver, move(url), move(method), move(request_headers), move(request_body), include_credentials, move(alt_svc_cache_path), proxy_data, keep_alive_for_transfer });
+    auto request = adopt_own(*new Request { request_id, RequestType::Fetch, disk_cache, move(memory_cache), cache_mode, client, curl_multi, resolver, move(url), move(method), move(request_headers), move(request_body), include_credentials, move(alt_svc_cache_path), proxy_data, keep_alive_for_transfer });
     request->process();
 
     return request;
@@ -413,7 +414,7 @@ NonnullOwnPtr<Request> Request::revalidate(
     Optional<ByteString> alt_svc_cache_path,
     Core::ProxyData proxy_data)
 {
-    auto request = adopt_own(*new Request { request_id, RequestType::BackgroundRevalidation, disk_cache, HTTP::CacheMode::Default, client, curl_multi, resolver, move(url), move(method), move(request_headers), move(request_body), include_credentials, move(alt_svc_cache_path), proxy_data });
+    auto request = adopt_own(*new Request { request_id, RequestType::BackgroundRevalidation, disk_cache, nullptr, HTTP::CacheMode::Default, client, curl_multi, resolver, move(url), move(method), move(request_headers), move(request_body), include_credentials, move(alt_svc_cache_path), proxy_data });
     request->process();
 
     return request;
@@ -423,6 +424,7 @@ Request::Request(
     u64 request_id,
     RequestType type,
     Optional<HTTP::DiskCache&> disk_cache,
+    RefPtr<HTTP::MemoryCache> memory_cache,
     HTTP::CacheMode cache_mode,
     ConnectionFromClient& client,
     void* curl_multi,
@@ -438,7 +440,9 @@ Request::Request(
     : m_request_id(request_id)
     , m_type(type)
     , m_disk_cache(disk_cache)
+    , m_memory_cache(move(memory_cache))
     , m_cache_mode(cache_mode)
+    , m_is_private(client.is_private())
     , m_client(&client)
     , m_curl_multi_handle(curl_multi)
     , m_resolver(resolver)
@@ -452,6 +456,8 @@ Request::Request(
     , m_response_headers(HTTP::HeaderList::create())
     , m_keep_alive_for_transfer(keep_alive_for_transfer)
 {
+    VERIFY(!m_disk_cache.has_value() || !m_memory_cache);
+
     if constexpr (REQUESTSERVER_WIRE_DEBUG)
         wire_stats().ensure(this).created_at = MonotonicTime::now();
 }
@@ -464,6 +470,7 @@ Request::Request(
     URL::URL url)
     : m_request_id(request_id)
     , m_type(RequestType::Connect)
+    , m_is_private(client.is_private())
     , m_client(&client)
     , m_curl_multi_handle(curl_multi)
     , m_resolver(resolver)
@@ -571,6 +578,9 @@ void Request::process()
     case State::ReadCache:
         handle_read_cache_state();
         break;
+    case State::ReadMemoryCache:
+        handle_read_memory_cache_state();
+        break;
     case State::WaitForCache:
         // Do nothing; we are waiting for the disk cache to notify us to proceed.
         break;
@@ -613,6 +623,12 @@ void Request::handle_initial_state()
 
     if (m_cache_mode == HTTP::CacheMode::NoStore) {
         m_cache_status = HTTP::CacheRequest::CacheStatus::NotCached;
+    } else if (m_memory_cache) {
+        m_memory_cache_entry = m_memory_cache->open_entry(m_url, m_method, m_request_headers, m_cache_mode);
+        if (m_memory_cache_entry.has_value()) {
+            transition_to_state(State::ReadMemoryCache);
+            return;
+        }
     } else if (m_disk_cache.has_value()) {
         auto open_mode = m_type == RequestType::BackgroundRevalidation
             ? HTTP::DiskCache::OpenMode::Revalidate
@@ -729,6 +745,27 @@ void Request::handle_read_cache_state()
     m_cache_entry_reader.clear();
 
     transition_to_state(State::Complete);
+}
+
+void Request::handle_read_memory_cache_state()
+{
+    VERIFY(m_memory_cache_entry.has_value());
+
+    m_status_code = m_memory_cache_entry->status_code;
+    m_reason_phrase = MUST(String::from_utf8(m_memory_cache_entry->reason_phrase.view()));
+    m_response_headers = m_memory_cache_entry->response_headers;
+    m_cache_status = CacheStatus::ReadFromCache;
+
+    transfer_headers_to_client_if_needed();
+
+    if (inform_client_request_started().is_error())
+        return;
+
+    m_curl_result_code = CURLE_OK;
+    if (write_memory_cache_body_without_blocking().is_error()) {
+        m_network_error = Requests::NetworkError::CacheReadFailed;
+        transition_to_state(State::Error);
+    }
 }
 
 void Request::handle_failed_cache_only_state()
@@ -856,7 +893,7 @@ void Request::handle_retrieve_cookie_state()
 
     if (auto connection = ConnectionFromClient::primary_connection(); connection.has_value()) {
         mark_lifecycle_event(this, &WireStats::cookie_started_at);
-        connection->async_retrieve_http_cookie(m_client->client_id(), m_request_id, m_type, m_url, m_client->is_private());
+        connection->async_retrieve_http_cookie(m_client->client_id(), m_request_id, m_type, m_url, m_is_private);
     } else {
         m_network_error = Requests::NetworkError::RequestServerDied;
         transition_to_state(State::Error);
@@ -1056,6 +1093,12 @@ void Request::handle_complete_state()
         auto timing_info = acquire_timing_info();
         transfer_headers_to_client_if_needed();
 
+        if (m_memory_cache_candidate.has_value()) {
+            auto response_body = Core::ImmutableBytes::adopt(m_memory_cache_candidate.release_value());
+            auto reason_phrase = m_reason_phrase.has_value() ? m_reason_phrase->to_byte_string() : ByteString {};
+            (void)m_memory_cache->store_entry(m_url, m_method, m_request_headers, m_request_start_time, *m_status_code, move(reason_phrase), m_response_headers, move(response_body));
+        }
+
         // Finalize the disk cache entry before notifying WebContent that the request is complete: WebContent may
         // immediately fire off a JavaScript bytecode cache store against this entry, and that store needs the cache
         // index row to already exist. If we notified first the store would race the index write and be rejected.
@@ -1087,6 +1130,8 @@ void Request::handle_complete_state()
 
 void Request::handle_error_state()
 {
+    m_memory_cache_candidate.clear();
+
     if (m_type == RequestType::Fetch) {
         // FIXME: Implement timing info for failed requests.
         m_client->async_request_finished(m_request_id, m_bytes_transferred_to_client, {}, m_network_error.value_or(Requests::NetworkError::Unknown));
@@ -1157,6 +1202,7 @@ size_t Request::on_data_received(void* buffer, size_t size, size_t nmemb, void* 
 
     auto total_size = size * nmemb;
     ReadonlyBytes bytes { static_cast<u8 const*>(buffer), total_size };
+    request.append_to_memory_cache_candidate(bytes);
 
     auto result = [&] -> ErrorOr<void> {
         TRY(request.m_response_buffer.write_some(bytes));
@@ -1191,6 +1237,10 @@ ErrorOr<void> Request::transfer_to_client(ConnectionFromClient& client, u64 requ
 {
     if (m_type == RequestType::BackgroundRevalidation)
         return Error::from_string_literal("Cannot transfer background revalidation requests");
+    if (client.is_private() != m_is_private)
+        return Error::from_string_literal("Cannot transfer a request across a private browsing boundary");
+
+    VERIFY(!m_disk_cache.has_value() || !m_memory_cache);
 
     auto was_complete = is_complete();
     auto& previous_client = *m_client;
@@ -1269,6 +1319,8 @@ void Request::transfer_headers_to_client_if_needed()
     if (!m_status_code.has_value())
         m_status_code = acquire_status_code();
 
+    prepare_memory_cache_candidate();
+
     if (m_cache_entry_writer.has_value()) {
         if (m_cache_entry_writer->write_status_and_reason(*m_status_code, m_reason_phrase, m_request_headers, m_response_headers).is_error()) {
             m_cache_status = CacheStatus::NotCached;
@@ -1310,6 +1362,10 @@ void Request::transfer_headers_to_client_if_needed()
         }
     } else if (m_cache_status == CacheStatus::WrittenToCache && m_cache_entry_writer.has_value()) {
         javascript_bytecode_cache_vary_key = m_cache_entry_writer->vary_key();
+    } else if (m_cache_status == CacheStatus::ReadFromCache && m_memory_cache_entry.has_value()) {
+        javascript_bytecode_cache_vary_key = m_memory_cache_entry->vary_key;
+    } else if (m_memory_cache_vary_key.has_value()) {
+        javascript_bytecode_cache_vary_key = m_memory_cache_vary_key;
     }
 
     send_headers_to_client(move(javascript_bytecode), javascript_bytecode_size, javascript_bytecode_cache_vary_key);
@@ -1412,6 +1468,75 @@ ErrorOr<void> Request::write_queued_bytes_without_blocking()
         transition_to_state(State::Complete);
 
     return {};
+}
+
+ErrorOr<void> Request::write_memory_cache_body_without_blocking()
+{
+    VERIFY(m_memory_cache_entry.has_value());
+    VERIFY(m_client_request_pipe.has_value());
+
+    if (!m_client_writer_notifier) {
+        m_client_writer_notifier = Core::Notifier::construct(m_client_request_pipe->writer_fd(), Core::NotificationType::Write);
+        m_client_writer_notifier->set_enabled(false);
+
+        m_client_writer_notifier->on_activation = weak_callback(*this, [](auto& self) {
+            if (auto result = self.write_memory_cache_body_without_blocking(); result.is_error()) {
+                self.m_client_writer_notifier->set_enabled(false);
+                self.m_network_error = Requests::NetworkError::CacheReadFailed;
+                self.transition_to_state(State::Error);
+            }
+        });
+    }
+
+    auto body = m_memory_cache_entry->response_body.bytes();
+    while (m_memory_cache_body_offset < body.size()) {
+        auto result = m_client_request_pipe->write(body.slice(m_memory_cache_body_offset));
+        if (result.is_error()) {
+            if (!first_is_one_of(result.error().code(), EAGAIN, EWOULDBLOCK))
+                return result.release_error();
+
+            m_client_writer_notifier->set_enabled(true);
+            return {};
+        }
+
+        m_memory_cache_body_offset += result.value();
+        m_bytes_transferred_to_client += result.value();
+    }
+
+    m_client_writer_notifier->set_enabled(false);
+    transition_to_state(State::Complete);
+    return {};
+}
+
+void Request::prepare_memory_cache_candidate()
+{
+    if (!m_memory_cache || m_cache_status == CacheStatus::ReadFromCache || m_cache_mode == HTTP::CacheMode::NoStore)
+        return;
+    if (!is_cacheable(m_method, m_request_headers) || !is_cacheable(*m_status_code, m_response_headers))
+        return;
+
+    m_memory_cache_vary_key = create_vary_key(m_request_headers, m_response_headers);
+
+    auto content_length = m_response_headers->extract_length();
+    if (auto* length = content_length.get_pointer<u64>(); length && *length > m_memory_cache->limits().maximum_entry_body_size)
+        return;
+
+    m_memory_cache_candidate.emplace();
+}
+
+void Request::append_to_memory_cache_candidate(ReadonlyBytes bytes)
+{
+    if (!m_memory_cache_candidate.has_value())
+        return;
+
+    auto maximum_body_size = m_memory_cache->limits().maximum_entry_body_size;
+    if (m_memory_cache_candidate->size() > maximum_body_size || bytes.size() > maximum_body_size - m_memory_cache_candidate->size()) {
+        m_memory_cache_candidate.clear();
+        return;
+    }
+
+    if (m_memory_cache_candidate->try_append(bytes).is_error())
+        m_memory_cache_candidate.clear();
 }
 
 bool Request::is_revalidation_request() const

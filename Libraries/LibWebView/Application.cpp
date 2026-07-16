@@ -792,12 +792,23 @@ void Application::maybe_close_private_browsing_session()
     if (has_private_client)
         return;
 
-    m_private_browsing_session = nullptr;
+    dispose_private_browsing_session(CancelPrivateDownloads::No);
 }
 
 void Application::reset_private_browsing_session()
 {
-    m_file_downloader.cancel_private_downloads();
+    dispose_private_browsing_session(CancelPrivateDownloads::Yes);
+}
+
+void Application::dispose_private_browsing_session(CancelPrivateDownloads cancel_private_downloads)
+{
+    if (cancel_private_downloads == CancelPrivateDownloads::Yes)
+        m_file_downloader.cancel_private_downloads();
+
+    if (m_request_server_client && m_request_server_client->is_open())
+        m_request_server_client->reset_private_memory_cache();
+
+    m_private_request_server_client = nullptr;
     m_private_browsing_session = nullptr;
 }
 
