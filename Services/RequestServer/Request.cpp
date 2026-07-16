@@ -644,12 +644,14 @@ void Request::handle_initial_state()
 
         if (m_state != State::Init)
             return;
+    }
 
-        if (is_cache_only_request()) {
-            transition_to_state(State::FailedCacheOnly);
-            return;
-        }
+    if (is_cache_only_request()) {
+        transition_to_state(State::FailedCacheOnly);
+        return;
+    }
 
+    if (m_cache_mode != HTTP::CacheMode::NoStore && m_disk_cache.has_value()) {
         m_disk_cache->create_entry(*this, m_url, m_method, m_request_headers, m_request_start_time)
             .visit(
                 [&](Optional<HTTP::CacheEntryWriter&> cache_entry_writer) {
