@@ -42,6 +42,10 @@ target_link_libraries(RequestServer PRIVATE requestserverservice)
 target_link_libraries(requestserverservice PUBLIC LibCore LibDNS LibHTTP LibIPC LibMain LibRequests LibSandbox LibTLS LibWebSocket LibURL LibTextCodec CURL::libcurl)
 target_link_libraries(requestserverservice PRIVATE OpenSSL::Crypto OpenSSL::SSL)
 
+if (BUILD_TESTING)
+    ladybird_test("${LADYBIRD_SOURCE_DIR}/Tests/RequestServer/TestRequestServer.cpp" RequestServer LIBS requestserverservice LibRequests LibThreading LibURL)
+endif()
+
 if (WIN32)
     ladybird_windows_bin(RequestServer CONSOLE)
 endif()
