@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <LibWebView/ViewImplementation.h>
+
+#import <Interface/LadybirdWebView.h>
 #import <Interface/SidebarViewController.h>
 #import <Interface/Tab.h>
 
@@ -102,6 +105,7 @@ static constexpr CGFloat SIDEBAR_ROW_VERTICAL_INSET = 2;
     NSTrackingArea* m_tracking_area;
     BOOL m_hovered;
     BOOL m_selected;
+    BOOL m_audio_indicator_visible;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect
@@ -120,8 +124,8 @@ static constexpr CGFloat SIDEBAR_ROW_VERTICAL_INSET = 2;
 
         m_audio_button = [NSButton buttonWithImage:[NSImage imageWithSystemSymbolName:@"speaker.wave.2.fill"
                                                              accessibilityDescription:@"Audio playing"]
-                                            target:nil
-                                            action:nil];
+                                            target:self
+                                            action:@selector(toggleTabAudio:)];
         [m_audio_button setBordered:NO];
         [m_audio_button setFocusRingType:NSFocusRingTypeNone];
         [m_audio_button setHidden:YES];
@@ -210,6 +214,15 @@ static constexpr CGFloat SIDEBAR_ROW_VERTICAL_INSET = 2;
     [m_title_field setStringValue:tab.displayTitle];
     [self setToolTip:tab.displayTitle];
 
+    auto& view = tab.web_view.view;
+    m_audio_indicator_visible = view.audio_play_state() == Web::HTML::AudioPlayState::Playing
+        || view.page_mute_state() == Web::HTML::MuteState::Muted;
+    [m_audio_button setHidden:!m_audio_indicator_visible];
+    if (m_audio_indicator_visible) {
+        [m_audio_button setImage:tab.iconForPageMuteState];
+        [m_audio_button setToolTip:tab.toolTipForPageMuteState];
+    }
+
     auto mouse_location = [self.window mouseLocationOutsideOfEventStream];
     m_hovered = NSPointInRect([self convertPoint:mouse_location fromView:nil], self.bounds);
     [self updateCloseButtonVisibility];
@@ -224,6 +237,12 @@ static constexpr CGFloat SIDEBAR_ROW_VERTICAL_INSET = 2;
 {
     if (m_tab && self.on_close)
         self.on_close(m_tab);
+}
+
+- (void)toggleTabAudio:(id)sender
+{
+    if (m_tab && m_audio_indicator_visible)
+        [m_tab togglePageMuteState:sender];
 }
 
 @end
