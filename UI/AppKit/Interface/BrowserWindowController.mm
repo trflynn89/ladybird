@@ -966,6 +966,11 @@ private:
 {
     m_fullscreen_requested_for_web_content = true;
 
+    [self.vertical_tabs_width_persistence_timer invalidate];
+    self.vertical_tabs_width_persistence_timer = nil;
+    if (m_is_presenting_vertical_tabs)
+        [self setVerticalTabsExpanded:NO animated:NO];
+
     if (([self.window styleMask] & NSWindowStyleMaskFullScreen) == 0) {
         [self.window toggleFullScreen:nil];
     }
@@ -2417,12 +2422,13 @@ private:
 - (void)windowWillEnterFullScreen:(NSNotification*)notification
 {
     if (m_fullscreen_requested_for_web_content) {
-        [self.toolbar setVisible:NO];
+        [self.window.toolbar setVisible:NO];
         [self updateBookmarksBarDisplay:NO];
 
-        m_fullscreen_should_restore_tab_bar = [[self.window tabGroup] isTabBarVisible];
-        if (m_fullscreen_should_restore_tab_bar) {
-            [self.window toggleTabBar:nil];
+        if (!m_is_presenting_vertical_tabs) {
+            m_fullscreen_should_restore_tab_bar = [[self.window tabGroup] isTabBarVisible];
+            if (m_fullscreen_should_restore_tab_bar)
+                [self.window toggleTabBar:nil];
         }
     }
 }
@@ -2442,10 +2448,14 @@ private:
 - (void)windowDidExitFullScreen:(NSNotification*)notification
 {
     if (exchange(m_fullscreen_requested_for_web_content, false)) {
-        [self.toolbar setVisible:YES];
+        [self.window.toolbar setVisible:YES];
         [self updateBookmarksBarDisplay:WebView::Application::settings().show_bookmarks_bar()];
 
-        if (m_fullscreen_should_restore_tab_bar && ![[self.window tabGroup] isTabBarVisible]) {
+        if (m_is_presenting_vertical_tabs) {
+            auto const& tab_settings = WebView::Application::settings().tab_settings();
+            [self setVerticalTabsExpanded:tab_settings.vertical_tabs_expanded animated:NO];
+            [self applyVerticalTabsWidth:tab_settings.vertical_tabs_expanded_width.value_or(VERTICAL_TABS_DEFAULT_WIDTH)];
+        } else if (m_fullscreen_should_restore_tab_bar && ![[self.window tabGroup] isTabBarVisible]) {
             [self.window toggleTabBar:nil];
         }
     }
