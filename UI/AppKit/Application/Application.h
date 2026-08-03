@@ -18,6 +18,7 @@ class Application final : public WebView::Application {
 private:
     explicit Application();
 
+    virtual bool supports_vertical_tabs() const override { return true; }
     virtual bool supports_private_browsing_windows() const override { return true; }
 
     virtual Core::EventLoop& create_platform_event_loop() override;
