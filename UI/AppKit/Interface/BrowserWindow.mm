@@ -99,6 +99,57 @@ static NSString* window_frame_autosave_name()
         [self makeFirstResponder:self.preferred_first_responder];
 }
 
+- (BOOL)performKeyEquivalent:(NSEvent*)event
+{
+    auto modifiers = event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
+    auto allowed_modifiers = NSEventModifierFlagControl | NSEventModifierFlagShift;
+    if ([event.charactersIgnoringModifiers isEqualToString:@"\t"]
+        && (modifiers & NSEventModifierFlagControl)
+        && (modifiers & ~allowed_modifiers) == 0) {
+        auto* controller = (BrowserWindowController*)self.windowController;
+        if (controller.isPresentingVerticalTabs && controller.tabs.count > 1) {
+            if (modifiers & NSEventModifierFlagShift)
+                [controller selectPreviousTab:self];
+            else
+                [controller selectNextTab:self];
+            return YES;
+        }
+    }
+
+    return [super performKeyEquivalent:event];
+}
+
+- (void)selectNextTab:(id)sender
+{
+    auto* controller = (BrowserWindowController*)self.windowController;
+    if (controller.isPresentingVerticalTabs) {
+        [controller selectNextTab:sender];
+        return;
+    }
+    [super selectNextTab:sender];
+}
+
+- (void)selectPreviousTab:(id)sender
+{
+    auto* controller = (BrowserWindowController*)self.windowController;
+    if (controller.isPresentingVerticalTabs) {
+        [controller selectPreviousTab:sender];
+        return;
+    }
+    [super selectPreviousTab:sender];
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem*)item
+{
+    if (item.tag == VERTICAL_TABS_NEXT_MENU_ITEM_TAG || item.tag == VERTICAL_TABS_PREVIOUS_MENU_ITEM_TAG) {
+        auto* controller = (BrowserWindowController*)self.windowController;
+        auto show_item = controller.isPresentingVerticalTabs && controller.tabs.count > 1;
+        item.hidden = !show_item;
+        return show_item;
+    }
+    return [super validateMenuItem:item];
+}
+
 - (void)setIsVisible:(BOOL)visible
 {
     auto* controller = (BrowserWindowController*)self.windowController;

@@ -1237,6 +1237,28 @@ private:
     return m_is_presenting_vertical_tabs;
 }
 
+- (void)selectNextTab:(id)sender
+{
+    if (!m_is_presenting_vertical_tabs || self.tabs.count < 2)
+        return;
+
+    auto index = [self.tabs indexOfObjectIdenticalTo:self.selected_tab];
+    if (index == NSNotFound)
+        return;
+    [self selectTab:self.tabs[(index + 1) % self.tabs.count]];
+}
+
+- (void)selectPreviousTab:(id)sender
+{
+    if (!m_is_presenting_vertical_tabs || self.tabs.count < 2)
+        return;
+
+    auto index = [self.tabs indexOfObjectIdenticalTo:self.selected_tab];
+    if (index == NSNotFound)
+        return;
+    [self selectTab:self.tabs[(index + self.tabs.count - 1) % self.tabs.count]];
+}
+
 - (void)installVerticalTabsPresentation
 {
     if (m_is_presenting_vertical_tabs || self.window == nil)
@@ -1712,6 +1734,17 @@ private:
 {
     if ([item.itemIdentifier isEqualToString:TOOLBAR_TAB_OVERVIEW_IDENTIFIER])
         return !m_is_presenting_vertical_tabs;
+    return YES;
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem*)item
+{
+    auto action = item.action;
+    if (action == @selector(selectNextTab:) || action == @selector(selectPreviousTab:)) {
+        auto show_item = m_is_presenting_vertical_tabs && self.tabs.count > 1;
+        item.hidden = !show_item;
+        return show_item;
+    }
     return YES;
 }
 

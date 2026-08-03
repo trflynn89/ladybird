@@ -10,6 +10,9 @@
 
 #import <Cocoa/Cocoa.h>
 
+static constexpr NSInteger VERTICAL_TABS_NEXT_MENU_ITEM_TAG = 0x4c425601;
+static constexpr NSInteger VERTICAL_TABS_PREVIOUS_MENU_ITEM_TAG = 0x4c425602;
+
 @interface BrowserWindow : NSWindow
 
 - (instancetype)init:(WebView::IsPrivate)is_private;

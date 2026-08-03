@@ -668,6 +668,20 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
 
     [NSApp setWindowsMenu:submenu];
 
+    auto* next_tab = [[NSMenuItem alloc] initWithTitle:@"Show Next Tab"
+                                                action:@selector(selectNextTab:)
+                                         keyEquivalent:@"]"];
+    next_tab.tag = VERTICAL_TABS_NEXT_MENU_ITEM_TAG;
+    [next_tab setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
+    [submenu addItem:next_tab];
+
+    auto* previous_tab = [[NSMenuItem alloc] initWithTitle:@"Show Previous Tab"
+                                                    action:@selector(selectPreviousTab:)
+                                             keyEquivalent:@"["];
+    previous_tab.tag = VERTICAL_TABS_PREVIOUS_MENU_ITEM_TAG;
+    [previous_tab setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
+    [submenu addItem:previous_tab];
+
     [menu setSubmenu:submenu];
     return menu;
 }
@@ -727,6 +741,11 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
 
     if (action == @selector(closeCurrentTab:)) {
         return [[NSApp keyWindow] isKindOfClass:[BrowserWindow class]];
+    }
+
+    if (menu.tag == VERTICAL_TABS_NEXT_MENU_ITEM_TAG || menu.tag == VERTICAL_TABS_PREVIOUS_MENU_ITEM_TAG) {
+        menu.hidden = YES;
+        return NO;
     }
 
     return YES;

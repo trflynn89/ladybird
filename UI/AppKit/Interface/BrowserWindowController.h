@@ -50,6 +50,8 @@
 - (void)tearDownVerticalTabsPresentation;
 - (void)setVerticalTabsExpanded:(BOOL)expanded animated:(BOOL)animated;
 - (void)applyVerticalTabsWidth:(CGFloat)width;
+- (void)selectNextTab:(id)sender;
+- (void)selectPreviousTab:(id)sender;
 
 @property (nonatomic, strong, readonly) NSArray<Tab*>* tabs;
 @property (nonatomic, strong, readonly) Tab* selected_tab;
