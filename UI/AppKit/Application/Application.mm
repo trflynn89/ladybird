@@ -77,12 +77,18 @@ Vector<WebView::ViewImplementation&> Application::active_window_web_views() cons
     return web_views;
 }
 
+void Application::update_tabs_display() const
+{
+    ApplicationDelegate* delegate = [NSApp delegate];
+    [delegate updateTabsDisplay];
+}
+
 Optional<WebView::ViewImplementation&> Application::open_blank_new_tab(Web::HTML::ActivateTab activate_tab) const
 {
     ApplicationDelegate* delegate = [NSApp delegate];
 
     auto* tab = [delegate createNewTab:activate_tab fromTab:[delegate activeTab]];
-    auto* controller = (BrowserWindowController*)tab.view.window.windowController;
+    auto* controller = tab.browser_window_controller;
 
     if (activate_tab == Web::HTML::ActivateTab::Yes)
         [controller focusWebView];

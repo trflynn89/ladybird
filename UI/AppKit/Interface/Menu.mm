@@ -282,6 +282,9 @@ static void initialize_native_icon(WebView::Action& action, id control)
         [control setKeyEquivalent:@"\b"];
         [control setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
         break;
+    case WebView::ActionID::ToggleVerticalTabsExpanded:
+        set_control_image(control, @"sidebar.leading");
+        break;
 
     case WebView::ActionID::Undo:
         set_control_image(control, @"arrow.uturn.backward");

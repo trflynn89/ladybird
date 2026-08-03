@@ -40,6 +40,16 @@
 - (void)webViewDidCloseForTab:(Tab*)tab;
 - (void)addTab:(Tab*)tab atIndex:(NSUInteger)index;
 - (void)removeTab:(Tab*)tab;
+- (Tab*)createTabForHosting;
+- (Tab*)detachTabForTransfer:(Tab*)tab;
+- (void)showWindowWithTab:(Tab*)tab;
+- (void)closeWindowForTabTransfer;
+
+- (BOOL)isPresentingVerticalTabs;
+- (void)installVerticalTabsPresentation;
+- (void)tearDownVerticalTabsPresentation;
+- (void)setVerticalTabsExpanded:(BOOL)expanded animated:(BOOL)animated;
+- (void)applyVerticalTabsWidth:(CGFloat)width;
 
 @property (nonatomic, strong, readonly) NSArray<Tab*>* tabs;
 @property (nonatomic, strong, readonly) Tab* selected_tab;

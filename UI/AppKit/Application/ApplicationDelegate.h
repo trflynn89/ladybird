@@ -63,6 +63,8 @@ private:
 - (void)setActiveTab:(nonnull Tab*)tab;
 - (nullable Tab*)activeTab;
 
+- (void)updateTabsDisplay;
+
 - (void)removeTab:(nonnull BrowserWindowController*)controller;
 - (NSUInteger)tabCount;
 

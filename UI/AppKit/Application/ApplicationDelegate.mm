@@ -38,6 +38,8 @@ private:
 @interface ApplicationDelegate ()
 {
     OwnPtr<ApplicationSettingsObserver> m_settings_observer;
+    Optional<WebView::TabSettings> m_last_applied_tab_settings;
+    bool m_tabs_display_update_scheduled;
 }
 
 @property (nonatomic, strong) NSMutableArray<BrowserWindowController*>* managed_tabs;
@@ -57,6 +59,12 @@ private:
 - (NSMenuItem*)createDebugMenu;
 - (NSMenuItem*)createWindowMenu;
 - (NSMenuItem*)createHelpMenu;
+- (void)convertWindowsToVerticalTabs;
+- (void)convertWindowsToHorizontalTabs;
+- (Tab*)createHostedTabWithController:(BrowserWindowController*)tab_controller
+                              fromTab:(Tab*)from_tab
+                          activateTab:(Web::HTML::ActivateTab)activate_tab
+                          tabLocation:(TabLocation)tab_location;
 
 @end
 
@@ -87,6 +95,8 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
 
         self.managed_tabs = [[NSMutableArray alloc] init];
         m_settings_observer = make<ApplicationSettingsObserver>(self);
+        m_last_applied_tab_settings = WebView::Application::settings().tab_settings();
+        m_tabs_display_update_scheduled = false;
 
         // Reduce the tooltip delay, as the default delay feels quite long.
         [[NSUserDefaults standardUserDefaults] setObject:@100 forKey:@"NSInitialToolTipDelay"];
@@ -103,6 +113,9 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
     auto is_private = tab ? [tab isPrivate] : WebView::IsPrivate::No;
     auto* controller = [[BrowserWindowController alloc] init:is_private];
 
+    if (WebView::Application::settings().tab_settings().vertical_tabs_enabled && tab.browser_window_controller.isPresentingVerticalTabs)
+        return [self createHostedTabWithController:controller fromTab:tab activateTab:activate_tab tabLocation:TabLocation::end()];
+
     [self initializeBrowserWindowController:controller
                                 activateTab:activate_tab
                                     fromTab:tab];
@@ -117,6 +130,18 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
          tabLocation:(TabLocation)tab_location
 {
     auto* controller = [[BrowserWindowController alloc] init:is_private];
+
+    if (WebView::Application::settings().tab_settings().vertical_tabs_enabled
+        && [tab isPrivate] == is_private
+        && tab.browser_window_controller.isPresentingVerticalTabs) {
+        auto* hosted_tab = [self createHostedTabWithController:controller fromTab:tab activateTab:activate_tab tabLocation:tab_location];
+        if (url.has_value()) {
+            [hosted_tab loadURL:*url];
+            if (*url != WebView::Application::settings().new_tab_page_url())
+                [hosted_tab.toolbar_controller focusWebView];
+        }
+        return hosted_tab;
+    }
 
     [self initializeBrowserWindowController:controller
                                 activateTab:activate_tab
@@ -138,13 +163,21 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
                    activateTab:(Web::HTML::ActivateTab)activate_tab
                      pageIndex:(u64)page_index
 {
-    auto* child_tab = [self createChildTab:activate_tab fromTab:tab pageIndex:page_index];
-
-    if (url.has_value()) {
-        [child_tab loadURL:*url];
+    Tab* child_tab;
+    if (WebView::Application::settings().tab_settings().vertical_tabs_enabled && tab.browser_window_controller.isPresentingVerticalTabs) {
+        auto* controller = [[BrowserWindowController alloc] initAsChild:tab pageIndex:page_index];
+        child_tab = [self createHostedTabWithController:controller fromTab:tab activateTab:activate_tab tabLocation:TabLocation::end()];
+    } else {
+        child_tab = [self createChildTab:activate_tab fromTab:tab pageIndex:page_index];
     }
 
-    [child_tab.toolbar_controller focusWebView];
+    if (url.has_value())
+        [child_tab loadURL:*url];
+
+    if (activate_tab == Web::HTML::ActivateTab::Yes)
+        [child_tab.toolbar_controller focusWebView];
+    else
+        [child_tab.toolbar_controller focusWebViewWhenActivated];
 
     return child_tab;
 }
@@ -167,6 +200,51 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
 - (Tab*)activeTab
 {
     return self.active_tab;
+}
+
+- (void)updateTabsDisplay
+{
+    if (m_tabs_display_update_scheduled)
+        return;
+    m_tabs_display_update_scheduled = true;
+
+    __weak ApplicationDelegate* weak_self = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        ApplicationDelegate* self = weak_self;
+        if (self == nil)
+            return;
+        self->m_tabs_display_update_scheduled = false;
+
+        auto const& settings = WebView::Application::settings().tab_settings();
+        auto const& previous_settings = self->m_last_applied_tab_settings.value();
+        auto mode_changed = settings.vertical_tabs_enabled != previous_settings.vertical_tabs_enabled;
+        auto expanded_changed = settings.vertical_tabs_expanded != previous_settings.vertical_tabs_expanded;
+        auto width_changed = settings.vertical_tabs_expanded_width != previous_settings.vertical_tabs_expanded_width;
+
+        if (mode_changed) {
+            if (settings.vertical_tabs_enabled)
+                [self convertWindowsToVerticalTabs];
+            else
+                [self convertWindowsToHorizontalTabs];
+        }
+
+        if (mode_changed || expanded_changed) {
+            for (BrowserWindowController* controller in self.managed_tabs) {
+                if (controller.isPresentingVerticalTabs)
+                    [controller setVerticalTabsExpanded:settings.vertical_tabs_expanded animated:!mode_changed];
+            }
+        }
+
+        if (width_changed) {
+            auto width = settings.vertical_tabs_expanded_width.value_or(232);
+            for (BrowserWindowController* controller in self.managed_tabs) {
+                if (controller.isPresentingVerticalTabs)
+                    [controller applyVerticalTabsWidth:width];
+            }
+        }
+
+        self->m_last_applied_tab_settings = settings;
+    });
 }
 
 - (void)removeTab:(BrowserWindowController*)controller
@@ -232,6 +310,116 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
 }
 
 #pragma mark - Private methods
+
+- (Tab*)createHostedTabWithController:(BrowserWindowController*)tab_controller
+                              fromTab:(Tab*)from_tab
+                          activateTab:(Web::HTML::ActivateTab)activate_tab
+                          tabLocation:(TabLocation)tab_location
+{
+    auto* host_controller = from_tab.browser_window_controller;
+    auto* tab = [tab_controller createTabForHosting];
+    [tab_controller detachTabForTransfer:tab];
+
+    NSUInteger insertion_index = host_controller.tabs.count;
+    if (tab_location.is_after_tab()) {
+        auto index = [host_controller.tabs indexOfObjectIdenticalTo:tab_location.tab()];
+        if (index != NSNotFound)
+            insertion_index = index + 1;
+    }
+
+    [host_controller addTab:tab atIndex:insertion_index];
+    if (activate_tab == Web::HTML::ActivateTab::Yes) {
+        [host_controller selectTab:tab];
+        [host_controller.window orderFrontRegardless];
+        [host_controller focusLocationToolbarItem];
+    } else {
+        [tab.toolbar_controller focusWebViewWhenActivated];
+    }
+
+    return tab;
+}
+
+- (void)convertWindowsToVerticalTabs
+{
+    auto* consumed_windows = [NSHashTable hashTableWithOptions:NSPointerFunctionsStrongMemory | NSPointerFunctionsObjectPointerPersonality];
+
+    for (BrowserWindowController* first_controller in [self.managed_tabs copy]) {
+        if (first_controller.isPresentingVerticalTabs || [consumed_windows containsObject:first_controller.window])
+            continue;
+
+        auto* tab_group = first_controller.window.tabGroup;
+        NSArray<NSWindow*>* group_windows = tab_group ? tab_group.windows : @[ first_controller.window ];
+        auto* controllers = [[NSMutableArray<BrowserWindowController*> alloc] init];
+        auto* tabs = [[NSMutableArray<Tab*> alloc] init];
+
+        for (NSWindow* window in group_windows) {
+            auto* controller = (BrowserWindowController*)window.windowController;
+            if (![controller isKindOfClass:BrowserWindowController.class])
+                continue;
+            [consumed_windows addObject:window];
+            [controllers addObject:controller];
+            [tabs addObject:controller.selected_tab];
+        }
+        if (controllers.count == 0)
+            continue;
+
+        auto* selected_window = tab_group.selectedWindow ?: first_controller.window;
+        auto* host_controller = (BrowserWindowController*)selected_window.windowController;
+        if (![controllers containsObject:host_controller])
+            host_controller = controllers.firstObject;
+        auto* selected_tab = host_controller.selected_tab;
+        auto frame = selected_window.frame;
+
+        for (NSUInteger index = 0; index < controllers.count; ++index) {
+            auto* controller = controllers[index];
+            auto* tab = tabs[index];
+            if (controller == host_controller)
+                continue;
+            [controller detachTabForTransfer:tab];
+            [controller closeWindowForTabTransfer];
+        }
+
+        for (NSUInteger index = 0; index < tabs.count; ++index) {
+            auto* tab = tabs[index];
+            if (tab != selected_tab)
+                [host_controller addTab:tab atIndex:index];
+        }
+
+        [host_controller installVerticalTabsPresentation];
+        [host_controller selectTab:selected_tab];
+        [host_controller.window setFrame:frame display:NO];
+        [host_controller.window orderFront:nil];
+    }
+}
+
+- (void)convertWindowsToHorizontalTabs
+{
+    for (BrowserWindowController* host_controller in [self.managed_tabs copy]) {
+        if (!host_controller.isPresentingVerticalTabs)
+            continue;
+
+        NSArray<Tab*>* tabs = [host_controller.tabs copy];
+        auto* selected_tab = host_controller.selected_tab;
+        auto frame = host_controller.window.frame;
+        [host_controller tearDownVerticalTabsPresentation];
+
+        for (NSUInteger index = 0; index < tabs.count; ++index) {
+            auto* tab = tabs[index];
+            if (tab == selected_tab)
+                continue;
+
+            [host_controller detachTabForTransfer:tab];
+            auto* controller = [[BrowserWindowController alloc] init:[tab isPrivate]];
+            [controller showWindowWithTab:tab];
+            [controller.window setFrame:frame display:NO];
+            [self.managed_tabs addObject:controller];
+            [[host_controller.window tabGroup] insertWindow:controller.window atIndex:index];
+        }
+
+        [host_controller selectTab:selected_tab];
+        [host_controller.window orderFront:nil];
+    }
+}
 
 - (void)openLocation:(id)sender
 {
@@ -300,11 +488,12 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
         tab_for_location = nil;
 
     if (tab_for_location) {
-        tab_group = tab_for_location.view.window.tabGroup;
+        auto* tab_window = tab_for_location.browser_window_controller.window;
+        tab_group = tab_window.tabGroup;
 
         if (tab_location.is_after_tab()) {
             auto* windows = [tab_group windows];
-            auto tab_index = [windows indexOfObject:tab_for_location.view.window];
+            auto tab_index = [windows indexOfObject:tab_window];
             if (tab_index != NSNotFound)
                 insertion_index = tab_index + 1;
         }
@@ -320,7 +509,7 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
 
         // FIXME: Can we create the tabbed window above without it becoming active in the first place?
         if (activate_tab == Web::HTML::ActivateTab::No) {
-            [tab_for_location.view.window orderFront:nil];
+            [tab_for_location.browser_window_controller.window orderFront:nil];
         }
     }
 
@@ -330,6 +519,9 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
     }
 
     [self.managed_tabs addObject:controller];
+
+    if (WebView::Application::settings().tab_settings().vertical_tabs_enabled && tab_for_location == nil)
+        [controller installVerticalTabsPresentation];
 }
 
 - (void)closeCurrentTab:(id)sender

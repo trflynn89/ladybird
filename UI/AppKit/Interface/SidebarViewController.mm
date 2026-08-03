@@ -387,7 +387,20 @@ static constexpr CGFloat SIDEBAR_ROW_VERTICAL_INSET = 2;
     [scroll_view setHasVerticalScroller:YES];
     [scroll_view setBorderType:NSNoBorder];
     [scroll_view setDocumentView:self.table_view];
-    self.view = scroll_view;
+    [scroll_view setTranslatesAutoresizingMaskIntoConstraints:NO];
+
+    auto* container = [[NSView alloc] init];
+    [container addSubview:scroll_view];
+    [NSLayoutConstraint activateConstraints:@[
+        [scroll_view.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
+        [scroll_view.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
+        [scroll_view.topAnchor constraintEqualToAnchor:container.safeAreaLayoutGuide.topAnchor],
+        [scroll_view.bottomAnchor constraintEqualToAnchor:container.bottomAnchor],
+    ]];
+    self.view = container;
+
+    [self.table_view reloadData];
+    [self setSelectedTab:m_selected_tab];
 }
 
 - (void)viewDidLayout
