@@ -731,6 +731,9 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
     bool m_is_presenting_vertical_tabs;
     bool m_has_configured_toolbar;
     bool m_toolbar_configuration_is_vertical;
+    bool m_is_applying_vertical_tabs_width;
+    bool m_is_converting_vertical_tabs;
+    NSUInteger m_vertical_tabs_width_application_generation;
     Function<void()> m_pending_immediate_close;
 }
 
@@ -745,6 +748,7 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 @property (nonatomic, strong) NSSplitViewItem* sidebar_item;
 @property (nonatomic, strong) NSSplitViewItem* page_host_item;
 @property (nonatomic, strong) SidebarViewController* sidebar;
+@property (nonatomic, strong) NSTimer* vertical_tabs_width_persistence_timer;
 
 @property (nonatomic, strong) NSToolbar* toolbar;
 @property (nonatomic, strong) NSArray* toolbar_identifiers;
@@ -784,6 +788,8 @@ static NSInteger ns_index_for_selected_suggestion(Optional<size_t> selected_sugg
 - (void)installSelectedTabToolbar;
 - (void)initializeWindowWithTab:(Tab*)tab;
 - (Tab*)toolbarTab;
+- (void)splitViewDidResize:(NSNotification*)notification;
+- (void)persistVerticalTabsWidth;
 
 @end
 
@@ -855,6 +861,9 @@ private:
         m_is_presenting_vertical_tabs = false;
         m_has_configured_toolbar = false;
         m_toolbar_configuration_is_vertical = false;
+        m_is_applying_vertical_tabs_width = false;
+        m_is_converting_vertical_tabs = false;
+        m_vertical_tabs_width_application_generation = 0;
 
         self.autocomplete = [[Autocomplete alloc] init:self withToolbarItem:self.location_toolbar_item];
         m_omnibox = make<WebView::Omnibox>(m_is_private);
@@ -1264,6 +1273,7 @@ private:
     if (m_is_presenting_vertical_tabs || self.window == nil)
         return;
 
+    m_is_converting_vertical_tabs = true;
     m_is_presenting_vertical_tabs = true;
 
     self.sidebar = [[SidebarViewController alloc] init];
@@ -1292,6 +1302,10 @@ private:
 
     [self.split_view_controller addSplitViewItem:self.sidebar_item];
     [self.split_view_controller addSplitViewItem:self.page_host_item];
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                           selector:@selector(splitViewDidResize:)
+                                               name:NSSplitViewDidResizeSubviewsNotification
+                                             object:self.split_view_controller.splitView];
 
     auto frame = self.window.frame;
     if (self.window.tabGroup.isTabBarVisible)
@@ -1308,6 +1322,7 @@ private:
     auto width = tab_settings.vertical_tabs_expanded_width.value_or(VERTICAL_TABS_DEFAULT_WIDTH);
     [self applyVerticalTabsWidth:width];
     [self setVerticalTabsExpanded:tab_settings.vertical_tabs_expanded animated:NO];
+    m_is_converting_vertical_tabs = false;
 }
 
 - (void)tearDownVerticalTabsPresentation
@@ -1315,7 +1330,16 @@ private:
     if (!m_is_presenting_vertical_tabs)
         return;
 
+    m_is_converting_vertical_tabs = true;
+    ++m_vertical_tabs_width_application_generation;
+    m_is_applying_vertical_tabs_width = false;
     auto frame = self.window.frame;
+
+    [self.vertical_tabs_width_persistence_timer invalidate];
+    self.vertical_tabs_width_persistence_timer = nil;
+    [NSNotificationCenter.defaultCenter removeObserver:self
+                                                  name:NSSplitViewDidResizeSubviewsNotification
+                                                object:self.split_view_controller.splitView];
 
     // Removing the content item first makes AppKit briefly constrain the sidebar as the
     // content pane, which can raise an Auto Layout exception during teardown.
@@ -1338,6 +1362,7 @@ private:
     self.window.tabbingMode = NSWindowTabbingModeAutomatic;
     [self.window setFrame:frame display:NO];
     [self installSelectedTabToolbar];
+    m_is_converting_vertical_tabs = false;
 }
 
 - (void)setVerticalTabsExpanded:(BOOL)expanded animated:(BOOL)animated
@@ -1356,19 +1381,67 @@ private:
     if (!m_is_presenting_vertical_tabs)
         return;
 
+    auto generation = ++m_vertical_tabs_width_application_generation;
+    m_is_applying_vertical_tabs_width = true;
     width = clamp(width, VERTICAL_TABS_MINIMUM_WIDTH, VERTICAL_TABS_MAXIMUM_WIDTH);
     self.sidebar_item.minimumThickness = width;
     self.sidebar_item.maximumThickness = width;
+    [self.split_view_controller.view layoutSubtreeIfNeeded];
+    [self.split_view_controller.splitView setPosition:width ofDividerAtIndex:0];
     [self.split_view_controller.view layoutSubtreeIfNeeded];
 
     __weak BrowserWindowController* weak_self = self;
     dispatch_async(dispatch_get_main_queue(), ^{
         BrowserWindowController* self = weak_self;
-        if (self == nil || !self->m_is_presenting_vertical_tabs)
+        if (self == nil || !self->m_is_presenting_vertical_tabs || generation != self->m_vertical_tabs_width_application_generation)
             return;
         self.sidebar_item.minimumThickness = VERTICAL_TABS_MINIMUM_WIDTH;
         self.sidebar_item.maximumThickness = VERTICAL_TABS_MAXIMUM_WIDTH;
+        self->m_is_applying_vertical_tabs_width = false;
     });
+}
+
+- (void)splitViewDidResize:(NSNotification*)notification
+{
+    [self updateLocationToolbarItemWidth];
+
+    auto* delegate = (ApplicationDelegate*)NSApp.delegate;
+    if (!m_is_presenting_vertical_tabs
+        || m_is_converting_vertical_tabs
+        || m_is_applying_vertical_tabs_width
+        || m_fullscreen_requested_for_web_content
+        || self.sidebar_item.collapsed
+        || delegate.isApplyingTabSettings)
+        return;
+
+    [self.vertical_tabs_width_persistence_timer invalidate];
+    __weak BrowserWindowController* weak_self = self;
+    self.vertical_tabs_width_persistence_timer = [NSTimer timerWithTimeInterval:0.5
+                                                                        repeats:NO
+                                                                          block:^(NSTimer*) {
+                                                                              [weak_self persistVerticalTabsWidth];
+                                                                          }];
+    [NSRunLoop.mainRunLoop addTimer:self.vertical_tabs_width_persistence_timer forMode:NSRunLoopCommonModes];
+}
+
+- (void)persistVerticalTabsWidth
+{
+    self.vertical_tabs_width_persistence_timer = nil;
+    if (!m_is_presenting_vertical_tabs
+        || m_is_converting_vertical_tabs
+        || m_is_applying_vertical_tabs_width
+        || m_fullscreen_requested_for_web_content
+        || self.sidebar_item.collapsed)
+        return;
+
+    auto width = static_cast<NSUInteger>(NSWidth(self.sidebar.view.frame) + 0.5);
+    width = clamp(width, static_cast<NSUInteger>(VERTICAL_TABS_MINIMUM_WIDTH), static_cast<NSUInteger>(VERTICAL_TABS_MAXIMUM_WIDTH));
+    auto const& persisted_width = WebView::Application::settings().tab_settings().vertical_tabs_expanded_width;
+    if (persisted_width.has_value() && *persisted_width == width)
+        return;
+
+    auto* delegate = (ApplicationDelegate*)NSApp.delegate;
+    [delegate persistVerticalTabsWidth:width fromController:self];
 }
 
 - (void)updateTabChrome
@@ -2281,6 +2354,13 @@ private:
     // sever the NSControl delegate notifications of a location field this controller continues to
     // service after its tab has been transferred to another window.
     auto* notification_center = NSNotificationCenter.defaultCenter;
+    [self.vertical_tabs_width_persistence_timer invalidate];
+    self.vertical_tabs_width_persistence_timer = nil;
+    if (self.split_view_controller) {
+        [notification_center removeObserver:self
+                                       name:NSSplitViewDidResizeSubviewsNotification
+                                     object:self.split_view_controller.splitView];
+    }
     for (Tab* tab in self.tabs)
         [notification_center removeObserver:self name:nil object:tab];
 

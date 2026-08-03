@@ -40,10 +40,12 @@ private:
     OwnPtr<ApplicationSettingsObserver> m_settings_observer;
     Optional<WebView::TabSettings> m_last_applied_tab_settings;
     bool m_tabs_display_update_scheduled;
+    bool m_applying_tab_settings;
 }
 
 @property (nonatomic, strong) NSMutableArray<BrowserWindowController*>* managed_tabs;
 @property (nonatomic, weak) Tab* active_tab;
+@property (nonatomic, weak) BrowserWindowController* vertical_tabs_width_source;
 
 @property (nonatomic, strong) NSMenu* bookmarks_menu;
 
@@ -97,6 +99,7 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
         m_settings_observer = make<ApplicationSettingsObserver>(self);
         m_last_applied_tab_settings = WebView::Application::settings().tab_settings();
         m_tabs_display_update_scheduled = false;
+        m_applying_tab_settings = false;
 
         // Reduce the tooltip delay, as the default delay feels quite long.
         [[NSUserDefaults standardUserDefaults] setObject:@100 forKey:@"NSInitialToolTipDelay"];
@@ -238,13 +241,30 @@ void ApplicationSettingsObserver::show_bookmarks_bar_changed()
         if (width_changed) {
             auto width = settings.vertical_tabs_expanded_width.value_or(232);
             for (BrowserWindowController* controller in self.managed_tabs) {
-                if (controller.isPresentingVerticalTabs)
+                if (controller.isPresentingVerticalTabs && controller != self.vertical_tabs_width_source)
                     [controller applyVerticalTabsWidth:width];
             }
         }
 
+        self.vertical_tabs_width_source = nil;
         self->m_last_applied_tab_settings = settings;
     });
+}
+
+- (void)persistVerticalTabsWidth:(NSUInteger)width fromController:(BrowserWindowController*)controller
+{
+    auto tab_settings = WebView::Application::settings().tab_settings();
+    tab_settings.vertical_tabs_expanded_width = clamp(width, static_cast<NSUInteger>(0), static_cast<NSUInteger>(NumericLimits<u16>::max()));
+
+    self.vertical_tabs_width_source = controller;
+    m_applying_tab_settings = true;
+    WebView::Application::settings().set_tab_settings(tab_settings);
+    m_applying_tab_settings = false;
+}
+
+- (BOOL)isApplyingTabSettings
+{
+    return m_applying_tab_settings;
 }
 
 - (void)removeTab:(BrowserWindowController*)controller

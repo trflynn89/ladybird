@@ -64,6 +64,8 @@ private:
 - (nullable Tab*)activeTab;
 
 - (void)updateTabsDisplay;
+- (void)persistVerticalTabsWidth:(NSUInteger)width fromController:(nonnull BrowserWindowController*)controller;
+- (BOOL)isApplyingTabSettings;
 
 - (void)removeTab:(nonnull BrowserWindowController*)controller;
 - (NSUInteger)tabCount;
