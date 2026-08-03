@@ -132,6 +132,8 @@ void SettingsUI::load_features()
     JsonObject features;
     features.set("primaryPaste"_string, application.supports_clipboard_type(Application::ClipboardType::Selection));
     features.set("verticalTabs"_string, application.supports_vertical_tabs());
+    features.set("verticalTabsExpandOnHover"_string, application.supports_vertical_tabs_expand_on_hover());
+    features.set("verticalTabsPosition"_string, application.supports_vertical_tabs_position());
     features.set("geolocation"_string, Core::GeolocationProvider::is_available());
 
     async_send_message("loadFeatures"sv, move(features));

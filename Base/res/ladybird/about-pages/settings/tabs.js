@@ -3,17 +3,29 @@ const verticalTabsExpandOnHover = document.querySelector("#vertical-tabs-expand-
 const verticalTabsPosition = document.querySelector("#vertical-tabs-position");
 
 let TAB_SETTINGS = {};
+let VERTICAL_TABS_EXPAND_ON_HOVER_SUPPORTED = false;
+let VERTICAL_TABS_POSITION_SUPPORTED = false;
 
 const loadFeatures = features => {
     // When more tab settings are added, we will need to be more selective here.
     const tabSettingsCard = enableVerticalTabs.closest(".card");
     tabSettingsCard.previousElementSibling.classList.toggle("hidden", !features?.verticalTabs);
     tabSettingsCard.classList.toggle("hidden", !features?.verticalTabs);
+
+    VERTICAL_TABS_EXPAND_ON_HOVER_SUPPORTED = !!features?.verticalTabsExpandOnHover;
+    VERTICAL_TABS_POSITION_SUPPORTED = !!features?.verticalTabsPosition;
+    updateVerticalTabsDependentSettings();
 };
 
 const updateVerticalTabsDependentSettings = () => {
-    verticalTabsExpandOnHover.parentElement.classList.toggle("hidden", !enableVerticalTabs.checked);
-    verticalTabsPosition.parentElement.classList.toggle("hidden", !enableVerticalTabs.checked);
+    verticalTabsExpandOnHover.parentElement.classList.toggle(
+        "hidden",
+        !enableVerticalTabs.checked || !VERTICAL_TABS_EXPAND_ON_HOVER_SUPPORTED
+    );
+    verticalTabsPosition.parentElement.classList.toggle(
+        "hidden",
+        !enableVerticalTabs.checked || !VERTICAL_TABS_POSITION_SUPPORTED
+    );
 };
 
 const loadSettings = settings => {

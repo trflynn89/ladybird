@@ -95,6 +95,8 @@ private:
     virtual void insert_clipboard_item(Web::Clipboard::SystemClipboardItem) override;
 
     virtual bool supports_vertical_tabs() const override { return true; }
+    virtual bool supports_vertical_tabs_expand_on_hover() const override { return true; }
+    virtual bool supports_vertical_tabs_position() const override { return true; }
     virtual bool supports_private_browsing_windows() const override { return true; }
     virtual bool supports_client_side_window_decorations() const override
     {
