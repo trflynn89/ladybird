@@ -16,6 +16,7 @@
 
 static NSString* const SIDEBAR_TAB_CELL_IDENTIFIER = @"SidebarTabCellIdentifier";
 static NSString* const SIDEBAR_NEW_TAB_CELL_IDENTIFIER = @"SidebarNewTabCellIdentifier";
+static NSPasteboardType const SIDEBAR_TAB_PASTEBOARD_TYPE = @"org.ladybird.sidebar-tab";
 static constexpr CGFloat SIDEBAR_ROW_HEIGHT = 33;
 static constexpr CGFloat SIDEBAR_ICON_SIZE = 16;
 static constexpr CGFloat SIDEBAR_ROW_HORIZONTAL_PADDING = 8;
@@ -287,6 +288,9 @@ static constexpr CGFloat SIDEBAR_ROW_VERTICAL_INSET = 2;
 
 @interface SidebarTableView : NSTableView
 
+@property (nonatomic) BOOL handling_tab_mouse_down;
+@property (nonatomic) BOOL drag_session_started;
+@property (nonatomic, copy) void (^on_tab_click)(NSInteger);
 @property (nonatomic, copy) void (^on_middle_click)(NSInteger);
 @property (nonatomic, copy) void (^on_new_tab_click)(void);
 
@@ -306,7 +310,19 @@ static constexpr CGFloat SIDEBAR_ROW_VERTICAL_INSET = 2;
         return;
     }
 
+    if (row < 0) {
+        [super mouseDown:event];
+        return;
+    }
+
+    self.handling_tab_mouse_down = YES;
+    self.drag_session_started = NO;
+    [self selectRowIndexes:[NSIndexSet indexSetWithIndex:row] byExtendingSelection:NO];
     [super mouseDown:event];
+    self.handling_tab_mouse_down = NO;
+
+    if (!self.drag_session_started && self.selectedRow == row && self.on_tab_click)
+        self.on_tab_click(row);
 }
 
 - (void)otherMouseDown:(NSEvent*)event
@@ -344,6 +360,7 @@ static constexpr CGFloat SIDEBAR_ROW_VERTICAL_INSET = 2;
 {
     NSPointerArray* m_tabs;
     __weak Tab* m_selected_tab;
+    __weak Tab* m_dragged_tab;
     BOOL m_programmatic_selection;
 }
 
@@ -381,12 +398,22 @@ static constexpr CGFloat SIDEBAR_ROW_VERTICAL_INSET = 2;
     [self.table_view setUsesAutomaticRowHeights:NO];
     [self.table_view setStyle:NSTableViewStyleSourceList];
     [self.table_view setColumnAutoresizingStyle:NSTableViewUniformColumnAutoresizingStyle];
+    [self.table_view registerForDraggedTypes:@[ SIDEBAR_TAB_PASTEBOARD_TYPE ]];
+    [self.table_view setDraggingSourceOperationMask:NSDragOperationMove forLocal:YES];
 
     auto* column = [[NSTableColumn alloc] initWithIdentifier:@"SidebarColumn"];
     [column setResizingMask:NSTableColumnAutoresizingMask];
     [self.table_view addTableColumn:column];
 
     __weak SidebarViewController* weak_self = self;
+    [self.table_view setOn_tab_click:^(NSInteger row) {
+        SidebarViewController* self = weak_self;
+        if (self == nil)
+            return;
+        auto* tab = [self tabAtIndex:row];
+        if (tab && self.on_tab_selected)
+            self.on_tab_selected(tab);
+    }];
     [self.table_view setOn_middle_click:^(NSInteger row) {
         SidebarViewController* self = weak_self;
         if (self == nil)
@@ -499,6 +526,69 @@ static constexpr CGFloat SIDEBAR_ROW_VERTICAL_INSET = 2;
     return m_tabs.count + 1;
 }
 
+- (id<NSPasteboardWriting>)tableView:(NSTableView*)tableView pasteboardWriterForRow:(NSInteger)row
+{
+    auto* tab = [self tabAtIndex:row];
+    if (tab == nil)
+        return nil;
+
+    self.table_view.drag_session_started = YES;
+    m_dragged_tab = tab;
+    auto* item = [[NSPasteboardItem alloc] init];
+    [item setString:@"tab" forType:SIDEBAR_TAB_PASTEBOARD_TYPE];
+    return item;
+}
+
+- (NSDragOperation)tableView:(NSTableView*)tableView
+                validateDrop:(id<NSDraggingInfo>)info
+                 proposedRow:(NSInteger)row
+       proposedDropOperation:(NSTableViewDropOperation)dropOperation
+{
+    if (info.draggingSource != tableView || m_dragged_tab == nil || row < 0 || static_cast<NSUInteger>(row) > m_tabs.count)
+        return NSDragOperationNone;
+
+    [tableView setDropRow:row dropOperation:NSTableViewDropAbove];
+    return NSDragOperationMove;
+}
+
+- (BOOL)tableView:(NSTableView*)tableView
+       acceptDrop:(id<NSDraggingInfo>)info
+              row:(NSInteger)row
+    dropOperation:(NSTableViewDropOperation)dropOperation
+{
+    auto source_index = [self indexOfTab:m_dragged_tab];
+    if (source_index == NSNotFound || row < 0 || static_cast<NSUInteger>(row) > m_tabs.count)
+        return NO;
+
+    auto* reordered_tabs = [[NSMutableArray<Tab*> alloc] initWithCapacity:m_tabs.count];
+    for (NSUInteger index = 0; index < m_tabs.count; ++index) {
+        if (auto* tab = [self tabAtIndex:index])
+            [reordered_tabs addObject:tab];
+    }
+
+    auto* dragged_tab = m_dragged_tab;
+    [reordered_tabs removeObjectAtIndex:source_index];
+    auto destination_index = static_cast<NSUInteger>(row);
+    if (source_index < destination_index)
+        --destination_index;
+    destination_index = MIN(destination_index, reordered_tabs.count);
+    [reordered_tabs insertObject:dragged_tab atIndex:destination_index];
+
+    if (self.on_tabs_reordered)
+        self.on_tabs_reordered(reordered_tabs);
+    m_dragged_tab = nil;
+    return YES;
+}
+
+- (void)tableView:(NSTableView*)tableView
+    draggingSession:(NSDraggingSession*)session
+       endedAtPoint:(NSPoint)screenPoint
+          operation:(NSDragOperation)operation
+{
+    m_dragged_tab = nil;
+    [self setSelectedTab:m_selected_tab];
+}
+
 #pragma mark - NSTableViewDelegate
 
 - (NSTableRowView*)tableView:(NSTableView*)tableView
@@ -549,7 +639,7 @@ static constexpr CGFloat SIDEBAR_ROW_VERTICAL_INSET = 2;
 
 - (void)tableViewSelectionDidChange:(NSNotification*)notification
 {
-    if (m_programmatic_selection)
+    if (m_programmatic_selection || self.table_view.handling_tab_mouse_down)
         return;
 
     auto row = self.table_view.selectedRow;

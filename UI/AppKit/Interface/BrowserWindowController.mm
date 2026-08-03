@@ -1297,6 +1297,19 @@ private:
         if (self != nil)
             [self.selected_tab.toolbar_controller createNewTab:nil];
     }];
+    [self.sidebar setOn_tabs_reordered:^(NSArray<Tab*>* tabs) {
+        BrowserWindowController* self = weak_self;
+        if (self == nil || tabs.count != self.tabs.count)
+            return;
+        for (Tab* tab in tabs) {
+            if (![self.tabs containsObject:tab])
+                return;
+        }
+
+        self.tabs = [tabs mutableCopy];
+        [self.sidebar setTabs:self.tabs];
+        [self.sidebar setSelectedTab:self.selected_tab];
+    }];
 
     self.split_view_controller = [[NSSplitViewController alloc] init];
     self.sidebar_item = [NSSplitViewItem sidebarWithViewController:self.sidebar];
