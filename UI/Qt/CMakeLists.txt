@@ -119,6 +119,10 @@ if (NOT APPLE AND USE_VULKAN_DMABUF_IMAGES AND Qt6_VERSION VERSION_GREATER_EQUAL
     add_dependencies(ladybird generate_web_content_view_linux_shaders)
 endif()
 
+if (WIN32)
+    target_sources(ladybird PRIVATE WindowsWindow.cpp)
+endif()
+
 if (HAS_DIRECTX)
     target_sources(ladybird PRIVATE WebContentViewWindows.cpp)
     target_link_libraries(ladybird PRIVATE Qt::GuiPrivate d3d11)

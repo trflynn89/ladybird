@@ -32,6 +32,9 @@
 #include <UI/Qt/TabBar.h>
 #include <UI/Qt/WebContentView.h>
 #include <UI/Qt/WindowControlButton.h>
+#if defined(AK_OS_WINDOWS)
+#    include <UI/Qt/WindowsWindow.h>
+#endif
 
 #include <QAbstractButton>
 #include <QAction>
@@ -68,6 +71,18 @@ static constexpr int WINDOW_RESIZE_CORNER_WIDTH = WINDOW_RESIZE_BORDER_WIDTH * 2
 static constexpr int NATIVE_WINDOW_CONTROL_X_OFFSET = 6;
 static constexpr int NATIVE_WINDOW_CONTROL_Y_OFFSET = 6;
 #endif
+
+// Qt can expand the client area into the Windows title bar since 6.9, the same way it does on
+// macOS. Unlike macOS, though, we keep drawing the window controls ourselves: Qt would paint its
+// own, in its own fixed style, and we already have controls that match the rest of our chrome.
+static constexpr bool uses_windows_expanded_client_area()
+{
+#if defined(AK_OS_WINDOWS)
+    return true;
+#else
+    return false;
+#endif
+}
 
 static bool should_use_screen_signal_for_dpi_changes()
 {
@@ -181,8 +196,8 @@ bool FullscreenMode::eventFilter(QObject* obj, QEvent* event)
 ExitFullscreenButton::ExitFullscreenButton(QWidget* parent)
     : QPushButton("Exit fullscreen", parent)
 {
-#if defined(AK_OS_MACOS)
-    // The web content view is a native QRhiWidget on macOS, so this overlay must also be native to remain above it.
+#ifdef LADYBIRD_QT_USE_RHI_WIDGET
+    // The web content view is a native QRhiWidget here, so this overlay must also be native to remain above it.
     setAttribute(Qt::WA_NativeWindow);
 #endif
     setStyleSheet("background-color:rgb(55, 99, 129); color: white; padding: 10px; border-radius: 5px;");
@@ -232,13 +247,8 @@ BrowserWindow::BrowserWindow(Vector<URL::URL> const& initial_urls, IsPopupWindow
 
     register_window_with_session_store();
 
-#if defined(AK_OS_MACOS)
-    setWindowFlag(Qt::ExpandedClientAreaHint);
-    setWindowFlag(Qt::NoTitleBarBackgroundHint);
-    setAttribute(Qt::WA_ContentsMarginsRespectsSafeArea, false);
-#else
+    apply_expanded_client_area_flags();
     setWindowFlag(Qt::FramelessWindowHint, uses_client_side_decorations());
-#endif
     setAttribute(Qt::WA_OpaquePaintEvent);
     setWindowIcon(app_icon());
     qApp->installEventFilter(this);
@@ -606,14 +616,80 @@ FullscreenMode& BrowserWindow::fullscreen_mode()
     return *m_fullscreen_mode;
 }
 
+static bool chrome_in_titlebar_requested()
+{
+    return WebView::Application::settings().config_variable_as_bool(WebView::ConfigVariableID::UseClientSideWindowDecorations);
+}
+
+// True when the window frame is the platform's, but our chrome is drawn inside it, all the way up
+// into the title bar. macOS has always worked this way; Windows opts in via the same setting that
+// selects client-side decorations elsewhere.
+bool BrowserWindow::uses_expanded_client_area()
+{
+    if constexpr (use_native_macos_window_controls())
+        return true;
+    else if constexpr (uses_windows_expanded_client_area())
+        return chrome_in_titlebar_requested();
+    else
+        return false;
+}
+
+// True when we are responsible for the whole window frame: our own resize borders and our own
+// one-pixel window outline, with no help from the window manager.
 bool BrowserWindow::uses_client_side_decorations()
 {
-    return !use_native_macos_window_controls() && WebView::Application::settings().config_variable_as_bool(WebView::ConfigVariableID::UseClientSideWindowDecorations);
+    if constexpr (use_native_macos_window_controls() || uses_windows_expanded_client_area())
+        return false;
+    else
+        return chrome_in_titlebar_requested();
 }
 
 bool BrowserWindow::has_chrome_in_titlebar()
 {
-    return use_native_macos_window_controls() || uses_client_side_decorations();
+    return uses_expanded_client_area() || uses_client_side_decorations();
+}
+
+// Whether we turn mouse activity near the window edges into a resize ourselves. A frameless window
+// has no one else to do it. An expanded client area does get native resize borders, but only over
+// the parts of the window the window manager can see: the web content view is a native child
+// window, and it takes the mouse messages along its edges before they ever reach the frame.
+bool BrowserWindow::handles_resize_borders()
+{
+    return uses_client_side_decorations() || (uses_windows_expanded_client_area() && uses_expanded_client_area());
+}
+
+void BrowserWindow::apply_expanded_client_area_flags()
+{
+    auto expanded = uses_expanded_client_area();
+
+    setWindowFlag(Qt::ExpandedClientAreaHint, expanded);
+    setWindowFlag(Qt::NoTitleBarBackgroundHint, expanded);
+    setAttribute(Qt::WA_ContentsMarginsRespectsSafeArea, !expanded);
+
+    if constexpr (uses_windows_expanded_client_area()) {
+        // Left to itself, Qt paints the window icon, the window title and the caption buttons into
+        // the expanded title bar, right on top of our tab strip. Qt::CustomizeWindowHint makes it
+        // paint only what the remaining hints ask for, and it stops hit-testing caption buttons in
+        // our top-right corner, so we drop the button hints and draw our own controls instead.
+        //
+        // Qt::WindowTitleHint has to stay, even though it is exactly the hint that makes Qt paint
+        // the icon and title. QWindowsWindow::handleNonClientHitTest() treats a customized window
+        // that names none of the title or button hints as a third kind of window, and that path
+        // leaves the window receiving no mouse events at all - no clicks, no hover, nothing. Naming
+        // the title hint keeps hit testing on the working path; apply_expanded_client_area_window_
+        // styles() then hides the child window Qt would have drawn the icon and title into.
+        //
+        // These have to go out in a single setWindowFlags() call, because QWidgetPrivate::
+        // adjustFlags() runs on every change and re-adds hints we just cleared.
+        auto flags = windowFlags();
+        flags.setFlag(Qt::CustomizeWindowHint, expanded);
+        flags.setFlag(Qt::WindowTitleHint, true);
+        flags.setFlag(Qt::WindowSystemMenuHint, !expanded);
+        flags.setFlag(Qt::WindowMinimizeButtonHint, !expanded);
+        flags.setFlag(Qt::WindowMaximizeButtonHint, !expanded);
+        flags.setFlag(Qt::WindowCloseButtonHint, !expanded);
+        setWindowFlags(flags);
+    }
 }
 
 Tab& BrowserWindow::create_new_tab(Web::HTML::ActivateTab activate_tab, TabLocation location)
@@ -1107,7 +1183,7 @@ void BrowserWindow::update_menu_bar_visibility()
     menuBar()->setVisible(show_menu_bar);
 
     if (m_menu_bar_window_controls)
-        m_menu_bar_window_controls->setVisible(show_menu_bar && uses_client_side_decorations());
+        m_menu_bar_window_controls->setVisible(show_menu_bar && has_chrome_in_titlebar());
     m_tabs_container->set_window_controls_visible(!show_menu_bar && has_chrome_in_titlebar());
 }
 
@@ -1129,13 +1205,22 @@ void BrowserWindow::update_window_decoration_state()
 
     auto should_be_frameless = uses_client_side_decorations();
     auto is_frameless = windowFlags().testFlag(Qt::FramelessWindowHint);
+    auto should_be_expanded = uses_expanded_client_area();
+    auto is_expanded = windowFlags().testFlag(Qt::ExpandedClientAreaHint);
 
-    if (is_frameless != should_be_frameless) {
+    if (is_frameless != should_be_frameless || is_expanded != should_be_expanded) {
         auto was_visible = isVisible();
         auto was_fullscreen = isFullScreen();
         auto was_maximized = isMaximized();
 
         setWindowFlag(Qt::FramelessWindowHint, should_be_frameless);
+        apply_expanded_client_area_flags();
+
+#if defined(AK_OS_WINDOWS)
+        // Changing the window flags reapplies the native styles, so our fixups have to be redone.
+        if (should_be_expanded)
+            apply_expanded_client_area_window_styles(*this);
+#endif
 
         if (was_visible) {
             if (was_fullscreen)
@@ -1315,6 +1400,9 @@ bool BrowserWindow::event(QEvent* event)
                 hide_appkit_window_title(*this);
                 offset_appkit_window_controls(*this, NATIVE_WINDOW_CONTROL_X_OFFSET, NATIVE_WINDOW_CONTROL_Y_OFFSET);
             });
+#elif defined(AK_OS_WINDOWS)
+            if (uses_expanded_client_area())
+                apply_expanded_client_area_window_styles(*this);
 #endif
         } else if (platform_surface_event->surfaceEventType() == QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed) {
             disconnect_window_screen_changed_signal();
@@ -1382,7 +1470,7 @@ bool BrowserWindow::eventFilter(QObject* object, QEvent* event)
         return QMainWindow::eventFilter(object, event);
 
     auto position = widget->mapTo(this, mouse_event->position().toPoint());
-    auto edges = uses_client_side_decorations() ? resize_edges_for_position(position) : Qt::Edges {};
+    auto edges = handles_resize_borders() ? resize_edges_for_position(position) : Qt::Edges {};
     if (event->type() == QEvent::MouseButtonPress && !isMaximized() && !isFullScreen()) {
         if (edges != Qt::Edges {}) {
             auto* handle = windowHandle();
@@ -1419,7 +1507,7 @@ bool BrowserWindow::eventFilter(QObject* object, QEvent* event)
 
 bool BrowserWindow::filter_native_window_event(QWindow& window, QEvent& event)
 {
-    if (!uses_client_side_decorations())
+    if (!handles_resize_borders())
         return false;
 
     auto* window_handle = windowHandle();
@@ -1510,7 +1598,7 @@ Optional<Qt::CursorShape> BrowserWindow::resize_cursor_for_edges(Qt::Edges edges
 
 void BrowserWindow::update_resize_cursor(QPoint const& position)
 {
-    if (!uses_client_side_decorations() || isMaximized() || isFullScreen() || !rect().contains(position)) {
+    if (!handles_resize_borders() || isMaximized() || isFullScreen() || !rect().contains(position)) {
         clear_resize_cursor();
         return;
     }

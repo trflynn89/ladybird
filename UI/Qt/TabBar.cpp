@@ -18,6 +18,7 @@
 #include <UI/Qt/Menu.h>
 #include <UI/Qt/StringUtils.h>
 #include <UI/Qt/TabBar.h>
+#include <UI/Qt/WebContentView.h>
 #include <UI/Qt/WindowControlButton.h>
 
 #include <QApplication>
@@ -1525,7 +1526,11 @@ TabWidget::TabWidget(QWidget* parent)
 
     m_vertical_tab_bar_column = new QWidget(this);
     m_vertical_tab_bar_column->setObjectName("LadybirdVerticalTabBar");
-#if defined(AK_OS_MACOS)
+#ifdef LADYBIRD_QT_USE_RHI_WIDGET
+    // The web content view lives in a native window of its own, which sits above every ordinary
+    // widget in the chrome and takes the mouse events over its own area first. Hover-expanded
+    // vertical tabs reach out over the content, so this column has to be native to stay both
+    // visible and clickable there.
     m_vertical_tab_bar_column->setAttribute(Qt::WA_DontCreateNativeAncestors);
     m_vertical_tab_bar_column->setAttribute(Qt::WA_NativeWindow);
 #endif
@@ -1544,7 +1549,7 @@ TabWidget::TabWidget(QWidget* parent)
 
     m_vertical_tabs_resize_handle = new QWidget(this);
     m_vertical_tabs_resize_handle->setObjectName("LadybirdVerticalTabsResizeHandle");
-#if defined(AK_OS_MACOS)
+#ifdef LADYBIRD_QT_USE_RHI_WIDGET
     m_vertical_tabs_resize_handle->setAttribute(Qt::WA_DontCreateNativeAncestors);
     m_vertical_tabs_resize_handle->setAttribute(Qt::WA_NativeWindow);
 #endif

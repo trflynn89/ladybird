@@ -231,7 +231,10 @@ private:
     void update_menu_bar_visibility();
     void update_menu_bar_window_control_icons();
     void update_window_decoration_state();
+    void apply_expanded_client_area_flags();
+    static bool uses_expanded_client_area();
     static bool uses_client_side_decorations();
+    static bool handles_resize_borders();
     void toggle_window_maximized();
     bool start_window_move();
     bool connect_window_screen_changed_signal();
