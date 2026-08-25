@@ -1690,6 +1690,12 @@ void BrowserWindow::closeEvent(QCloseEvent* event)
             dbgln("Unable to record the closing window in the session store: {}", result.error());
         Application::the().update_reopen_recently_closed_actions();
     }
+
+#if defined(AK_OS_MACOS)
+    // Qt keeps the application alive on macOS when the last window is closed.
+    if (event->isAccepted() && visible_browser_window_count() <= 1)
+        QApplication::quit();
+#endif
 }
 
 }
