@@ -25,6 +25,18 @@
 namespace WebView {
 
 enum class ActionID {
+    NewTab,
+    NewWindow,
+    NewPrivateWindow,
+    ReopenRecentlyClosedTab,
+    CloseCurrentTab,
+    OpenFile,
+    OpenLocation,
+    FindInPage,
+    OpenNextTab,
+    OpenPreviousTab,
+    Quit,
+
     NavigateBack,
     NavigateForward,
     Reload,

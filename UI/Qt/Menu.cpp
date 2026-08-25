@@ -14,8 +14,14 @@
 #include <UI/Qt/Tab.h>
 #include <UI/Qt/WebContentView.h>
 
+#if defined(AK_OS_MACOS)
+#    include <UI/MacOS/MenuIcons.h>
+#endif
+
 #include <QAction>
+#include <QIcon>
 #include <QMenu>
+#include <QOperatingSystemVersion>
 #include <QPointer>
 #include <QToolButton>
 #include <QWidget>
@@ -25,11 +31,20 @@ namespace Ladybird {
 static constexpr auto DYNAMIC_HISTORY_MENU_ITEM_PROPERTY = "LadybirdDynamicHistoryMenuItem";
 static constexpr size_t RECENT_HISTORY_MENU_ITEM_LIMIT = 15;
 
+#if defined(AK_OS_MACOS)
+static QIcon create_native_menu_icon(WebView::ActionID, bool engaged = false);
+#else
+QAction* execute_popup_menu(QMenu& menu, QPoint const& global_position)
+{
+    return menu.exec(global_position);
+}
+#endif
+
 class ActionObserver final : public WebView::Action::Observer {
 public:
-    static NonnullOwnPtr<ActionObserver> create(WebView::Action& action, QAction& qaction, IncludeActionIcon include_action_icon)
+    static NonnullOwnPtr<ActionObserver> create(WebView::Action& action, QAction& qaction, ActionIconMode action_icon_mode)
     {
-        return adopt_own(*new ActionObserver(action, qaction, include_action_icon));
+        return adopt_own(*new ActionObserver(action, qaction, action_icon_mode));
     }
 
     virtual void on_text_changed(WebView::Action& action) override
@@ -64,7 +79,7 @@ public:
 
     virtual void on_engaged_state_changed(WebView::Action& action) override
     {
-        if (m_include_action_icon == IncludeActionIcon::No)
+        if (m_action_icon_mode == ActionIconMode::None)
             return;
 
         if (!m_action)
@@ -72,7 +87,11 @@ public:
 
         switch (action.id()) {
         case WebView::ActionID::ToggleVerticalTabsExpanded:
-            if (auto* parent = as_if<QWidget>(m_action->parent())) {
+            if (m_action_icon_mode == ActionIconMode::Chrome) {
+                auto* parent = as_if<QWidget>(m_action->parent());
+                if (!parent)
+                    break;
+
                 auto const& tab_settings = WebView::Application::settings().tab_settings();
                 auto icon = tab_settings.vertical_tabs_position == WebView::VerticalTabsPosition::Right
                     ? (action.engaged() ? ChromeIcon::VerticalTabBarCollapseRight : ChromeIcon::VerticalTabBarExpandRight)
@@ -83,10 +102,19 @@ public:
 
         case WebView::ActionID::ToggleBookmark:
         case WebView::ActionID::ToggleBookmarkViaToolbar:
-            if (auto* parent = as_if<QWidget>(m_action->parent())) {
+            if (m_action_icon_mode == ActionIconMode::Chrome) {
+                auto* parent = as_if<QWidget>(m_action->parent());
+                if (!parent)
+                    break;
+
                 auto icon = action.engaged() ? ChromeIcon::StarFilled : ChromeIcon::Star;
                 m_action->setIcon(create_chrome_icon(icon, parent->palette()));
             }
+#if defined(AK_OS_MACOS)
+            else if (m_action_icon_mode == ActionIconMode::Menu) {
+                m_action->setIcon(create_native_menu_icon(action.id(), action.engaged()));
+            }
+#endif
             break;
 
         default:
@@ -101,9 +129,9 @@ public:
     }
 
 private:
-    ActionObserver(WebView::Action& action, QAction& qaction, IncludeActionIcon include_action_icon)
+    ActionObserver(WebView::Action& action, QAction& qaction, ActionIconMode action_icon_mode)
         : m_action(&qaction)
-        , m_include_action_icon(include_action_icon)
+        , m_action_icon_mode(action_icon_mode)
     {
         QObject::connect(m_action, &QAction::triggered, [weak_action = action.make_weak_ptr()](bool checked) {
             if (auto action = weak_action.strong_ref()) {
@@ -124,7 +152,7 @@ private:
     }
 
     QPointer<QAction> m_action;
-    IncludeActionIcon m_include_action_icon { IncludeActionIcon::Yes };
+    ActionIconMode m_action_icon_mode { ActionIconMode::Chrome };
 };
 
 class MenuObserver final : public WebView::Menu::Observer {
@@ -156,28 +184,53 @@ static void add_properties(QObject& object, T& menu_or_action)
         object.setProperty(key.to_byte_string().characters(), qstring_from_ak_string(value));
 }
 
-static void initialize_native_control(WebView::Action& action, QAction& qaction, QPalette const& palette, IncludeActionIcon include_action_icon)
+#if defined(AK_OS_MACOS)
+static QIcon create_native_menu_icon(WebView::ActionID action_id, bool engaged)
+{
+    auto icon_name = MacOS::menu_icon_name_for_action(action_id, engaged);
+    if (!icon_name.is_empty())
+        return QIcon::fromTheme(qstring_from_ak_string(icon_name));
+    return {};
+}
+
+void initialize_native_menu_action(QAction& action, WebView::ActionID action_id, bool engaged)
+{
+    action.setIcon(create_native_menu_icon(action_id, engaged));
+    action.setShortcutVisibleInContextMenu(true);
+
+    // macOS added icons to native menus in macOS 26. Explicitly set this because Qt versions
+    // predating macOS 26 otherwise retain the old platform default of hiding menu icons.
+    action.setIconVisibleInMenu(QOperatingSystemVersion::current().majorVersion() >= 26);
+}
+#endif
+
+static void initialize_native_control(WebView::Action& action, QAction& qaction, QPalette const& palette, ActionIconMode action_icon_mode)
 {
     static constexpr int const MENU_ICON_SIZE = 16;
 
+#if defined(AK_OS_MACOS)
+    if (action_icon_mode == ActionIconMode::Menu)
+        initialize_native_menu_action(qaction, action.id(), action.engaged());
+#endif
+
     switch (action.id()) {
     case WebView::ActionID::NavigateBack:
-        if (include_action_icon == IncludeActionIcon::Yes)
+        if (action_icon_mode == ActionIconMode::Chrome)
             qaction.setIcon(create_chrome_icon(ChromeIcon::Back, palette));
         qaction.setShortcuts(QKeySequence::keyBindings(QKeySequence::StandardKey::Back));
         break;
     case WebView::ActionID::NavigateForward:
-        if (include_action_icon == IncludeActionIcon::Yes)
+        if (action_icon_mode == ActionIconMode::Chrome)
             qaction.setIcon(create_chrome_icon(ChromeIcon::Forward, palette));
         qaction.setShortcuts(QKeySequence::keyBindings(QKeySequence::StandardKey::Forward));
         break;
     case WebView::ActionID::Reload:
-        if (include_action_icon == IncludeActionIcon::Yes)
+        if (action_icon_mode == ActionIconMode::Chrome)
             qaction.setIcon(create_chrome_icon(ChromeIcon::Reload, palette));
         qaction.setShortcuts({ QKeySequence(Qt::CTRL | Qt::Key_R), QKeySequence(Qt::Key_F5) });
         break;
     case WebView::ActionID::ViewDownloads:
-        if (include_action_icon == IncludeActionIcon::Yes)
+        if (action_icon_mode == ActionIconMode::Chrome)
             qaction.setIcon(create_chrome_icon(ChromeIcon::Download, palette));
         qaction.setShortcut(QKeySequence(Qt::CTRL | Qt::Key_J));
         break;
@@ -202,12 +255,12 @@ static void initialize_native_control(WebView::Action& action, QAction& qaction,
         break;
 
     case WebView::ActionID::ToggleBookmark:
-        if (include_action_icon == IncludeActionIcon::Yes)
+        if (action_icon_mode == ActionIconMode::Chrome)
             qaction.setIcon(create_chrome_icon(action.engaged() ? ChromeIcon::StarFilled : ChromeIcon::Star, palette));
         qaction.setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
         break;
     case WebView::ActionID::ToggleBookmarkViaToolbar:
-        if (include_action_icon == IncludeActionIcon::Yes)
+        if (action_icon_mode == ActionIconMode::Chrome)
             qaction.setIcon(create_chrome_icon(action.engaged() ? ChromeIcon::StarFilled : ChromeIcon::Star, palette));
         break;
     case WebView::ActionID::AddBookmarkAllTabs:
@@ -219,6 +272,10 @@ static void initialize_native_control(WebView::Action& action, QAction& qaction,
     case WebView::ActionID::BookmarkItem:
         if (auto icon = action.png_icon(); icon.has_value())
             qaction.setIcon(icon_from_png(icon->bytes(), MENU_ICON_SIZE));
+#if defined(AK_OS_MACOS)
+        else if (action_icon_mode == ActionIconMode::Menu)
+            qaction.setIcon(create_native_menu_icon(action.id(), action.engaged()));
+#endif
         else
             qaction.setIcon(create_chrome_icon(ChromeIcon::Globe, palette));
         break;
@@ -282,7 +339,7 @@ static void initialize_native_control(WebView::Action& action, QAction& qaction,
     if (action.is_checkable())
         qaction.setCheckable(true);
 
-    action.add_observer(ActionObserver::create(action, qaction, include_action_icon));
+    action.add_observer(ActionObserver::create(action, qaction, action_icon_mode));
     add_properties(qaction, action);
 }
 
@@ -294,15 +351,21 @@ static void add_items_to_menu(QMenu& qmenu, QWidget& parent, WebView::Menu& menu
     for (auto& menu_item : menu.items()) {
         menu_item.visit(
             [&](NonnullRefPtr<WebView::Action>& action) {
-                auto* qaction = create_application_action(parent, action, IncludeActionIcon::No);
+                auto* qaction = create_application_action(parent, action, ActionIconMode::Menu);
                 qmenu.addAction(qaction);
             },
             [&](NonnullRefPtr<WebView::Menu> const& submenu) {
                 auto* qsubmenu = new QMenu(qstring_from_ak_string(submenu->title()), &qmenu);
                 add_items_to_menu(*qsubmenu, parent, submenu);
 
-                if (submenu->render_group_icon())
+                if (submenu->render_group_icon()) {
+#if defined(AK_OS_MACOS)
+                    qsubmenu->setIcon(QIcon::fromTheme(qstring_from_ak_string(MacOS::folder_menu_icon_name)));
+                    qsubmenu->menuAction()->setIconVisibleInMenu(QOperatingSystemVersion::current().majorVersion() >= 26);
+#else
                     qsubmenu->setIcon(create_chrome_icon(ChromeIcon::Folder, parent.palette()));
+#endif
+                }
 
                 add_properties(*qsubmenu, *submenu);
                 qmenu.addMenu(qsubmenu);
@@ -441,16 +504,16 @@ QMenu* create_context_menu(QWidget& parent, WebContentView& view, WebView::Menu&
 
     menu.on_activation = [view = QPointer { &view }, application_menu = QPointer { application_menu }](Gfx::IntPoint position) {
         if (view && application_menu)
-            application_menu->exec(view->map_point_to_global_position(position));
+            execute_popup_menu(*application_menu, view->map_point_to_global_position(position));
     };
 
     return application_menu;
 }
 
-QAction* create_application_action(QWidget& parent, WebView::Action& action, IncludeActionIcon include_action_icon)
+QAction* create_application_action(QWidget& parent, WebView::Action& action, ActionIconMode action_icon_mode)
 {
     auto* qaction = new QAction(&parent);
-    initialize_native_control(action, *qaction, parent.palette(), include_action_icon);
+    initialize_native_control(action, *qaction, parent.palette(), action_icon_mode);
     return qaction;
 }
 

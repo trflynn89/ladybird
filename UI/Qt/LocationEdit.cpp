@@ -13,6 +13,7 @@
 #include <UI/Qt/ChromeStyle.h>
 #include <UI/Qt/Icon.h>
 #include <UI/Qt/LocationEdit.h>
+#include <UI/Qt/Menu.h>
 #include <UI/Qt/StringUtils.h>
 
 #include <QAction>
@@ -332,7 +333,7 @@ void LocationEdit::contextMenuEvent(QContextMenuEvent* event)
     if (!added_paste_and_go_action)
         menu->addAction(paste_and_go_action);
 
-    menu->exec(event->globalPos());
+    execute_popup_menu(*menu, event->globalPos());
     delete menu;
 }
 

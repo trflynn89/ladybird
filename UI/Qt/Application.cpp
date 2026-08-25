@@ -176,52 +176,52 @@ public:
 
         auto* file_menu = m_application_menu_bar->addMenu("&File");
 
-        auto* new_tab_action = add_application_menu_action(*file_menu, "New &Tab", { QKeySequence(Qt::CTRL | Qt::Key_T) });
+        auto* new_tab_action = add_application_menu_action(*file_menu, "New &Tab", { QKeySequence(Qt::CTRL | Qt::Key_T) }, WebView::ActionID::NewTab);
         QObject::connect(new_tab_action, &QAction::triggered, this, [] {
             Application::the().open_new_tab();
         });
 
-        auto* new_window_action = add_application_menu_action(*file_menu, "New &Window", QKeySequence::keyBindings(QKeySequence::StandardKey::New));
+        auto* new_window_action = add_application_menu_action(*file_menu, "New &Window", QKeySequence::keyBindings(QKeySequence::StandardKey::New), WebView::ActionID::NewWindow);
         QObject::connect(new_window_action, &QAction::triggered, this, [] {
             Application::the().open_new_window(WebView::IsPrivate::No);
         });
 
-        auto* new_private_window_action = add_application_menu_action(*file_menu, "New Pri&vate Window", { QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N) });
+        auto* new_private_window_action = add_application_menu_action(*file_menu, "New Pri&vate Window", { QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N) }, WebView::ActionID::NewPrivateWindow);
         QObject::connect(new_private_window_action, &QAction::triggered, this, [] {
             Application::the().open_new_window(WebView::IsPrivate::Yes);
         });
 
-        m_reopen_recently_closed_tab_action = add_application_menu_action(*file_menu, {}, { QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T) });
+        m_reopen_recently_closed_tab_action = add_application_menu_action(*file_menu, {}, { QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T) }, WebView::ActionID::ReopenRecentlyClosedTab);
         QObject::connect(m_reopen_recently_closed_tab_action, &QAction::triggered, this, [] {
             Application::the().reopen_recently_closed_tab();
         });
 
-        auto* open_file_action = add_application_menu_action(*file_menu, "&Open File...", QKeySequence::keyBindings(QKeySequence::StandardKey::Open));
+        auto* open_file_action = add_application_menu_action(*file_menu, "&Open File...", QKeySequence::keyBindings(QKeySequence::StandardKey::Open), WebView::ActionID::OpenFile);
         QObject::connect(open_file_action, &QAction::triggered, this, [] {
             Application::the().open_file();
         });
 
-        file_menu->addAction(create_application_action(*file_menu, application.open_downloads_page_action(), IncludeActionIcon::No));
+        file_menu->addAction(create_application_action(*file_menu, application.open_downloads_page_action(), ActionIconMode::Menu));
 
-        auto* open_location_action = add_application_menu_action(*file_menu, "Open &Location", { QKeySequence("Ctrl+L"), QKeySequence("Alt+D") });
+        auto* open_location_action = add_application_menu_action(*file_menu, "Open &Location", { QKeySequence("Ctrl+L"), QKeySequence("Alt+D") }, WebView::ActionID::OpenLocation);
         QObject::connect(open_location_action, &QAction::triggered, this, [] {
             Application::the().focus_location_editor();
         });
 
         file_menu->addSeparator();
 
-        auto* quit_action = add_application_menu_action(*file_menu, "&Quit", QKeySequence::keyBindings(QKeySequence::StandardKey::Quit));
+        auto* quit_action = add_application_menu_action(*file_menu, "&Quit", QKeySequence::keyBindings(QKeySequence::StandardKey::Quit), WebView::ActionID::Quit);
         QObject::connect(quit_action, &QAction::triggered, this, [] {
             Application::the().quit();
         });
 
         auto* edit_menu = m_application_menu_bar->addMenu("&Edit");
-        edit_menu->addAction(create_application_action(*edit_menu, application.cut_selection_action(), IncludeActionIcon::No));
-        edit_menu->addAction(create_application_action(*edit_menu, application.copy_selection_action(), IncludeActionIcon::No));
-        edit_menu->addAction(create_application_action(*edit_menu, application.paste_action(), IncludeActionIcon::No));
-        edit_menu->addAction(create_application_action(*edit_menu, application.select_all_action(), IncludeActionIcon::No));
+        edit_menu->addAction(create_application_action(*edit_menu, application.cut_selection_action(), ActionIconMode::Menu));
+        edit_menu->addAction(create_application_action(*edit_menu, application.copy_selection_action(), ActionIconMode::Menu));
+        edit_menu->addAction(create_application_action(*edit_menu, application.paste_action(), ActionIconMode::Menu));
+        edit_menu->addAction(create_application_action(*edit_menu, application.select_all_action(), ActionIconMode::Menu));
         edit_menu->addSeparator();
-        edit_menu->addAction(create_application_action(*edit_menu, application.open_settings_page_action(), IncludeActionIcon::No));
+        edit_menu->addAction(create_application_action(*edit_menu, application.open_settings_page_action(), ActionIconMode::Menu));
 
         auto* view_menu = m_application_menu_bar->addMenu("&View");
         view_menu->addMenu(create_application_menu(*view_menu, application.color_scheme_menu()));
@@ -237,7 +237,7 @@ public:
         m_application_menu_bar->addMenu(m_history_menu);
 
         auto* help_menu = m_application_menu_bar->addMenu("&Help");
-        help_menu->addAction(create_application_action(*help_menu, application.open_about_page_action(), IncludeActionIcon::No));
+        help_menu->addAction(create_application_action(*help_menu, application.open_about_page_action(), ActionIconMode::Menu));
 
         m_inspect_menu = create_application_menu(*m_application_menu_bar, application.inspect_menu());
         m_application_menu_bar->insertMenu(help_menu->menuAction(), m_inspect_menu);
@@ -337,10 +337,11 @@ private:
         }
     }
 
-    QAction* add_application_menu_action(QMenu& menu, QString const& text, QList<QKeySequence> shortcuts)
+    QAction* add_application_menu_action(QMenu& menu, QString const& text, QList<QKeySequence> shortcuts, WebView::ActionID action_id)
     {
         auto* action = new QAction(text, m_application_menu_bar);
         action->setShortcuts(shortcuts);
+        initialize_native_menu_action(*action, action_id);
         menu.addAction(action);
         return action;
     }

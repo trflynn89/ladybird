@@ -300,22 +300,22 @@ BrowserWindow::BrowserWindow(Vector<URL::URL> const& initial_urls, IsPopupWindow
     m_hamburger_menu->addAction(open_file_action);
     file_menu->addAction(open_file_action);
 
-    m_hamburger_menu->addAction(create_application_action(*this, application.open_downloads_page_action(), IncludeActionIcon::No));
-    file_menu->addAction(create_application_action(*this, application.open_downloads_page_action(), IncludeActionIcon::No));
+    m_hamburger_menu->addAction(create_application_action(*this, application.open_downloads_page_action(), ActionIconMode::Menu));
+    file_menu->addAction(create_application_action(*this, application.open_downloads_page_action(), ActionIconMode::Menu));
 
     m_hamburger_menu->addSeparator();
 
     auto* edit_menu = m_hamburger_menu->addMenu("&Edit");
     menuBar()->addMenu(edit_menu);
 
-    edit_menu->addAction(create_application_action(*this, application.undo_action(), IncludeActionIcon::No));
-    edit_menu->addAction(create_application_action(*this, application.redo_action(), IncludeActionIcon::No));
+    edit_menu->addAction(create_application_action(*this, application.undo_action(), ActionIconMode::Menu));
+    edit_menu->addAction(create_application_action(*this, application.redo_action(), ActionIconMode::Menu));
     edit_menu->addSeparator();
 
-    edit_menu->addAction(create_application_action(*this, application.cut_selection_action(), IncludeActionIcon::No));
-    edit_menu->addAction(create_application_action(*this, application.copy_selection_action(), IncludeActionIcon::No));
-    edit_menu->addAction(create_application_action(*this, application.paste_action(), IncludeActionIcon::No));
-    edit_menu->addAction(create_application_action(*this, application.select_all_action(), IncludeActionIcon::No));
+    edit_menu->addAction(create_application_action(*this, application.cut_selection_action(), ActionIconMode::Menu));
+    edit_menu->addAction(create_application_action(*this, application.copy_selection_action(), ActionIconMode::Menu));
+    edit_menu->addAction(create_application_action(*this, application.paste_action(), ActionIconMode::Menu));
+    edit_menu->addAction(create_application_action(*this, application.select_all_action(), ActionIconMode::Menu));
     edit_menu->addSeparator();
 
     m_find_in_page_action = new QAction("&Find in Page...", this);
@@ -339,7 +339,7 @@ BrowserWindow::BrowserWindow(Vector<URL::URL> const& initial_urls, IsPopupWindow
     QObject::connect(m_find_in_page_action, &QAction::triggered, this, &BrowserWindow::show_find_in_page);
 
     edit_menu->addSeparator();
-    edit_menu->addAction(create_application_action(*edit_menu, application.open_settings_page_action(), IncludeActionIcon::No));
+    edit_menu->addAction(create_application_action(*edit_menu, application.open_settings_page_action(), ActionIconMode::Menu));
 
     auto* view_menu = m_hamburger_menu->addMenu("&View");
     menuBar()->addMenu(view_menu);
@@ -379,7 +379,7 @@ BrowserWindow::BrowserWindow(Vector<URL::URL> const& initial_urls, IsPopupWindow
     view_menu->addSeparator();
 
     if (show_menubar_option_available())
-        view_menu->addAction(create_application_action(*view_menu, application.toggle_menu_bar_action(), IncludeActionIcon::No));
+        view_menu->addAction(create_application_action(*view_menu, application.toggle_menu_bar_action(), ActionIconMode::Menu));
 
     m_bookmarks_menu = Application::the().qt_bookmarks_menu();
     if (!m_bookmarks_menu)
@@ -405,7 +405,7 @@ BrowserWindow::BrowserWindow(Vector<URL::URL> const& initial_urls, IsPopupWindow
     auto* help_menu = m_hamburger_menu->addMenu("&Help");
     menuBar()->addMenu(help_menu);
 
-    help_menu->addAction(create_application_action(*help_menu, application.open_about_page_action(), IncludeActionIcon::No));
+    help_menu->addAction(create_application_action(*help_menu, application.open_about_page_action(), ActionIconMode::Menu));
 
     m_hamburger_menu->addSeparator();
     file_menu->addSeparator();
@@ -415,6 +415,17 @@ BrowserWindow::BrowserWindow(Vector<URL::URL> const& initial_urls, IsPopupWindow
     m_hamburger_menu->addAction(quit_action);
     file_menu->addAction(quit_action);
 #if defined(AK_OS_MACOS)
+    initialize_native_menu_action(*m_new_tab_action, WebView::ActionID::NewTab);
+    initialize_native_menu_action(*m_new_window_action, WebView::ActionID::NewWindow);
+    initialize_native_menu_action(*m_new_private_window_action, WebView::ActionID::NewPrivateWindow);
+    initialize_native_menu_action(*m_reopen_recently_closed_tab_action, WebView::ActionID::ReopenRecentlyClosedTab);
+    initialize_native_menu_action(*close_current_tab_action, WebView::ActionID::CloseCurrentTab);
+    initialize_native_menu_action(*open_file_action, WebView::ActionID::OpenFile);
+    initialize_native_menu_action(*m_find_in_page_action, WebView::ActionID::FindInPage);
+    initialize_native_menu_action(*open_next_tab_action, WebView::ActionID::OpenNextTab);
+    initialize_native_menu_action(*open_previous_tab_action, WebView::ActionID::OpenPreviousTab);
+    initialize_native_menu_action(*quit_action, WebView::ActionID::Quit);
+
     QObject::connect(quit_action, &QAction::triggered, this, [] {
         Application::the().quit();
     });

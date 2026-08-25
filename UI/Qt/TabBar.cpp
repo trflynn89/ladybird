@@ -805,7 +805,7 @@ void TabBar::contextMenuEvent(QContextMenuEvent* event)
 
     m_pressed_tab = nullptr;
     if (auto* tab = m_tab_widget->tab(tab_index))
-        tab->context_menu()->exec(event->globalPos());
+        execute_popup_menu(*tab->context_menu(), event->globalPos());
 }
 
 void TabBar::dragEnterEvent(QDragEnterEvent* event)

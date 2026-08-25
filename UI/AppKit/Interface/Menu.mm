@@ -7,6 +7,7 @@
 #import <Interface/Event.h>
 #import <Interface/LadybirdWebView.h>
 #import <Interface/Menu.h>
+#include <UI/MacOS/MenuIcons.h>
 #import <Utilities/Conversions.h>
 #import <objc/runtime.h>
 
@@ -171,6 +172,12 @@ NSString* get_control_property(id control, NSString* key)
     return nil;
 }
 
+static void set_native_action_icon(id control, WebView::Action const& action)
+{
+    if (auto icon_name = MacOS::menu_icon_name_for_action(action.id(), action.engaged()); !icon_name.is_empty())
+        set_control_image(control, string_to_ns_string(icon_name));
+}
+
 class ActionObserver final : public WebView::Action::Observer {
 public:
     static NonnullOwnPtr<ActionObserver> create(WebView::Action& action, id control)
@@ -209,7 +216,7 @@ public:
         switch (action.id()) {
         case WebView::ActionID::ToggleBookmark:
         case WebView::ActionID::ToggleBookmarkViaToolbar:
-            set_control_image(m_control, action.engaged() ? @"star.fill" : @"star");
+            set_native_action_icon(m_control, action);
             break;
         default:
             break;
@@ -256,177 +263,82 @@ static void initialize_native_icon(WebView::Action& action, id control)
 {
     static constexpr CGFloat const MENU_ICON_SIZE = 16;
 
+    set_native_action_icon(control, action);
+
     switch (action.id()) {
     case WebView::ActionID::NavigateBack:
-        set_control_image(control, @"chevron.left");
         [control setKeyEquivalent:@"["];
         break;
     case WebView::ActionID::NavigateForward:
-        set_control_image(control, @"chevron.right");
         [control setKeyEquivalent:@"]"];
         break;
     case WebView::ActionID::Reload:
-        set_control_image(control, @"arrow.clockwise");
         [control setKeyEquivalent:@"r"];
         break;
     case WebView::ActionID::ViewDownloads:
-        set_control_image(control, @"arrow.down.circle");
         [control setKeyEquivalent:@"j"];
         break;
     case WebView::ActionID::ViewHistory:
-        set_control_image(control, @"clock");
         [control setKeyEquivalent:@"y"];
         break;
     case WebView::ActionID::ClearBrowsingData:
-        set_control_image(control, @"trash");
         [control setKeyEquivalent:@"\b"];
         [control setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
         break;
 
     case WebView::ActionID::Undo:
-        set_control_image(control, @"arrow.uturn.backward");
         [control setKeyEquivalent:@"z"];
         break;
     case WebView::ActionID::Redo:
-        set_control_image(control, @"arrow.uturn.forward");
         [control setKeyEquivalent:@"z"];
         [control setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
         break;
     case WebView::ActionID::CopySelection:
-        set_control_image(control, @"document.on.document");
         [control setKeyEquivalent:@"c"];
         break;
     case WebView::ActionID::CutSelection:
-        set_control_image(control, @"scissors");
         [control setKeyEquivalent:@"x"];
         break;
     case WebView::ActionID::Paste:
-        set_control_image(control, @"document.on.clipboard");
         [control setKeyEquivalent:@"v"];
         break;
     case WebView::ActionID::SelectAll:
-        set_control_image(control, @"character.textbox");
         [control setKeyEquivalent:@"a"];
         break;
 
-    case WebView::ActionID::LookUpSelectedText:
-    case WebView::ActionID::SearchSelectedText:
-        set_control_image(control, @"magnifyingglass");
-        break;
-
-    case WebView::ActionID::ManageBookmarks:
-        set_control_image(control, @"bookmark");
-        break;
     case WebView::ActionID::ToggleBookmark:
         [control setKeyEquivalent:@"d"];
         break;
     case WebView::ActionID::AddBookmarkAllTabs:
-        set_control_image(control, @"square.badge.plus");
         [control setKeyEquivalent:@"D"];
         break;
     case WebView::ActionID::ToggleBookmarksBar:
-        set_control_image(control, @"line.horizontal.star.fill.line.horizontal");
         [control setKeyEquivalent:@"B"];
         break;
     case WebView::ActionID::BookmarkItem:
         if (auto icon = action.png_icon(); icon.has_value())
             [control setImage:Ladybird::image_from_png(icon->bytes(), NSMakeSize(MENU_ICON_SIZE, MENU_ICON_SIZE))];
-        else
-            set_control_image(control, @"globe");
-        break;
-
-    case WebView::ActionID::OpenAboutPage:
-        set_control_image(control, @"info.circle");
         break;
     case WebView::ActionID::OpenProcessesPage:
-        set_control_image(control, @"gearshape.2");
         [control setKeyEquivalent:@"M"];
         break;
     case WebView::ActionID::OpenSettingsPage:
-        set_control_image(control, @"gearshape");
         [control setKeyEquivalent:@","];
         break;
     case WebView::ActionID::ToggleDevTools:
-        set_control_image(control, @"chevron.left.chevron.right");
         [control setKeyEquivalent:@"I"];
         break;
     case WebView::ActionID::ViewSource:
-        set_control_image(control, @"text.document");
         [control setKeyEquivalent:@"u"];
         break;
 
-    case WebView::ActionID::TakeVisibleScreenshot:
-    case WebView::ActionID::TakeFullScreenshot:
-        set_control_image(control, @"photo");
-        break;
-
-    case WebView::ActionID::OpenInNewTab:
-        set_control_image(control, @"plus.square.on.square");
-        break;
-    case WebView::ActionID::OpenInNewWindow:
-        set_control_image(control, @"macwindow.badge.plus");
-        break;
-    case WebView::ActionID::OpenInNewPrivateWindow:
-        set_control_image(control, @"eyeglasses");
-        break;
-    case WebView::ActionID::CopyURL:
-        set_control_image(control, @"document.on.document");
-        break;
-
-    case WebView::ActionID::OpenImage:
-        set_control_image(control, @"photo");
-        break;
-    case WebView::ActionID::SaveImage:
-        set_control_image(control, @"square.and.arrow.down");
-        break;
-    case WebView::ActionID::CopyImage:
-        set_control_image(control, @"document.on.document");
-        break;
-
-    case WebView::ActionID::OpenAudio:
-        set_control_image(control, @"speaker.wave.1");
-        break;
-    case WebView::ActionID::OpenVideo:
-        set_control_image(control, @"video");
-        break;
-    case WebView::ActionID::PlayMedia:
-        set_control_image(control, @"play");
-        break;
-    case WebView::ActionID::PauseMedia:
-        set_control_image(control, @"pause");
-        break;
-    case WebView::ActionID::MuteMedia:
-        set_control_image(control, @"speaker.slash");
-        break;
-    case WebView::ActionID::UnmuteMedia:
-        set_control_image(control, @"speaker.wave.2");
-        break;
-    case WebView::ActionID::ShowControls:
-        set_control_image(control, @"eye");
-        break;
-    case WebView::ActionID::HideControls:
-        set_control_image(control, @"eye.slash");
-        break;
-    case WebView::ActionID::ToggleMediaLoopState:
-        set_control_image(control, @"arrow.clockwise");
-        break;
-    case WebView::ActionID::EnterFullscreen:
-        set_control_image(control, @"arrow.up.left.and.arrow.down.right");
-        break;
-    case WebView::ActionID::ExitFullscreen:
-        set_control_image(control, @"arrow.down.right.and.arrow.up.left");
-        break;
-
     case WebView::ActionID::ZoomIn:
-        set_control_image(control, @"plus.magnifyingglass");
         [control setKeyEquivalent:@"+"];
         break;
     case WebView::ActionID::ZoomOut:
-        set_control_image(control, @"minus.magnifyingglass");
         [control setKeyEquivalent:@"-"];
         break;
     case WebView::ActionID::ResetZoom:
-        set_control_image(control, @"1.magnifyingglass");
         [control setKeyEquivalent:@"0"];
         break;
 
@@ -534,7 +446,7 @@ NSMenuItem* create_application_menu_item(WebView::Menu& menu)
     initialize_native_menu(menu, item);
 
     if (menu.render_group_icon())
-        set_control_image(item, @"folder");
+        set_control_image(item, string_to_ns_string(MacOS::folder_menu_icon_name));
 
     return item;
 }
