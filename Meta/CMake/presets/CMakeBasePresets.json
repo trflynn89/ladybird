@@ -13,7 +13,6 @@
       },
       "environment": {
         "LADYBIRD_SOURCE_DIR": "${fileDir}/../../..",
-        "VCPKG_ROOT": "$env{LADYBIRD_SOURCE_DIR}/Build/vcpkg",
         "VCPKG_BINARY_SOURCES": "clear;files,$env{LADYBIRD_SOURCE_DIR}/Build/caches/vcpkg-binary-cache,readwrite;$penv{VCPKG_BINARY_SOURCES}",
         "X_VCPKG_ASSET_SOURCES": "clear;x-azurl,https://vcpkg-cache.app.ladybird.org/ladybird/source-assets/,$penv{VCPKG_CACHE_SAS},read$penv{VCPKG_CACHE_MODE}"
       },
@@ -32,6 +31,9 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "VCPKG_OVERLAY_TRIPLETS": "$env{LADYBIRD_SOURCE_DIR}/Meta/CMake/vcpkg/release-triplets"
+      },
+      "environment": {
+        "VCPKG_ROOT": "$env{LADYBIRD_SOURCE_DIR}/Build/vcpkg-release"
       }
     },
     {
@@ -43,6 +45,9 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "VCPKG_OVERLAY_TRIPLETS": "$env{LADYBIRD_SOURCE_DIR}/Meta/CMake/vcpkg/debug-triplets"
+      },
+      "environment": {
+        "VCPKG_ROOT": "$env{LADYBIRD_SOURCE_DIR}/Build/vcpkg-debug"
       }
     },
     {
@@ -56,6 +61,9 @@
         "ENABLE_UNDEFINED_SANITIZER": "ON",
         "ENABLE_ADDRESS_SANITIZER": "ON",
         "VCPKG_OVERLAY_TRIPLETS": "$env{LADYBIRD_SOURCE_DIR}/Meta/CMake/vcpkg/sanitizer-triplets"
+      },
+      "environment": {
+        "VCPKG_ROOT": "$env{LADYBIRD_SOURCE_DIR}/Build/vcpkg-sanitizers"
       }
     },
     {
@@ -68,6 +76,9 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "VCPKG_OVERLAY_TRIPLETS": "$env{LADYBIRD_SOURCE_DIR}/Meta/CMake/vcpkg/debug-triplets",
         "ENABLE_ALL_THE_DEBUG_MACROS": "ON"
+      },
+      "environment": {
+        "VCPKG_ROOT": "$env{LADYBIRD_SOURCE_DIR}/Build/vcpkg-debug"
       }
     },
     {
@@ -80,6 +91,9 @@
         "BUILD_SHARED_LIBS": "OFF",
         "CMAKE_BUILD_TYPE": "Release",
         "VCPKG_OVERLAY_TRIPLETS": "$env{LADYBIRD_SOURCE_DIR}/Meta/CMake/vcpkg/distribution-triplets"
+      },
+      "environment": {
+        "VCPKG_ROOT": "$env{LADYBIRD_SOURCE_DIR}/Build/vcpkg-distribution"
       }
     },
     {
@@ -94,6 +108,9 @@
         "VCPKG_OVERLAY_TRIPLETS": "$env{LADYBIRD_SOURCE_DIR}/Meta/CMake/vcpkg/distribution-triplets",
         "ENABLE_FUZZERS_LIBFUZZER": "ON",
         "ENABLE_ADDRESS_SANITIZER": "ON"
+      },
+      "environment": {
+        "VCPKG_ROOT": "$env{LADYBIRD_SOURCE_DIR}/Build/vcpkg-release"
       }
     }
   ],

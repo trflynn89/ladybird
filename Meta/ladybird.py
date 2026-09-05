@@ -17,6 +17,8 @@ from typing import Optional
 
 sys.path.append(str(Path(__file__).resolve().parent))
 
+from Utils.build_presets import BUILD_DIRECTORIES
+from Utils.build_presets import VCPKG_DIRECTORIES
 from Utils.build_vcpkg import build_vcpkg
 from Utils.find_compiler import pick_host_compiler
 from Utils.host_platform import GUIFramework
@@ -179,8 +181,8 @@ def main():
         build_main(build_dir, args.jobs, args.target, args.args)
         build_main(build_dir, args.jobs, "install", args.args)
     elif args.command == "vcpkg":
-        configure_build_env(platform, args.preset, args.jobs)
-        build_vcpkg()
+        _, _, vcpkg_preset_dir = configure_build_env(platform, args.preset, args.jobs)
+        build_vcpkg(vcpkg_preset_dir)
     elif args.command == "clean":
         clean_main(platform, args.preset)
     elif args.command == "rebuild":
@@ -196,8 +198,8 @@ def main():
 def configure_main(
     platform: Platform, preset: str, cc: str, cxx: str, jobs: Optional[str], gui: Optional[GUIFramework]
 ) -> Path:
-    ladybird_source_dir, build_preset_dir = configure_build_env(platform, preset, jobs)
-    build_vcpkg()
+    ladybird_source_dir, build_preset_dir, vcpkg_preset_dir = configure_build_env(platform, preset, jobs)
+    build_vcpkg(vcpkg_preset_dir)
 
     if build_preset_dir.joinpath("build.ninja").exists() or build_preset_dir.joinpath("ladybird.sln").exists():
         if not gui or gui == gui_for_build_dir(build_preset_dir):
@@ -283,26 +285,22 @@ def configure_skia_jemalloc() -> list[str]:
     return cmake_args
 
 
-def configure_build_env(platform: Platform, preset: str, jobs: Optional[str] = None) -> tuple[Path, Path]:
+def configure_build_env(platform: Platform, preset: str, jobs: Optional[str] = None) -> tuple[Path, Path, Path]:
     ladybird_source_dir = ensure_ladybird_source_dir()
     build_root_dir = ladybird_source_dir / "Build"
 
-    known_presets = {
-        "Debug": build_root_dir / "debug",
-        "All_Debug": build_root_dir / "alldebug",
-        "Distribution": build_root_dir / "distribution",
-        "Release": build_root_dir / "release",
-        "Sanitizer": build_root_dir / "sanitizers",
-    }
+    build_preset_dir = BUILD_DIRECTORIES.get(preset, None)
+    vcpkg_preset_dir = VCPKG_DIRECTORIES.get(preset, None)
 
-    build_preset_dir = known_presets.get(preset, None)
-    if not build_preset_dir:
+    if not build_preset_dir or not vcpkg_preset_dir:
         print(f'Unknown build preset "{preset}"', file=sys.stderr)
         sys.exit(1)
 
-    vcpkg_root = str(build_root_dir / "vcpkg")
-    os.environ["PATH"] += os.pathsep + vcpkg_root
-    os.environ["VCPKG_ROOT"] = vcpkg_root
+    build_preset_dir = build_root_dir / build_preset_dir
+    vcpkg_preset_dir = build_root_dir / vcpkg_preset_dir
+
+    os.environ["PATH"] += os.pathsep + str(vcpkg_preset_dir)
+    os.environ["VCPKG_ROOT"] = str(vcpkg_preset_dir)
 
     if jobs:
         os.environ["VCPKG_MAX_CONCURRENCY"] = jobs
@@ -316,7 +314,7 @@ def configure_build_env(platform: Platform, preset: str, jobs: Optional[str] = N
         # Ninja binaries but still downloads, builds and uses its own pinned gn, meson and pkg-config.
         os.environ["VCPKG_FORCE_SYSTEM_BINARIES"] = "1"
 
-    return ladybird_source_dir, build_preset_dir
+    return ladybird_source_dir, build_preset_dir, vcpkg_preset_dir
 
 
 def validate_cmake_version():
@@ -452,7 +450,7 @@ def profile_main(host_system: HostSystem, build_dir: Path, target: str, args: li
 
 
 def clean_main(platform: Platform, preset: str):
-    ladybird_source_dir, build_preset_dir = configure_build_env(platform, preset)
+    ladybird_source_dir, build_preset_dir, _ = configure_build_env(platform, preset)
     shutil.rmtree(str(build_preset_dir), ignore_errors=True)
 
     user_vars_cmake_module = ladybird_source_dir.joinpath("Meta", "CMake", "vcpkg", "user-variables.cmake")

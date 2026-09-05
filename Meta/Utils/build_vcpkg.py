@@ -5,6 +5,7 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
+import argparse
 import json
 import pathlib
 import subprocess
@@ -16,11 +17,12 @@ LADYBIRD_SOURCE_DIR = META_SOURCE_DIR.parent
 
 sys.path.append(str(META_SOURCE_DIR))
 
+from Utils.build_presets import VCPKG_DIRECTORIES  # noqa: E402
 from Utils.host_platform import HostSystem  # noqa: E402
 from Utils.host_platform import Platform  # noqa: E402
 
 
-def build_vcpkg():
+def build_vcpkg(vcpkg_preset_dir: pathlib.Path):
     platform = Platform()
 
     with open(LADYBIRD_SOURCE_DIR / "vcpkg.json", "r") as vcpkg_json_file:
@@ -31,13 +33,12 @@ def build_vcpkg():
 
     build_dir = LADYBIRD_SOURCE_DIR / "Build"
     build_dir.mkdir(parents=True, exist_ok=True)
-    vcpkg_checkout = build_dir / "vcpkg"
 
-    if not vcpkg_checkout.is_dir():
-        subprocess.check_call(args=["git", "clone", git_repo], cwd=build_dir)
+    if not vcpkg_preset_dir.is_dir():
+        subprocess.check_call(args=["git", "clone", git_repo, vcpkg_preset_dir], cwd=build_dir)
     else:
         bootstrapped_vcpkg_version = (
-            subprocess.check_output(["git", "-C", vcpkg_checkout, "rev-parse", "HEAD"]).strip().decode()
+            subprocess.check_output(["git", "-C", vcpkg_preset_dir, "rev-parse", "HEAD"]).strip().decode()
         )
 
         if bootstrapped_vcpkg_version == git_rev:
@@ -45,11 +46,11 @@ def build_vcpkg():
 
     print(f"Building vcpkg@{git_rev}")
 
-    subprocess.check_call(args=["git", "fetch", "origin"], cwd=vcpkg_checkout)
-    subprocess.check_call(args=["git", "checkout", git_rev], cwd=vcpkg_checkout)
+    subprocess.check_call(args=["git", "fetch", "origin"], cwd=vcpkg_preset_dir)
+    subprocess.check_call(args=["git", "checkout", git_rev], cwd=vcpkg_preset_dir)
 
     bootstrap_script = "bootstrap-vcpkg.bat" if platform.host_system == HostSystem.Windows else "bootstrap-vcpkg.sh"
-    arguments = [vcpkg_checkout / bootstrap_script, "-disableMetrics"]
+    arguments = [vcpkg_preset_dir / bootstrap_script, "-disableMetrics"]
 
     if platform.libc_name() == "musl":
         arguments.append("-musl")
@@ -57,7 +58,7 @@ def build_vcpkg():
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):
         try:
-            subprocess.check_call(args=arguments, cwd=vcpkg_checkout)
+            subprocess.check_call(args=arguments, cwd=vcpkg_preset_dir)
             return
         except subprocess.CalledProcessError:
             if attempt == max_attempts:
@@ -71,7 +72,19 @@ def build_vcpkg():
 
 
 def main():
-    build_vcpkg()
+    parser = argparse.ArgumentParser(description="Ladybird")
+    parser.add_argument("--preset", required=True)
+    args = parser.parse_args()
+
+    vcpkg_preset_dir = VCPKG_DIRECTORIES.get(args.preset, None)
+    if not vcpkg_preset_dir:
+        print(f'Unknown build preset "{args.preset}"', file=sys.stderr)
+        sys.exit(1)
+
+    vcpkg_preset_dir = LADYBIRD_SOURCE_DIR / "Build" / vcpkg_preset_dir
+    build_vcpkg(vcpkg_preset_dir)
+
+    print(vcpkg_preset_dir)
 
 
 if __name__ == "__main__":
