@@ -279,6 +279,8 @@ static void initialize_native_control(WebView::Action& action, QAction& qaction,
         break;
     }
 
+    qaction.setShortcutVisibleInContextMenu(true);
+
     if (action.is_checkable())
         qaction.setCheckable(true);
 
