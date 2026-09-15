@@ -8,7 +8,7 @@
 
 #include <QMenu>
 
-#import <Cocoa/Cocoa.h>
+#import <AppKit/AppKit.h>
 
 namespace Ladybird {
 
@@ -23,6 +23,35 @@ void enable_menu_icons([[maybe_unused]] QMenu& menu)
         }
     }
 #endif
+}
+
+void execute_context_menu(QMenu& menu, QPoint const& global_position)
+{
+    auto* parent = menu.parentWidget();
+    if (!parent) {
+        menu.exec(global_position);
+        return;
+    }
+
+    auto* window = parent->window();
+    auto* native_view = reinterpret_cast<NSView*>(window->winId());
+    if (!native_view) {
+        menu.exec(global_position);
+        return;
+    }
+
+    auto* native_menu = menu.toNSMenu();
+    if (!native_menu) {
+        menu.exec(global_position);
+        return;
+    }
+
+    auto local_position = window->mapFromGlobal(global_position);
+    auto native_position = NSMakePoint(local_position.x(), local_position.y());
+    if (!native_view.isFlipped)
+        native_position.y = NSHeight(native_view.bounds) - native_position.y;
+
+    [native_menu popUpMenuPositioningItem:nil atLocation:native_position inView:native_view];
 }
 
 }

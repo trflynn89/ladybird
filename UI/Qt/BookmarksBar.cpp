@@ -281,14 +281,14 @@ void BookmarksBar::show_context_menu(QPoint position, Optional<WebView::Bookmark
         m_selected_bookmark_menu_target_folder_id = target_folder_id.copy();
 
         if (item->is_bookmark())
-            bookmark_context_menu().exec(position);
+            execute_context_menu(bookmark_context_menu(), position);
         else if (item->is_folder())
-            bookmark_folder_context_menu().exec(position);
+            execute_context_menu(bookmark_folder_context_menu(), position);
     } else {
         m_selected_bookmark_menu_item_id = {};
         m_selected_bookmark_menu_target_folder_id = {};
 
-        bookmarks_bar_context_menu().exec(position);
+        execute_context_menu(bookmarks_bar_context_menu(), position);
     }
 }
 
