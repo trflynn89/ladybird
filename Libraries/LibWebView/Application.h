@@ -300,7 +300,8 @@ public:
     Action& open_downloads_page_action() { return *m_open_downloads_page_action; }
     Action& open_settings_page_action() { return *m_open_settings_page_action; }
 
-    Menu& zoom_menu() { return *m_zoom_menu; }
+    Action& zoom_in_action() { return *m_zoom_in_action; }
+    Action& zoom_out_action() { return *m_zoom_out_action; }
     Action& reset_zoom_action() { return *m_reset_zoom_action; }
 
     Menu& color_scheme_menu() { return *m_color_scheme_menu; }
@@ -595,7 +596,8 @@ private:
     RefPtr<Action> m_open_downloads_page_action;
     RefPtr<Action> m_open_settings_page_action;
 
-    RefPtr<Menu> m_zoom_menu;
+    RefPtr<Action> m_zoom_in_action;
+    RefPtr<Action> m_zoom_out_action;
     RefPtr<Action> m_reset_zoom_action;
 
     RefPtr<Menu> m_color_scheme_menu;
