@@ -35,6 +35,7 @@
 #include <QApplication>
 #include <QCursor>
 #include <QGuiApplication>
+#include <QHBoxLayout>
 #include <QIcon>
 #include <QInputDevice>
 #include <QMenuBar>
@@ -50,6 +51,7 @@
 #include <QVBoxLayout>
 #include <QWheelEvent>
 #include <QWidget>
+#include <QWidgetAction>
 #include <QWindow>
 
 namespace Ladybird {
@@ -380,6 +382,7 @@ void BrowserWindow::initialize_hamburger_menu()
     auto& application = Application::the();
 
     m_hamburger_menu = new QMenu(this);
+    QObject::connect(m_hamburger_menu, &QMenu::aboutToShow, this, &BrowserWindow::update_hamburger_zoom_label);
 
     m_hamburger_menu->addAction(application.new_tab_action());
     m_hamburger_menu->addAction(application.new_window_action());
@@ -392,11 +395,8 @@ void BrowserWindow::initialize_hamburger_menu()
     m_hamburger_menu->addAction(application.open_downloads_action());
     m_hamburger_menu->addSeparator();
 
-    // FIXME: We should create a nice widget for zoom like other browsers.
-    auto* zoom_menu = m_hamburger_menu->addMenu("Zoom");
-    zoom_menu->addAction(application.zoom_in_action());
-    zoom_menu->addAction(application.zoom_out_action());
-    zoom_menu->addAction(application.reset_zoom_action());
+    create_hamburger_zoom_actions();
+    m_hamburger_menu->addSeparator();
 
     m_hamburger_menu->addAction(application.find_in_page_action());
     m_hamburger_menu->addSeparator();
@@ -408,6 +408,53 @@ void BrowserWindow::initialize_hamburger_menu()
 
     m_hamburger_menu->addMenu(application.help_menu());
     m_hamburger_menu->addAction(application.quit_action());
+}
+
+void BrowserWindow::create_hamburger_zoom_actions()
+{
+    auto& application = Application::the();
+
+    auto* container = new QWidget(m_hamburger_menu);
+    container->setObjectName("LadybirdHamburgerZoomActions");
+
+    auto* layout = new QHBoxLayout(container);
+    layout->setContentsMargins(14, 2, 14, 2);
+    layout->setSpacing(0);
+    container->setLayout(layout);
+
+    auto* label = new QLabel("Zoom", container);
+    layout->addWidget(label);
+
+    auto* zoom_out_button = new QPushButton("-", container);
+    QObject::connect(zoom_out_button, &QPushButton::clicked, application.zoom_out_action(), &QAction::trigger);
+    QObject::connect(application.zoom_out_action(), &QAction::triggered, this, &BrowserWindow::update_hamburger_zoom_label);
+    zoom_out_button->setFixedSize(24, 24);
+    zoom_out_button->setFlat(true);
+    layout->addWidget(zoom_out_button);
+
+    m_zoom_level = new QPushButton("100%", container);
+    QObject::connect(m_zoom_level, &QPushButton::clicked, application.reset_zoom_action(), &QAction::trigger);
+    QObject::connect(application.reset_zoom_action(), &QAction::triggered, this, &BrowserWindow::update_hamburger_zoom_label);
+    m_zoom_level->setFixedSize(50, 24);
+    m_zoom_level->setFlat(true);
+    layout->addWidget(m_zoom_level);
+
+    auto* zoom_in_button = new QPushButton("+", container);
+    QObject::connect(zoom_in_button, &QPushButton::clicked, application.zoom_in_action(), &QAction::trigger);
+    QObject::connect(application.zoom_in_action(), &QAction::triggered, this, &BrowserWindow::update_hamburger_zoom_label);
+    zoom_in_button->setFixedSize(24, 24);
+    zoom_in_button->setFlat(true);
+    layout->addWidget(zoom_in_button);
+
+    auto* action = new QWidgetAction(m_hamburger_menu);
+    action->setDefaultWidget(container);
+    m_hamburger_menu->addAction(action);
+}
+
+void BrowserWindow::update_hamburger_zoom_label()
+{
+    auto zoom_level = round_to<int>(m_current_tab->view().zoom_level() * 100);
+    m_zoom_level->setText(qformatted("{}%", zoom_level));
 }
 
 void BrowserWindow::update_tabs_display()
