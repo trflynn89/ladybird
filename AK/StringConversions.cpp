@@ -5,14 +5,13 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <AK/FloatingPoint.h>
 #include <AK/StringConversions.h>
 #include <AK/StringView.h>
 #include <AK/Utf16View.h>
 #include <math.h>
 
 #include <fast_float/fast_float.h>
-#include <fmt/format.h>
+#include <zmij.h>
 
 namespace AK {
 
@@ -160,11 +159,8 @@ DecimalExponentialForm convert_to_decimal_exponential_form(T value)
     ASSERT(!isinf(value));
     ASSERT(!isnan(value));
 
-    FloatExtractor<T> extractor;
-    extractor.d = value;
-
-    auto [significand, exponent] = fmt::detail::dragonbox::to_decimal(value);
-    return { static_cast<bool>(extractor.sign), significand, exponent };
+    auto [significand, exponent, negative] = zmij::to_decimal(value);
+    return { negative, significand, exponent };
 }
 
 template DecimalExponentialForm convert_to_decimal_exponential_form(float);
