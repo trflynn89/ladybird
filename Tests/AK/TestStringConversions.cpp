@@ -8,6 +8,7 @@
 #include <LibTest/TestCase.h>
 
 #include <AK/Array.h>
+#include <AK/String.h>
 #include <AK/StringConversions.h>
 #include <AK/Utf16View.h>
 
@@ -741,6 +742,49 @@ TEST_CASE(float_conversion)
     DOES_CONVERT_TO(float, -34028235e31, 1, 34028235, 31);
     DOES_CONVERT_TO(float, 11754944e-45, 0, 11754944, -45);
     DOES_CONVERT_TO(float, -11754944e-45, 1, 11754944, -45);
+}
+
+TEST_CASE(decimal_conversion_trailing_zeroes)
+{
+    // Exercise short significands across zmij's range of decimal exponents, including
+    // cases with many trailing zeroes and extra factors of two in the significand.
+    for (auto exponent : to_array({ -300, -30, -7, -1, 0, 1, 7, 30, 300 })) {
+        for (u64 fraction = 1; fraction <= 100; ++fraction) {
+            auto normalized_fraction = fraction;
+            auto normalized_exponent = exponent;
+            while (normalized_fraction % 10 == 0) {
+                normalized_fraction /= 10;
+                ++normalized_exponent;
+            }
+
+            for (bool sign : { false, true }) {
+                auto text = MUST(String::formatted("{}{}e{}", sign ? "-"sv : ""sv, fraction, exponent));
+                auto expected = AK::DecimalExponentialForm { sign, normalized_fraction, normalized_exponent };
+                EXPECT_EQ(AK::convert_to_decimal_exponential_form(parse_complete_double(text.bytes_as_string_view())), expected);
+                if (exponent >= -30 && exponent <= 30)
+                    EXPECT_EQ(AK::convert_to_decimal_exponential_form(parse_complete_float(text.bytes_as_string_view())), expected);
+            }
+        }
+    }
+
+    // Powers of two can have many binary trailing zeroes without any decimal ones.
+    for (int exponent = 0; exponent <= 53; ++exponent) {
+        auto fraction = 1ULL << exponent;
+        DOES_CONVERT_TO(double, fraction, false, fraction, 0);
+        if (exponent <= 23)
+            DOES_CONVERT_TO(float, fraction, false, fraction, 0);
+    }
+
+    DOES_CONVERT_TO(double, 1e23, false, 1, 23);
+    DOES_CONVERT_TO(double, bit_cast<double>(1ULL), false, 5, -324);
+    DOES_CONVERT_TO(double, bit_cast<double>(2ULL), false, 1, -323);
+    DOES_CONVERT_TO(float, bit_cast<float>(1U), false, 1, -45);
+    DOES_CONVERT_TO(float, bit_cast<float>(2U), false, 3, -45);
+    DOES_CONVERT_TO(double, 123.456789, false, 123456789, -6);
+    DOES_CONVERT_TO(double, 0.000000123456789, false, 123456789, -15);
+    DOES_CONVERT_TO(double, 9876543210123456.0, false, 9876543210123456, 0);
+    DOES_CONVERT_TO(double, 1.23e-7, false, 123, -9);
+    DOES_CONVERT_TO(double, 58.0, false, 58, 0);
 }
 
 BENCHMARK_CASE(bench_float_conversion)
