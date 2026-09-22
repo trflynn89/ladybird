@@ -638,9 +638,11 @@ Tab::Tab(BrowserWindow* window, RefPtr<WebView::WebContentClient> parent_client,
     toolbar_layout->setContentsMargins(TOOLBAR_HORIZONTAL_MARGIN, TOOLBAR_VERTICAL_MARGIN, TOOLBAR_HORIZONTAL_MARGIN, TOOLBAR_VERTICAL_MARGIN);
 
     m_location_edit = new LocationEdit(this, m_window->is_private());
-    m_bookmarks_bar = new BookmarksBar(this);
     m_loading_animation_timer = new QTimer(this);
     m_loading_animation_timer->setInterval(80);
+
+    m_bookmarks_bar = new BookmarksBar(this);
+    update_bookmarks_bar_visibility();
 
     m_hover_label = new HyperlinkLabel(this);
     m_hover_label->hide();
@@ -827,8 +829,9 @@ Tab::Tab(BrowserWindow* window, RefPtr<WebView::WebContentClient> parent_client,
         m_suppress_javascript_dialogs_until_navigation = false;
     };
 
-    view().on_url_change = [this](auto const& url) {
+    view().on_url_change = [this](URL::URL const& url) {
         m_location_edit->set_url(url);
+        update_bookmarks_bar_visibility();
     };
 
     m_location_edit->on_navigation = [this](auto input, auto fallback_url, auto destination_kind) {
@@ -1686,6 +1689,25 @@ void Tab::find_previous()
 void Tab::find_next()
 {
     m_find_in_page->find_next();
+}
+
+void Tab::update_bookmarks_bar_visibility()
+{
+    switch (Application::settings().appearance().show_bookmarks_bar) {
+    case WebView::ShowBookmarksBar::Always:
+        m_bookmarks_bar->setVisible(true);
+        break;
+    case WebView::ShowBookmarksBar::Never:
+        m_bookmarks_bar->setVisible(false);
+        break;
+    case WebView::ShowBookmarksBar::OnNewTabPage: {
+        auto const& url = m_view->url();
+        auto segments = url.path_segments();
+
+        m_bookmarks_bar->setVisible(url.scheme() == "about"sv && !segments.is_empty() && segments.first() == "newtab"sv);
+        break;
+    }
+    }
 }
 
 void Tab::request_close()

@@ -88,6 +88,7 @@ public:
     void find_next();
 
     BookmarksBar& bookmarks_bar() { return *m_bookmarks_bar; }
+    void update_bookmarks_bar_visibility();
 
     void request_close();
 

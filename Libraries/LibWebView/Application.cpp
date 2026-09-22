@@ -2544,6 +2544,25 @@ void Application::initialize_actions()
     m_bookmarks_menu->add_action(Action::create("Manage Bookmarks"sv, ActionID::ManageBookmarks, [this]() {
         open_url_in_new_tab(URL::about_bookmarks(), Web::HTML::ActivateTab::Yes);
     }));
+
+    auto add_show_bookmarks_bar_option = [&](auto name, auto value) {
+        auto action = Action::create_checkable(name, ActionID::ShowBookmarksBar, [this, value]() {
+            auto appearance = m_settings->appearance();
+            appearance.show_bookmarks_bar = value;
+            m_settings->set_appearance(appearance);
+        });
+
+        action->set_checked(m_settings->appearance().show_bookmarks_bar == value);
+        m_show_bookmarks_bar_menu->add_action(action);
+        return action;
+    };
+
+    m_show_bookmarks_bar_menu = Menu::create_group("Show Bookmarks Bar"sv);
+    m_show_bookmarks_bar_menu->add_property("internal"sv, {});
+    m_show_bookmarks_bar_always_action = add_show_bookmarks_bar_option("Always"sv, ShowBookmarksBar::Always);
+    m_show_bookmarks_bar_never_action = add_show_bookmarks_bar_option("Never"sv, ShowBookmarksBar::Never);
+    m_show_bookmarks_bar_on_new_tab_page_action = add_show_bookmarks_bar_option("Only on the new tab page"sv, ShowBookmarksBar::OnNewTabPage);
+    m_bookmarks_menu->add_submenu(*m_show_bookmarks_bar_menu);
     m_bookmarks_menu->add_separator();
 
     m_toggle_bookmark_action = Action::create("Toggle Bookmark"sv, ActionID::ToggleBookmark, [this]() {
@@ -2569,14 +2588,6 @@ void Application::initialize_actions()
                     m_bookmark_store->add_bookmark(move(bookmark.url), move(bookmark.title), move(bookmark.favicon_hash), folder_id);
             });
     }));
-
-    m_toggle_bookmark_bar_action = Action::create_checkable("Show Bookmarks Bar"sv, ActionID::ToggleBookmarksBar, [this]() {
-        auto appearance = m_settings->appearance();
-        appearance.show_bookmarks_bar = !appearance.show_bookmarks_bar;
-        m_settings->set_appearance(appearance);
-    });
-    m_toggle_bookmark_bar_action->set_checked(m_settings->appearance().show_bookmarks_bar);
-    m_bookmarks_menu->add_action(*m_toggle_bookmark_bar_action);
 
     m_bookmarks_menu->add_separator();
     m_bookmarks_menu_static_size = m_bookmarks_menu->size();
@@ -2714,7 +2725,18 @@ void Application::update_vertical_tabs_action()
 void Application::appearance_changed(Badge<ApplicationSettingsObserver>)
 {
     m_toggle_menu_bar_action->set_checked(m_settings->appearance().show_menu_bar);
-    m_toggle_bookmark_bar_action->set_checked(m_settings->appearance().show_bookmarks_bar);
+
+    switch (m_settings->appearance().show_bookmarks_bar) {
+    case ShowBookmarksBar::Always:
+        m_show_bookmarks_bar_always_action->set_checked(true);
+        break;
+    case ShowBookmarksBar::Never:
+        m_show_bookmarks_bar_never_action->set_checked(true);
+        break;
+    case ShowBookmarksBar::OnNewTabPage:
+        m_show_bookmarks_bar_on_new_tab_page_action->set_checked(true);
+        break;
+    }
 }
 
 void Application::tab_settings_changed(Badge<ApplicationSettingsObserver>)

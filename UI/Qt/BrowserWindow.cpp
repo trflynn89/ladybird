@@ -1206,7 +1206,7 @@ void BrowserWindow::exit_fullscreen()
         return;
 
     m_tabs_container->set_tab_bar_visible(true);
-    current_tab()->bookmarks_bar().setVisible(Application::settings().appearance().show_bookmarks_bar);
+    current_tab()->update_bookmarks_bar_visibility();
 
     if (m_restore_to_maximized)
         showMaximized();
@@ -1512,8 +1512,8 @@ void BrowserWindow::appearance_changed()
 {
     update_menu_bar_visibility();
 
-    for_each_tab([&, show_bookmarks_bar = Application::settings().appearance().show_bookmarks_bar](Tab& tab) {
-        tab.bookmarks_bar().setVisible(show_bookmarks_bar);
+    for_each_tab([](Tab& tab) {
+        tab.update_bookmarks_bar_visibility();
     });
 }
 

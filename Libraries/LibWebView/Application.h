@@ -626,8 +626,11 @@ private:
     RefPtr<Action> m_toggle_menu_bar_action;
 
     RefPtr<Menu> m_bookmarks_menu;
+    RefPtr<Menu> m_show_bookmarks_bar_menu;
     RefPtr<Action> m_toggle_bookmark_action;
-    RefPtr<Action> m_toggle_bookmark_bar_action;
+    RefPtr<Action> m_show_bookmarks_bar_always_action;
+    RefPtr<Action> m_show_bookmarks_bar_never_action;
+    RefPtr<Action> m_show_bookmarks_bar_on_new_tab_page_action;
     size_t m_bookmarks_menu_static_size { 0 };
 
     RefPtr<Menu> m_history_menu;
