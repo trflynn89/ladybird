@@ -11,6 +11,7 @@
 #include <math.h>
 
 #include <fast_float/fast_float.h>
+#include <fmt/format-inl.h>
 #include <zmij.h>
 
 namespace AK {
@@ -160,6 +161,9 @@ DecimalExponentialForm convert_to_decimal_exponential_form(T value)
     ASSERT(!isnan(value));
 
     auto [significand, exponent, negative] = zmij::to_decimal(value);
+    if (significand != 0)
+        exponent += fmt::detail::dragonbox::remove_trailing_zeros(significand);
+
     return { negative, significand, exponent };
 }
 
