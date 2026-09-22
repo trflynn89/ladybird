@@ -52,7 +52,6 @@
         "ladybird-components"
       ]
     },
-    "fmt",
     {
       "name": "fontconfig",
       "platform": "linux | bsd | osx"
@@ -284,10 +283,6 @@
     {
       "name": "ffmpeg",
       "version": "7.1.1#5"
-    },
-    {
-      "name": "fmt",
-      "version": "12.2.0#1"
     },
     {
       "name": "fontconfig",
