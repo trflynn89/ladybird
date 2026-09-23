@@ -918,10 +918,18 @@ QWidget#LadybirdDevToolsBanner {{
     border-top: 1px solid {1};
 }}
 
-QWidget#LadybirdDevToolsBanner QLabel,
-QWidget#LadybirdDevToolsBanner QPushButton {{
-    background: transparent;
+QWidget#LadybirdDevToolsBanner QLabel {{
     color: {5};
+    background: transparent;
+}}
+
+QWidget#LadybirdDevToolsBanner QPushButton {{
+    color: {5};
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    min-height: 26px;
+    padding: 2px 9px;
 }}
 
 QWidget#LadybirdDevToolsBanner QPushButton:hover {{
