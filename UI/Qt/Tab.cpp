@@ -1693,20 +1693,26 @@ void Tab::find_next()
 
 void Tab::update_bookmarks_bar_visibility()
 {
-    switch (Application::settings().appearance().show_bookmarks_bar) {
-    case WebView::ShowBookmarksBar::Always:
-        m_bookmarks_bar->setVisible(true);
-        break;
-    case WebView::ShowBookmarksBar::Never:
-        m_bookmarks_bar->setVisible(false);
-        break;
-    case WebView::ShowBookmarksBar::OnNewTabPage: {
-        auto const& url = m_view->url();
-        auto segments = url.path_segments();
+    auto show_bookmarks_bar = [&]() {
+        switch (Application::settings().appearance().show_bookmarks_bar) {
+        case WebView::ShowBookmarksBar::Always:
+            return true;
+        case WebView::ShowBookmarksBar::Never:
+            return false;
+            break;
+        case WebView::ShowBookmarksBar::OnNewTabPage: {
+            auto const& url = m_view->url();
+            auto segments = url.path_segments();
 
-        m_bookmarks_bar->setVisible(url.scheme() == "about"sv && !segments.is_empty() && segments.first() == "newtab"sv);
-        break;
-    }
+            return url.scheme() == "about"sv && !segments.is_empty() && segments.first() == "newtab"sv;
+        }
+        }
+    }();
+
+    if (m_bookmarks_bar->isVisible() != show_bookmarks_bar) {
+        dbgln("!!! {}", show_bookmarks_bar);
+        m_bookmarks_bar->setVisible(show_bookmarks_bar);
+        emit toolbar_size_changed();
     }
 }
 

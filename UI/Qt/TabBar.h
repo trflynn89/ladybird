@@ -201,6 +201,7 @@ private:
     void rebuild_layout_for_vertical_tabs();
     void rebuild_page_column();
     void update_toolbar_placement();
+    void update_toolbar_container_height();
     void update_tab_toolbar_window_controls_visibility();
     int current_vertical_tabs_width() const;
     void apply_vertical_tabs_expanded_width(int width);

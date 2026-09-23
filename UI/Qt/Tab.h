@@ -116,6 +116,7 @@ public slots:
     void focus_location_editor();
 
 signals:
+    void toolbar_size_changed();
     void title_changed(int id, QString const&);
     void favicon_changed(int id, QIcon const&);
     void audio_play_state_changed(int id, Web::HTML::AudioPlayState);

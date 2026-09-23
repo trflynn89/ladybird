@@ -1606,6 +1606,7 @@ TabWidget::TabWidget(QWidget* parent)
 
         emit current_tab_changed(index);
         m_toolbar_container->setCurrentIndex(index);
+        update_toolbar_container_height();
         update_vertical_tabs_overlay_geometry();
         update_vertical_tabs_resize_handle();
         update_vertical_tabs_content_overlay();
@@ -1669,6 +1670,10 @@ void TabWidget::insert_tab(int index, Tab* widget, QString const& label)
     m_tab_bar->insertTab(index, label);
     widget->set_toolbar_container_in_tab_layout(false);
     m_toolbar_container->insertWidget(index, widget->toolbar_container());
+    connect(widget, &Tab::toolbar_size_changed, this, [this, widget] {
+        if (m_toolbar_container->currentWidget() == widget->toolbar_container())
+            update_toolbar_container_height();
+    });
 
     widget->set_vertical_tabs_enabled(m_vertical_tabs_enabled);
     widget->set_vertical_tabs_position(m_vertical_tabs_position);
@@ -1676,6 +1681,22 @@ void TabWidget::insert_tab(int index, Tab* widget, QString const& label)
     update_toolbar_placement();
     update_tab_layout();
     update_tab_button_visibility();
+}
+
+void TabWidget::update_toolbar_container_height()
+{
+    auto* toolbar = m_toolbar_container->currentWidget();
+    if (!toolbar)
+        return;
+
+    m_toolbar_container->setFixedHeight(toolbar->sizeHint().height());
+    m_page_column_layout->invalidate();
+    m_page_column_layout->activate();
+
+    for (int i = 0; i < m_stacked_widget->count(); ++i) {
+        if (auto* page = as_if<Tab>(m_stacked_widget->widget(i)))
+            page->view().push_viewport_size();
+    }
 }
 
 void TabWidget::remove_tab(int index)
