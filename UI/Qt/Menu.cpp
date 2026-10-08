@@ -213,9 +213,9 @@ static void initialize_native_control(WebView::Action& action, QAction& qaction,
     case WebView::ActionID::AddBookmarkAllTabs:
         qaction.setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_D));
         break;
-    case WebView::ActionID::ToggleBookmarksBar:
-        qaction.setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_B));
-        break;
+    // case WebView::ActionID::ToggleBookmarksBar:
+    //     qaction.setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_B));
+    //     break;
     case WebView::ActionID::BookmarkItem:
         if (auto icon = action.png_icon(); icon.has_value())
             qaction.setIcon(icon_from_png(icon->bytes(), MENU_ICON_SIZE));
