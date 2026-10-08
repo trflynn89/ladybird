@@ -224,7 +224,7 @@ public:
         ContentSecurityPolicy::Directives::Directive::NavigationType csp_navigation_type,
         bool allow_POST,
         GC::Ptr<GC::Function<void(GC::Ptr<PopulateSessionHistoryEntryDocumentOutput>)>> completion_steps,
-        GC::Ptr<GC::Function<void(NavigationPopulationResult)>> response_steps = {});
+        GC::Ptr<GC::Function<void(NavigationPopulationResult)>> response_steps = {}, u64 content_blocking_load_id = 0);
 
     void queue_navigation_and_traversal_task_for_session_history_entry_population(
         URL::URL url,

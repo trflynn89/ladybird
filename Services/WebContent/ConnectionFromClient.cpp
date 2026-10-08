@@ -638,7 +638,7 @@ void ConnectionFromClient::continue_history_navigation_population(Web::PageId pa
         move(population));
 }
 
-void ConnectionFromClient::run_changing_navigable_history_job(Web::PageId page_id, Web::HTML::CrossProcessId operation_id, Web::HTML::CrossProcessId navigable_id, Web::HTML::SessionHistoryEntryDescriptor target_entry, Web::HTML::UserNavigationInvolvement user_involvement, Optional<Web::Bindings::NavigationType> navigation_type, Web::HTML::TraversalYieldsTo traversal_yields_to, Optional<Utf16String> canceled_navigation_id)
+void ConnectionFromClient::run_changing_navigable_history_job(Web::PageId page_id, Web::HTML::CrossProcessId operation_id, Web::HTML::CrossProcessId navigable_id, Web::HTML::SessionHistoryEntryDescriptor target_entry, Web::HTML::UserNavigationInvolvement user_involvement, Optional<Web::Bindings::NavigationType> navigation_type, Web::HTML::TraversalYieldsTo traversal_yields_to, Optional<Utf16String> canceled_navigation_id, u64 content_blocking_load_id)
 {
     auto page = this->page(page_id);
     if (!page.has_value()) {
@@ -648,7 +648,8 @@ void ConnectionFromClient::run_changing_navigable_history_job(Web::PageId page_i
 
     page->page().history_executor().run_ui_changing_navigable_history_job(operation_id, navigable_id, move(target_entry), user_involvement, navigation_type, traversal_yields_to, move(canceled_navigation_id), GC::create_function(Web::HTML::main_thread_event_loop().heap(), [this, page_id, operation_id, navigable_id](Web::HTML::ChangingNavigableHistoryStepJobDisposition disposition, Web::HTML::UnloadDisplayedDocument unload_displayed_document) {
         async_changing_navigable_history_job_ready(page_id, operation_id, navigable_id, disposition, unload_displayed_document);
-    }));
+    }),
+        {}, content_blocking_load_id);
 }
 
 void ConnectionFromClient::prepare_changing_navigable_for_unload(Web::PageId page_id, Web::HTML::CrossProcessId operation_id, Web::HTML::CrossProcessId navigable_id)
@@ -3088,6 +3089,23 @@ void ConnectionFromClient::update_input_method_state(Web::PageId page_id)
     }
 
     async_did_update_input_method_state(page_id, caret_rect, is_enabled, cursor_position, anchor_position, move(text_before_cursor), move(text_after_cursor));
+}
+
+void ConnectionFromClient::initialize_content_blocking_load(Web::PageId page_id, u64 load_id)
+{
+    if (auto page = this->page(page_id); page.has_value()) {
+        page->register_content_blocking_load(load_id);
+        for (auto const& navigable : page->page().hosted_navigables()) {
+            if (auto document = navigable->active_document(); document && document->content_blocking_load_id() == 0)
+                document->set_content_blocking_load_id(load_id);
+        }
+    }
+}
+
+void ConnectionFromClient::release_content_blocking_load(Web::PageId page_id, u64 load_id)
+{
+    if (auto page = this->page(page_id); page.has_value())
+        page->release_content_blocking_load(load_id);
 }
 
 void ConnectionFromClient::set_content_blocking_policy(Web::PageId page_id, bool enabled, Vector<String> disabled_sites)

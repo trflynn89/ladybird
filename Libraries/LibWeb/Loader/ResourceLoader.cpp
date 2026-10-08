@@ -196,6 +196,10 @@ static bool should_block_request(LoadRequest const& request)
 
         if (ContentBlocker::the().is_filtered(url, source_url, request.destination(), request.initiator_type(), request.request_mode())) {
             log_filtered_request(request);
+
+            if (page && request.content_blocking_context().has_value() && request.content_blocking_context()->load_id != 0)
+                page->client().page_did_block_request(*request.content_blocking_context());
+
             return true;
         }
     }

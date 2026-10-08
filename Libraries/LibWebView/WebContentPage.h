@@ -102,6 +102,7 @@ public:
     // awaiting a detached close remains open; it still coordinates its own close.
     bool is_open() const { return m_is_open; }
     void close();
+    virtual void did_update_content_blocking_count(Web::ContentBlockingRequestContext, u64 cumulative_count) override;
 
     void owe_reply(OwedReply);
     bool take_owed_reply(OwedReply);

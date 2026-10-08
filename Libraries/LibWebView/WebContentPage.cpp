@@ -334,6 +334,7 @@ bool WebContentPage::continue_navigation_population_in_selected_process(Web::HTM
     }
     auto& loader = *navigable->ongoing_navigation()->loader;
     navigable->set_navigation_host(*host);
+    view().register_content_blocking_load(*host, navigable_id, loader.content_blocking_stats(), false);
     host->async_populate_navigation(loader.request(), loader.take_result());
     return true;
 }
@@ -1761,7 +1762,7 @@ void WebContentPage::did_complete_navigation_unload_check(Web::HTML::CrossProces
     auto population_request = Web::HTML::create_navigation_population_request(
         ongoing_navigation->start_request.release_value(),
         Application::the().allocate_ui_process_cross_process_id());
-    ongoing_navigation->loader = NavigationLoader::create(client().is_private(), move(population_request));
+    ongoing_navigation->loader = NavigationLoader::create(client().is_private(), move(population_request), view().content_blocking_stats_for_navigation(*this, navigable_id));
     ongoing_navigation->phase = CanonicalNavigation::Phase::Populating;
     async_create_navigation_params(ongoing_navigation->loader->request());
 
@@ -1814,14 +1815,14 @@ void WebContentPage::did_request_navigation_population(Web::HTML::CrossProcessId
         auto& ongoing_navigation = *target_navigable->ongoing_navigation();
         ongoing_navigation.url = target_url;
         ongoing_navigation.phase = CanonicalNavigation::Phase::Populating;
-        ongoing_navigation.loader = NavigationLoader::create(client().is_private(), move(request));
+        ongoing_navigation.loader = NavigationLoader::create(client().is_private(), move(request), view().content_blocking_stats_for_navigation(*this, target_navigable->id()));
     } else {
         target_navigable->set_ongoing_navigation(CanonicalNavigation {
             .url = target_url,
             .navigation_id = request.navigation_id,
             .sequence_number = target_navigable->top_level_traversable().next_sequence_number(),
             .phase = CanonicalNavigation::Phase::Populating,
-            .loader = NavigationLoader::create(client().is_private(), move(request)),
+            .loader = NavigationLoader::create(client().is_private(), move(request), view().content_blocking_stats_for_navigation(*this, target_navigable->id())),
         });
     }
 
@@ -2693,6 +2694,15 @@ Messages::WebContentClient::DidRequestCookieResponse WebContentPage::did_request
     if (source == HTTP::Cookie::Source::NonHttp)
         cookie.cookie_version = view().document_cookie_version(url);
     return cookie;
+}
+
+}
+
+namespace WebView {
+
+void WebContentPage::did_update_content_blocking_count(Web::ContentBlockingRequestContext context, u64 cumulative_count)
+{
+    view().did_receive_content_blocking_count(*this, context, cumulative_count);
 }
 
 }

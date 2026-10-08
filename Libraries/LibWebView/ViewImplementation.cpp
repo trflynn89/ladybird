@@ -27,6 +27,8 @@
 #include <LibWebCommon/WebView/SiteIsolation.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/BookmarkStore.h>
+#include <LibWebView/CanonicalEnvironmentSettingsObject.h>
+#include <LibWebView/CanonicalWindow.h>
 #include <LibWebView/CrashReportReview.h>
 #include <LibWebView/ErrorHTML.h>
 #include <LibWebView/FaviconStore.h>
@@ -89,6 +91,10 @@ ViewImplementation::ViewImplementation(IsPrivate is_private)
 
 ViewImplementation::~ViewImplementation()
 {
+    for (auto& [load_id, record] : m_content_blocking_loads) {
+        if (record.stats)
+            record.stats->set_discard_callback({});
+    }
     TabPerformanceMonitor::forget_view(view_id());
     if (m_top_level_traversable)
         m_top_level_traversable->clear_ongoing_navigation();
@@ -1858,6 +1864,93 @@ void ViewImplementation::set_content_blocking_enabled(bool enabled)
     traversable().for_each_hosting_page([&](WebContentPage& page) {
         page.async_set_content_blocking_policy(enabled, Application::settings().content_blocker_disabled_sites().values());
     });
+    notify_content_blocking_changed();
+}
+
+NonnullRefPtr<ContentBlockingStats> ViewImplementation::content_blocking_stats_for_navigation(WebContentPage& page, Web::HTML::CrossProcessId navigable_id, Optional<NonnullRefPtr<ContentBlockingStats>> existing)
+{
+    auto navigable = traversable().find(navigable_id);
+    auto stats = existing.has_value() ? existing.release_value()
+        : navigable.has_value() && !navigable->is_top_level_traversable()
+        ? traversable().active_document().content_blocking_stats()
+        : ContentBlockingStats::create();
+    register_content_blocking_load(page, navigable_id, *stats);
+    return stats;
+}
+
+void ViewImplementation::register_content_blocking_load(WebContentPage& page, Web::HTML::CrossProcessId navigable_id, ContentBlockingStats& stats, bool is_population_worker)
+{
+    page.async_initialize_content_blocking_load(stats.load_id());
+    stats.set_discard_callback([weak_this = make_weak_ptr()](u64 load_id) {
+        if (!weak_this)
+            return;
+        weak_this->m_content_blocking_loads.remove(load_id);
+        weak_this->traversable().for_each_hosting_page([&](WebContentPage& page) {
+            page.async_release_content_blocking_load(load_id);
+        });
+    });
+    m_content_blocking_loads.remove_all_matching([](auto const&, auto const& record) { return !record.stats; });
+    auto& record = m_content_blocking_loads.ensure(stats.load_id(), [&] { return ContentBlockingLoadRecord { stats.make_weak_ptr(), {} }; });
+    if (is_population_worker)
+        record.population_workers.set(navigable_id, page.id());
+}
+
+void ViewImplementation::did_receive_content_blocking_count(WebContentPage& sender, Web::ContentBlockingRequestContext const& context, u64 count)
+{
+    if (!sender.is_open())
+        return;
+    auto record = m_content_blocking_loads.get(context.load_id);
+    if (!record.has_value() || !record->stats)
+        return;
+    auto& stats = *record->stats;
+    bool permitted = stats.has_sender(sender.id().value());
+    if (!permitted && context.is_navigation)
+        permitted = record->population_workers.get(context.navigable_id) == sender.id();
+    if (!permitted && context.environment_id.has_value()) {
+        auto navigable = traversable().find(context.navigable_id);
+        if (navigable.has_value() && sender.hosted_environment(*context.environment_id).has_value()) {
+            auto matches = [&](CanonicalDocument const& document) {
+                return document.host().ptr() == &sender && document.content_blocking_stats()->load_id() == context.load_id
+                    && document.relevant_global_object().relevant_settings_object().id() == *context.environment_id;
+            };
+            permitted = matches(navigable->active_document());
+            navigable->for_each_populated_document([&](auto const& populated) { permitted |= matches(*populated.document); });
+        }
+    }
+    if (permitted && stats.accept_report(context.load_id, sender.id().value(), count))
+        notify_content_blocking_changed();
+}
+
+ContentBlockingSnapshot ViewImplementation::content_blocking_snapshot() const
+{
+    ContentBlockingSnapshot snapshot;
+    auto& stats = *traversable().active_document().content_blocking_stats();
+    snapshot.load_id = stats.load_id();
+    snapshot.blocked_request_count = stats.count();
+    if (m_crash_state.has_value() || !traversable().active_document().host())
+        return snapshot;
+    auto state = traversable().replicated_state();
+    if (!state.has_value())
+        return snapshot;
+    auto url = stats.failed_url().value_or(state->active_document_url);
+    snapshot.site = Web::content_blocking_site(url);
+    if (!snapshot.site.has_value())
+        return snapshot;
+    if (Application::browser_options().enable_content_blocker == EnableContentBlocker::No)
+        snapshot.state = ContentBlockingState::CommandLineDisabled;
+    else if (!Application::the().content_blocking_enabled())
+        snapshot.state = ContentBlockingState::GlobalDisabled;
+    else if (!Application::settings().content_blocker_enabled_for_site(*snapshot.site))
+        snapshot.state = ContentBlockingState::SiteDisabled;
+    else
+        snapshot.state = Application::the().has_content_blocking_rules() ? ContentBlockingState::Enabled : ContentBlockingState::NoRules;
+    return snapshot;
+}
+
+void ViewImplementation::notify_content_blocking_changed()
+{
+    if (on_content_blocking_change)
+        on_content_blocking_change(content_blocking_snapshot());
 }
 
 void ViewImplementation::update_content_blocking_policy()
@@ -3368,6 +3461,7 @@ void ViewImplementation::set_crash_state(Optional<CrashState> state)
 {
     auto active = state.has_value();
     m_crash_state = move(state);
+    notify_content_blocking_changed();
     if (on_crash_overlay_state_change)
         on_crash_overlay_state_change(active);
 }

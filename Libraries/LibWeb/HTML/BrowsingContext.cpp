@@ -165,6 +165,8 @@ BrowsingContext::BrowsingContextAndDocument BrowsingContext::create_a_new_browsi
     // Non-standard
     window->set_associated_document(*document);
     document->set_window(*window);
+    if (embedder)
+        document->set_content_blocking_load_id(embedder->document().content_blocking_load_id());
 
     // type: "html"
     document->set_document_type(DOM::Document::Type::HTML);

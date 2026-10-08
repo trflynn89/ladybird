@@ -72,8 +72,12 @@
 #include <LibWebCommon/WebView/ProcessHandle.h>
 #include <LibWebCommon/WebView/StorageSetResult.h>
 
+#include <LibWebCommon/Loader/ContentBlockingRequestContext.h>
+
 endpoint WebContentClient routed by Web::PageId page_id
 {
+    did_update_content_blocking_count(Web::PageId page_id, Web::ContentBlockingRequestContext context, u64 cumulative_count) =|
+
 
     [NotRouted] did_add_blob_url_entry(Web::PageId page_id, Web::HTML::EnvironmentId environment_id, Utf16String url, Web::FileAPI::SerializedBlobURLEntry entry) => (URL::BlobURLEntry::Token token)
     did_remove_blob_url_entries(Web::PageId page_id, Web::HTML::EnvironmentId environment_id, Vector<Utf16String> urls) => ()

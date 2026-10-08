@@ -10,9 +10,11 @@
 #include <AK/JsonObjectSerializer.h>
 #include <AK/JsonValue.h>
 #include <AK/Math.h>
+#include <AK/NumericLimits.h>
 #include <AK/Utf16FlyString.h>
 #include <AK/Utf16String.h>
 #include <AK/Utf16StringBuilder.h>
+#include <LibCore/EventLoop.h>
 #include <LibCore/Process.h>
 #include <LibCore/Timer.h>
 #include <LibDevTools/IndexedDBSerialization.h>
@@ -299,11 +301,13 @@ void PageClient::deliver_posted_message(Web::HTML::CrossProcessId navigable_id, 
 
 void PageClient::navigation_params_creation_finished(Web::HTML::LocalNavigable& navigable, Web::HTML::NavigationPopulationRequest request, Web::HTML::NavigationPopulationResult result)
 {
+    flush_content_blocking_counts();
     client().async_did_finish_navigation_params_creation(m_id, navigable.id(), request.navigation_id, move(result));
 }
 
 void PageClient::history_navigation_params_creation_finished(Web::HTML::CrossProcessId operation_id, Web::HTML::HistoryNavigationPopulation population)
 {
+    flush_content_blocking_counts();
     client().async_did_finish_history_navigation_params_creation(m_id, operation_id, move(population));
 }
 
@@ -417,6 +421,7 @@ void PageClient::page_did_update_child_frame_viewport(Web::HTML::CrossProcessId 
 
 void PageClient::page_did_destroy_child_frame(Web::HTML::CrossProcessId frame_id)
 {
+    flush_content_blocking_counts();
     client().async_did_destroy_child_frame(m_id, frame_id);
 }
 
@@ -2060,6 +2065,41 @@ void PageClient::received_message_from_web_ui(Utf16String const& name, JS::Value
 {
     if (m_web_ui)
         m_web_ui->received_message_from_web_ui(name, data);
+}
+
+void PageClient::release_content_blocking_load(u64 load_id)
+{
+    flush_content_blocking_counts();
+    m_content_blocking_loads.remove(load_id);
+    m_content_blocking_counts.remove(load_id);
+}
+
+void PageClient::page_did_block_request(Web::ContentBlockingRequestContext const& context)
+{
+    if (!m_content_blocking_loads.contains(context.load_id))
+        return;
+    auto& report = m_content_blocking_counts.ensure(context.load_id, [&] { return ContentBlockingReport { context }; });
+    report.context = context;
+    if (report.count != NumericLimits<u64>::max())
+        ++report.count;
+    report.dirty = true;
+    if (exchange(m_content_blocking_notification_pending, true))
+        return;
+    Core::deferred_invoke([self = GC::Root { *this }] {
+        self->m_content_blocking_notification_pending = false;
+        self->flush_content_blocking_counts();
+    });
+}
+
+void PageClient::flush_content_blocking_counts()
+{
+    if (!is_connection_open())
+        return;
+    for (auto& [load_id, report] : m_content_blocking_counts) {
+        if (!exchange(report.dirty, false))
+            continue;
+        client().async_did_update_content_blocking_count(id(), report.context, report.count);
+    }
 }
 
 void PageClient::page_did_start_network_request(u64 request_id, URL::URL const& url, ByteString const& method, Vector<HTTP::Header> const& request_headers, ReadonlyBytes request_body, Optional<String> initiator_type, String const& referrer_policy, bool is_navigation_request, Web::Fetch::Infrastructure::Request::Priority priority)

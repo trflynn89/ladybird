@@ -51,6 +51,7 @@
 #include <LibWebCommon/HTML/PreparedNavigationDescriptor.h>
 #include <LibWebCommon/HTML/Scripting/ScriptRegistryTypes.h>
 #include <LibWebCommon/HTML/SelectItem.h>
+#include <LibWebCommon/Loader/ContentBlockingRequestContext.h>
 #include <LibWebCommon/Page/DragEvent.h>
 #include <LibWebCommon/Page/EventResult.h>
 #include <LibWebCommon/Page/InputEvent.h>
@@ -68,6 +69,7 @@
 #include <LibWebView/BookmarkStore.h>
 #include <LibWebView/BrowsingSession.h>
 #include <LibWebView/CanonicalTraversable.h>
+#include <LibWebView/ContentBlockingStats.h>
 #include <LibWebView/ExternalURLHandler.h>
 #include <LibWebView/Forward.h>
 #include <LibWebView/HistoryVisitTransition.h>
@@ -313,6 +315,12 @@ public:
 
     void set_content_blocking_enabled(bool);
     void update_content_blocking_policy();
+    ContentBlockingSnapshot content_blocking_snapshot() const;
+    void notify_content_blocking_changed();
+    Function<void(ContentBlockingSnapshot const&)> on_content_blocking_change;
+    NonnullRefPtr<ContentBlockingStats> content_blocking_stats_for_navigation(WebContentPage&, Web::HTML::CrossProcessId, Optional<NonnullRefPtr<ContentBlockingStats>> = {});
+    void register_content_blocking_load(WebContentPage&, Web::HTML::CrossProcessId, ContentBlockingStats&, bool is_population_worker = true);
+    void did_receive_content_blocking_count(WebContentPage&, Web::ContentBlockingRequestContext const&, u64);
     ErrorOr<void> set_content_blocker_enabled_for_site(String const&, bool enabled);
 
     void debug_request(ByteString const& request, ByteString const& argument = {});
@@ -540,6 +548,12 @@ public:
     virtual Gfx::IntPoint to_widget_position(Gfx::IntPoint content_position) const = 0;
 
 protected:
+    struct ContentBlockingLoadRecord {
+        WeakPtr<ContentBlockingStats> stats;
+        HashMap<Web::HTML::CrossProcessId, Web::PageId> population_workers;
+    };
+    HashMap<u64, ContentBlockingLoadRecord> m_content_blocking_loads;
+
     void will_apply_history_traversal_step(Web::HTML::CrossProcessId operation_id);
     void did_apply_top_level_history_traversal_step(Web::HTML::CrossProcessId operation_id);
     void did_finish_history_traversal(Web::HTML::CrossProcessId operation_id, Web::HTML::HistoryStepResult);

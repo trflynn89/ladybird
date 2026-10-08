@@ -1039,6 +1039,7 @@ struct CanonicalTraversable::HistoryOperation {
 
         Web::HTML::UnloadDisplayedDocument unload_displayed_document { Web::HTML::UnloadDisplayedDocument::No };
 
+        RefPtr<ContentBlockingStats> content_blocking_stats;
         OwnPtr<NavigationLoader> population_loader;
         CanonicalNavigable::DidPopulateDocument did_populate_document { CanonicalNavigable::DidPopulateDocument::No };
         RefPtr<CanonicalDocument> document;
@@ -1431,7 +1432,7 @@ void CanonicalTraversable::did_finish_history_navigation_params_creation(WebCont
         return;
     }
     auto& loader = job.value()->population_loader;
-    loader = NavigationLoader::create(source_page.client().is_private(), move(population.request));
+    loader = NavigationLoader::create(source_page.client().is_private(), move(population.request), job.value()->content_blocking_stats);
     loader->did_finish_navigation_params_creation(move(population.result));
     loader->acquire_response_body([weak_this = make_weak_ptr(), operation_id, navigable_id, source_page = NonnullRefPtr<WebContentPage>(source_page)](bool succeeded) {
         if (!weak_this)
@@ -1503,6 +1504,7 @@ void CanonicalTraversable::continue_history_navigation_population(Web::HTML::Cro
     add_history_operation_completion_endpoint(*operation, *endpoint);
     auto& job = *pending_job.value();
     endpoint->owe_reply({ OwedReply::Kind::ChangingJob, operation_id, navigable_id });
+    endpoint->view().register_content_blocking_load(*endpoint, navigable_id, loader->content_blocking_stats(), false);
     endpoint->async_continue_history_navigation_population(operation_id, job.job.target_entry_descriptor(), job.job.navigation_type,
         Web::HTML::HistoryNavigationPopulation { loader->request(), loader->take_result() });
     job.population_loader = move(loader);
@@ -1518,6 +1520,15 @@ void CanonicalTraversable::dispatch_changing_navigable_history_step_job(HistoryO
     if (pending_job.value()->population_loader)
         pending_job.value()->population_loader->reclaim_response_body_after_failed_handoff();
     pending_job.value()->population_loader = nullptr;
+    if (!pending_job.value()->content_blocking_stats) {
+        Optional<NonnullRefPtr<ContentBlockingStats>> retained;
+        auto& document_state = *pending_job.value()->job.target_entry->document_state;
+        if (document_state.document && !operation.parameters.has<Web::ReloadHistoryOperationParameters>())
+            retained = document_state.document->content_blocking_stats();
+        pending_job.value()->content_blocking_stats = endpoint->view().content_blocking_stats_for_navigation(*endpoint, navigable_id, move(retained));
+    } else {
+        endpoint->view().register_content_blocking_load(*endpoint, navigable_id, *pending_job.value()->content_blocking_stats);
+    }
     auto target_entry = pending_job.value()->job.target_entry_descriptor();
     endpoint->owe_reply({ OwedReply::Kind::ChangingJob, operation.operation_id, navigable_id });
     endpoint->async_run_changing_navigable_history_job(
@@ -1525,7 +1536,7 @@ void CanonicalTraversable::dispatch_changing_navigable_history_step_job(HistoryO
         move(target_entry), pending_job.value()->job.user_involvement,
         pending_job.value()->job.navigation_type,
         pending_job.value()->job.traversal_yields_to,
-        pending_job.value()->job.canceled_navigation_id);
+        pending_job.value()->job.canceled_navigation_id, pending_job.value()->content_blocking_stats->load_id());
 }
 
 void CanonicalTraversable::dispatch_changing_navigable_history_step_continuation(HistoryOperation& operation, Web::HTML::CrossProcessId navigable_id)

@@ -6,6 +6,7 @@ set(TEST_SOURCES
     TestAutocompleteRanker.cpp
     TestCanonicalBrowsingContextGroup.cpp
     TestCookieJar.cpp
+    TestContentBlockingStats.cpp
     TestCrashReportDiagnostics.cpp
     TestDownloadSegmentation.cpp
     TestDownloadStore.cpp
@@ -137,6 +138,13 @@ if (NOT WIN32)
         target_compile_definitions(TestBrowserHistoryTraversal PRIVATE LADYBIRD_BINARY_PATH="$<TARGET_FILE_DIR:ladybird>")
     endif()
 
+    add_executable(TestContentBlockingIntegration TestContentBlockingIntegration.cpp)
+    add_dependencies(TestContentBlockingIntegration ladybird_build_resource_files ${ladybird_helper_processes})
+    target_link_libraries(TestContentBlockingIntegration PRIVATE AK LibCore LibDiff LibFileSystem LibGfx LibImageDecoders LibImageDecoderClient LibIPC LibJS LibMain LibRequests LibURL LibWeb LibWebView)
+    if (APPLE)
+        target_compile_definitions(TestContentBlockingIntegration PRIVATE LADYBIRD_BINARY_PATH="$<TARGET_FILE_DIR:ladybird>")
+    endif()
+
     add_executable(TestInputMethodState TestInputMethodState.cpp)
     add_dependencies(TestInputMethodState ladybird_build_resource_files ${ladybird_helper_processes})
     target_link_libraries(TestInputMethodState PRIVATE AK LibCore LibDiff LibFileSystem LibGfx LibImageDecoders LibImageDecoderClient LibIPC LibJS LibMain LibRequests LibURL LibWeb LibWebView)
@@ -260,6 +268,12 @@ if (BUILD_TESTING AND NOT WIN32)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-delete-session.py $<TARGET_FILE:WebDriver>
     )
     set_tests_properties(TestWebDriverDeleteSession PROPERTIES TIMEOUT 120)
+
+    add_test(
+        NAME TestContentBlockingIntegration
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-content-blocking-integration.py $<TARGET_FILE:TestContentBlockingIntegration>
+    )
+    set_tests_properties(TestContentBlockingIntegration PROPERTIES TIMEOUT 90 ENVIRONMENT LADYBIRD_SOURCE_DIR=${LADYBIRD_SOURCE_DIR})
 
     add_test(
         NAME TestWebDriverContentBlockerSites

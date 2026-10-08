@@ -28,6 +28,9 @@ NonnullRefPtr<CanonicalDocument> CanonicalDocument::create(URL::URL creation_url
     //         in DocumentLoader::CommitNavigation() (ShouldReuseDOMWindow()).
     if (!document->m_relevant_global_object->has_associated_document())
         document->m_relevant_global_object->set_associated_document({}, document);
+    auto& top_level_context = document->browsing_context().top_level_browsing_context();
+    if (&top_level_context != &document->browsing_context())
+        document->set_content_blocking_stats(top_level_context.active_document()->content_blocking_stats());
     return document;
 }
 

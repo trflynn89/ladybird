@@ -49,6 +49,9 @@ public:
 
     virtual ~PageClient() override;
 
+    void register_content_blocking_load(u64 load_id) { m_content_blocking_loads.set(load_id); }
+    void release_content_blocking_load(u64 load_id);
+
     virtual Web::PageId id() const override { return m_id; }
 
     virtual bool is_headless() const override;
@@ -157,6 +160,15 @@ public:
     void schedule_accessibility_tree_update();
 
 private:
+    struct ContentBlockingReport {
+        Web::ContentBlockingRequestContext context;
+        u64 count { 0 };
+        bool dirty { false };
+    };
+    HashTable<u64> m_content_blocking_loads;
+    HashMap<u64, ContentBlockingReport> m_content_blocking_counts;
+    bool m_content_blocking_notification_pending { false };
+
     struct PendingDOMMutation {
         GC::Ref<Web::DOM::Node> target;
         WebView::Mutation mutation;
@@ -364,6 +376,8 @@ private:
     virtual void page_did_change_accessibility_tree() override;
     virtual void page_did_take_screenshot(Gfx::ShareableBitmap const& screenshot) override;
     virtual void received_message_from_web_ui(Utf16String const& name, JS::Value data) override;
+    virtual void page_did_block_request(Web::ContentBlockingRequestContext const&) override;
+    void flush_content_blocking_counts();
     virtual void page_did_start_network_request(u64 request_id, URL::URL const&, ByteString const&, Vector<HTTP::Header> const&, ReadonlyBytes, Optional<String>, String const& referrer_policy, bool is_navigation_request, Web::Fetch::Infrastructure::Request::Priority) override;
     virtual void page_did_receive_network_response_headers(u64 request_id, u32 status_code, Optional<String>, Vector<HTTP::Header> const&, Requests::CacheState) override;
     virtual void page_did_receive_network_response_body(u64 request_id, ReadonlyBytes) override;

@@ -33,6 +33,7 @@ struct NavigationParams : GC::Cell {
 
     // null or a navigation ID
     Optional<Utf16String> id;
+    u64 content_blocking_load_id { 0 };
 
     // the navigable to be navigated
     GC::Ptr<LocalNavigable> navigable;
@@ -138,6 +139,7 @@ struct NonFetchSchemeNavigationParams : JS::Cell {
 
     // null or a navigation ID
     Optional<Utf16String> id;
+    u64 content_blocking_load_id { 0 };
 
     // the navigable to be navigated
     GC::Ptr<LocalNavigable> navigable;

@@ -2817,6 +2817,9 @@ bool Application::has_content_blocking_rules() const
 
 void Application::apply_content_blocking_policy(WebContentPage& page)
 {
+    auto& view = page.view();
+
+    view.register_content_blocking_load(page, view.traversable().id(), *view.traversable().active_document().content_blocking_stats(), false);
     page.async_set_content_blocking_policy(content_blocking_enabled(), m_settings->content_blocker_disabled_sites().values());
 
     if (m_content_blocker_list_buffer.has_value())
@@ -2848,6 +2851,10 @@ void Application::apply_content_blocker_settings()
 
     WebContentClient::for_each_client([&](WebContentClient& client) {
         client.async_set_content_blockers(*m_content_blocker_list_buffer);
+        return IterationDecision::Continue;
+    });
+    ViewImplementation::for_each_view([](ViewImplementation& view) {
+        view.notify_content_blocking_changed();
         return IterationDecision::Continue;
     });
 }

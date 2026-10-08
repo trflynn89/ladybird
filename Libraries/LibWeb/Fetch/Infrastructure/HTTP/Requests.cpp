@@ -227,6 +227,7 @@ GC::Ref<Request> Request::clone(JS::Realm& realm) const
     // To clone a request request, run these steps:
     // 1. Let newRequest be a copy of request, except for its body.
     auto new_request = Infrastructure::Request::create();
+    new_request->set_content_blocking_context(m_content_blocking_context);
     new_request->set_method(m_method);
     new_request->set_local_urls_only(m_local_urls_only);
     for (auto const& header : *m_header_list)

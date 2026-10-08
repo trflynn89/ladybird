@@ -919,6 +919,10 @@ void CanonicalNavigable::update_hosted_state(Web::HTML::HostedNavigableState sta
 {
     set_hosted_state(move(state));
     send_replicated_state();
+    if (is_top_level_traversable()) {
+        if (auto view = top_level_traversable().view(); view.has_value())
+            view->notify_content_blocking_changed();
+    }
 }
 
 Optional<Web::HTML::ReplicatedNavigableState> CanonicalNavigable::replicated_state() const

@@ -147,6 +147,7 @@ ErrorOr<Web::HTML::NavigationStartRequest> decode(Decoder& decoder)
 template<>
 ErrorOr<void> encode(Encoder& encoder, Web::HTML::NavigationPopulationRequest const& request)
 {
+    TRY(encoder.encode(request.content_blocking_load_id));
     TRY(encoder.encode(request.navigable_id));
     TRY(encoder.encode(request.history_entry));
     TRY(encoder.encode(request.source_snapshot_params));
@@ -163,6 +164,7 @@ template<>
 ErrorOr<Web::HTML::NavigationPopulationRequest> decode(Decoder& decoder)
 {
     return Web::HTML::NavigationPopulationRequest {
+        .content_blocking_load_id = TRY(decoder.decode<u64>()),
         .navigable_id = TRY(decoder.decode<Web::HTML::CrossProcessId>()),
         .history_entry = TRY(decoder.decode<Web::HTML::PendingSessionHistoryEntryDescriptor>()),
         .source_snapshot_params = TRY(decoder.decode<Web::HTML::NavigationSourceSnapshot>()),

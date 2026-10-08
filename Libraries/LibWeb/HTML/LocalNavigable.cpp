@@ -953,6 +953,8 @@ void LocalNavigable::continue_navigation_at_population(NavigationPopulationReque
         return;
     }
     auto navigation_params = navigation_params_or_error.release_value();
+    if (auto params = navigation_params.get_pointer<GC::Ref<NavigationParams>>())
+        (*params)->content_blocking_load_id = request.content_blocking_load_id;
 
     auto output = navigable->heap().allocate<PopulateSessionHistoryEntryDocumentOutput>();
     output->redirected_url = move(result.redirected_url);
@@ -977,7 +979,7 @@ void LocalNavigable::continue_navigation_at_population(NavigationPopulationReque
         request.csp_navigation_type,
         Bindings::NavigationTimingType::Navigate,
         output,
-        GC::create_function(navigable->heap(), [navigable, history_entry, history_handling = request.history_handling, navigation_id = request.navigation_id, user_involvement = request.user_involvement](GC::Ptr<PopulateSessionHistoryEntryDocumentOutput> output) mutable {
+        GC::create_function(navigable->heap(), [navigable, history_entry, history_handling = request.history_handling, navigation_id = request.navigation_id, user_involvement = request.user_involvement, load_id = request.content_blocking_load_id](GC::Ptr<PopulateSessionHistoryEntryDocumentOutput> output) mutable {
             if (output && output->download_handled) {
                 // NB: The UI process ended the recorded load and its transaction when the download adopted this
                 //     population's response body.
@@ -989,6 +991,8 @@ void LocalNavigable::continue_navigation_at_population(NavigationPopulationReque
             if (output)
                 output->apply_to(*history_entry);
             auto pending_document = output ? output->document : GC::Ptr<DOM::Document> {};
+            if (pending_document)
+                pending_document->set_content_blocking_load_id(load_id);
             finalize_a_cross_document_navigation(navigable, to_history_handling_behavior(history_handling), user_involvement, history_entry, pending_document, navigation_id, GC::create_function(navigable->heap(), [](HistoryStepResult) { }));
         }));
 }
@@ -2576,7 +2580,7 @@ static void create_navigation_params_by_fetching(
     UserNavigationInvolvement user_involvement,
     Optional<Utf16String> navigation_id,
     Bindings::NavigationTimingType navigation_timing_type,
-    GC::Ref<GC::Function<void(GC::Ref<InternalNavigationResult>)>> completion_steps)
+    GC::Ref<GC::Function<void(GC::Ref<InternalNavigationResult>)>> completion_steps, u64 content_blocking_load_id)
 {
     auto& vm = navigable->vm();
     VERIFY(navigable->active_window());
@@ -2601,6 +2605,13 @@ static void create_navigation_params_by_fetching(
     //    referrer policy: entry's document state's request referrer policy
     //    policy container: sourceSnapshotParams's source policy container
     auto request = Fetch::Infrastructure::Request::create(vm);
+    request->set_content_blocking_context(ContentBlockingRequestContext {
+        .load_id = content_blocking_load_id,
+        .navigable_id = navigable->id(),
+        .environment_id = {},
+        .navigation_id = navigation_id,
+        .is_navigation = true,
+    });
     request->set_url(url);
     request->set_client(source_snapshot_params->fetch_client);
     request->set_destination(Fetch::Infrastructure::Request::Destination::Document);
@@ -2914,7 +2925,7 @@ static void create_navigation_params_for_population(
     ContentSecurityPolicy::Directives::Directive::NavigationType csp_navigation_type,
     Bindings::NavigationTimingType navigation_timing_type,
     bool allow_POST,
-    GC::Ref<NavigationParamsCreationCompletion> completion_steps)
+    GC::Ref<NavigationParamsCreationCompletion> completion_steps, u64 content_blocking_load_id)
 {
     // Helper to wrap a NavigationParamsVariant in an InternalNavigationResult with no redirect mutations.
     auto wrap_navigation_params = [&](LocalNavigable::NavigationParamsVariant navigation_params) {
@@ -2964,7 +2975,7 @@ static void create_navigation_params_for_population(
                 user_involvement,
                 navigation_id,
                 navigation_timing_type,
-                completion_steps);
+                completion_steps, content_blocking_load_id);
         }
         // 3. Otherwise, if entry's URL's scheme is not a fetch scheme, then set navigationParams to a new non-fetch
         //    scheme navigation params, with:
@@ -3014,7 +3025,7 @@ void LocalNavigable::populate_session_history_entry_document(
     ContentSecurityPolicy::Directives::Directive::NavigationType csp_navigation_type,
     bool allow_POST,
     GC::Ptr<GC::Function<void(GC::Ptr<PopulateSessionHistoryEntryDocumentOutput>)>> completion_steps,
-    GC::Ptr<GC::Function<void(NavigationPopulationResult)>> response_steps)
+    GC::Ptr<GC::Function<void(NavigationPopulationResult)>> response_steps, u64 content_blocking_load_id)
 {
     // AD-HOC: Not in the spec but subsequent steps will fail if the navigable doesn't have an active window.
     if (!active_window()) {
@@ -3106,7 +3117,7 @@ void LocalNavigable::populate_session_history_entry_document(
         csp_navigation_type,
         navigation_timing_type,
         allow_POST,
-        received_navigation_params);
+        received_navigation_params, content_blocking_load_id);
 }
 
 // NB: A document created in place of the response, or the PDF viewer, has an origin other than its navigation params'.
@@ -3356,7 +3367,7 @@ void LocalNavigable::create_navigation_params_for_navigation(NavigationPopulatio
         request.csp_navigation_type,
         navigation_timing_type,
         true,
-        received_navigation_params);
+        received_navigation_params, request.content_blocking_load_id);
 }
 
 WebIDL::ExceptionOr<void> LocalNavigable::continue_navigation_in_active_document_agent(PreparedNavigation navigation)

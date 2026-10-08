@@ -19,6 +19,7 @@ set(SOURCES
     CanonicalWindow.cpp
     BrowserProcess.cpp
     CompositorClient.cpp
+    ContentBlockingStats.cpp
     CookieJar.cpp
     CrashReport.cpp
     CrashReportDiagnostics.cpp

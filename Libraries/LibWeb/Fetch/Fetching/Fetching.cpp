@@ -187,6 +187,20 @@ static void store_response_in_cache(HTTP::MemoryCache& http_cache, Infrastructur
 // https://fetch.spec.whatwg.org/#concept-fetch
 GC::Ref<Infrastructure::FetchController> fetch(JS::Realm& realm, Infrastructure::Request& request, Infrastructure::FetchAlgorithms const& algorithms, UseParallelQueue use_parallel_queue, CreateResponseBodyTransferLease create_response_body_transfer_lease)
 {
+    if (!request.content_blocking_context().has_value()) {
+        if (auto client = request.client()) {
+            if (auto document = client->responsible_document(); document && document->navigable()) {
+                request.set_content_blocking_context(ContentBlockingRequestContext {
+                    .load_id = document->content_blocking_load_id(),
+                    .navigable_id = document->navigable()->id(),
+                    .environment_id = client->id,
+                    .navigation_id = {},
+                    .is_navigation = false,
+                });
+            }
+        }
+    }
+
     dbgln_if(WEB_FETCH_DEBUG, "Fetch: Running 'fetch' with: request @ {}", &request);
 
     // 1. Assert: request’s mode is "navigate" or processEarlyHintsResponse is null.
@@ -2299,6 +2313,7 @@ GC::Ref<PendingResponse> nonstandard_resource_loader_file_or_http_network_fetch(
     LoadRequest load_request { move(load_request_headers) };
     load_request.set_url(request->current_url());
     load_request.set_page(page);
+    load_request.set_content_blocking_context(request->content_blocking_context());
     load_request.set_method(request->method());
     load_request.set_cache_mode(request->cache_mode());
     load_request.set_include_credentials(include_credentials);

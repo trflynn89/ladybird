@@ -217,8 +217,11 @@ Web::HTML::NavigationPopulationResult const& NavigationLoader::result() const
 // The window of the document the navigation params create takes over their reserved environment's id, which the UI
 // process generates, and is in the agent cluster of the agent the UI process obtained for it. A navigation without a
 // reserved environment gets one with the id.
-void NavigationLoader::set_document(CanonicalDocument const& document, CanonicalNavigable const& navigable)
+void NavigationLoader::set_document(CanonicalDocument& document, CanonicalNavigable const& navigable)
 {
+    document.set_content_blocking_stats(m_content_blocking_stats);
+    if (navigable.is_top_level_traversable() && response_document()->is_inline_content)
+        m_content_blocking_stats->set_failed_url(m_request.history_entry.url);
     VERIFY(m_result.has_value());
     auto* navigation_params = m_result->navigation_params.get_pointer<Web::HTML::NavigationParamsDescriptor>();
     if (!navigation_params)

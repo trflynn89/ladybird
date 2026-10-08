@@ -13,6 +13,7 @@
 #include <LibURL/Origin.h>
 #include <LibURL/URL.h>
 #include <LibWebCommon/HTML/CrossOrigin/OpenerPolicy.h>
+#include <LibWebView/ContentBlockingStats.h>
 #include <LibWebView/Export.h>
 #include <LibWebView/Forward.h>
 
@@ -64,6 +65,8 @@ public:
     void set_host(RefPtr<WebContentPage>);
 
     void make_active();
+    NonnullRefPtr<ContentBlockingStats> const& content_blocking_stats() const { return m_content_blocking_stats; }
+    void set_content_blocking_stats(NonnullRefPtr<ContentBlockingStats> stats) { m_content_blocking_stats = move(stats); }
 
 private:
     CanonicalDocument(URL::URL creation_url, URL::Origin, NonnullRefPtr<CanonicalBrowsingContext>, NonnullRefPtr<CanonicalWindow>, IsInitialAboutBlank);
@@ -76,6 +79,7 @@ private:
     Web::HTML::OpenerPolicy m_opener_policy;
     bool m_completely_loaded { false };
     RefPtr<WebContentPage> m_host;
+    NonnullRefPtr<ContentBlockingStats> m_content_blocking_stats { ContentBlockingStats::create() };
 };
 
 }

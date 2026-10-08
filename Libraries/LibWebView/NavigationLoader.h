@@ -16,6 +16,7 @@
 #include <LibWebCommon/HTML/NavigationPopulationRequest.h>
 #include <LibWebCommon/HTML/Scripting/EnvironmentId.h>
 #include <LibWebView/BrowsingSession.h>
+#include <LibWebView/ContentBlockingStats.h>
 #include <LibWebView/Export.h>
 #include <LibWebView/Forward.h>
 
@@ -27,9 +28,9 @@ class WEBVIEW_API NavigationLoader final : public Weakable<NavigationLoader> {
 public:
     AK_ALLOC_WITH_KMALLOC;
 
-    static NonnullOwnPtr<NavigationLoader> create(IsPrivate is_private, Web::HTML::NavigationPopulationRequest request)
+    static NonnullOwnPtr<NavigationLoader> create(IsPrivate is_private, Web::HTML::NavigationPopulationRequest request, RefPtr<ContentBlockingStats> stats = {})
     {
-        return adopt_own(*new NavigationLoader(is_private, move(request)));
+        return adopt_own(*new NavigationLoader(is_private, move(request), move(stats)));
     }
 
     ~NavigationLoader();
@@ -46,7 +47,8 @@ public:
         Optional<Web::HTML::EnvironmentId> environment_id;
     };
     Optional<ResponseDocument> response_document() const;
-    void set_document(CanonicalDocument const&, CanonicalNavigable const&);
+    void set_document(CanonicalDocument&, CanonicalNavigable const&);
+    ContentBlockingStats& content_blocking_stats() const { return *m_content_blocking_stats; }
 
     void did_finish_navigation_params_creation(Web::HTML::NavigationPopulationResult);
     void acquire_response_body(Function<void(bool)> completion_steps);
@@ -59,10 +61,12 @@ public:
     static void discard(IsPrivate, Web::HTML::NavigationPopulationResult&);
 
 private:
-    NavigationLoader(IsPrivate is_private, Web::HTML::NavigationPopulationRequest request)
+    NavigationLoader(IsPrivate is_private, Web::HTML::NavigationPopulationRequest request, RefPtr<ContentBlockingStats> stats)
         : m_is_private(is_private)
         , m_request(move(request))
+        , m_content_blocking_stats(stats ? stats.release_nonnull() : ContentBlockingStats::create())
     {
+        m_request.content_blocking_load_id = m_content_blocking_stats->load_id();
     }
 
     void determine_the_origin_of_the_response();
@@ -71,6 +75,7 @@ private:
 
     IsPrivate m_is_private { IsPrivate::No };
     Web::HTML::NavigationPopulationRequest m_request;
+    NonnullRefPtr<ContentBlockingStats> m_content_blocking_stats;
     Optional<Web::HTML::NavigationPopulationResult> m_result;
     RefPtr<Requests::Request> m_response_body_request;
     Optional<int> m_response_body_request_server_client_id;

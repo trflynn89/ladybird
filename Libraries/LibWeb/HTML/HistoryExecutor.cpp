@@ -563,6 +563,8 @@ bool HistoryExecutor::run_changing_navigable_history_step_job_impl(ChangingNavig
                     after_document_populated->function()(nullptr);
                     return;
                 }
+                if (auto navigation_params = params.value().get_pointer<GC::Ref<NavigationParams>>())
+                    (*navigation_params)->content_blocking_load_id = request.content_blocking_load_id;
                 auto output = heap().allocate<PopulateSessionHistoryEntryDocumentOutput>();
                 output->redirected_url = move(result.redirected_url);
                 output->classic_history_api_state = move(result.classic_history_api_state);
@@ -579,7 +581,9 @@ bool HistoryExecutor::run_changing_navigable_history_step_job_impl(ChangingNavig
                     request.history_entry.url, request.source_snapshot_params.allows_downloading, move(fetch_client_origin),
                     request.user_involvement, {}, params.release_value(), request.csp_navigation_type,
                     request.history_entry.document_state.reload_pending ? Bindings::NavigationTimingType::Reload : Bindings::NavigationTimingType::BackForward,
-                    output, GC::create_function(heap(), [navigable, after_document_populated](GC::Ptr<PopulateSessionHistoryEntryDocumentOutput> output) {
+                    output, GC::create_function(heap(), [navigable, after_document_populated, load_id = request.content_blocking_load_id](GC::Ptr<PopulateSessionHistoryEntryDocumentOutput> output) {
+                        if (output && output->document)
+                            output->document->set_content_blocking_load_id(load_id);
                         queue_apply_history_step_task(*navigable, navigable->active_document(), GC::create_function(navigable->heap(), [after_document_populated, output] {
                             after_document_populated->function()(output);
                         }));
@@ -637,6 +641,7 @@ bool HistoryExecutor::run_changing_navigable_history_step_job_impl(ChangingNavig
             auto input_user_agent_initiated = target_entry->document_state()->user_agent_initiated();
 
             auto request = NavigationPopulationRequest {
+                .content_blocking_load_id = job.content_blocking_load_id,
                 .navigable_id = navigable->id(),
                 .history_entry = create_pending_session_history_entry_descriptor(create_session_history_entry_descriptor(*target_entry)),
                 .source_snapshot_params = job.source_snapshot.has_value() ? job.source_snapshot.release_value() : create_navigation_source_snapshot(*potentially_target_specific_source_snapshot_params),
@@ -663,7 +668,8 @@ bool HistoryExecutor::run_changing_navigable_history_step_job_impl(ChangingNavig
                     ContentSecurityPolicy::Directives::Directive::NavigationType::Other, allow_POST,
                     {}, GC::create_function(heap(), [this, operation_id, request](NavigationPopulationResult result) mutable {
                         m_page->client().history_navigation_params_creation_finished(operation_id, { move(request), move(result) });
-                    }));
+                    }),
+                    request.content_blocking_load_id);
             }));
         }
         // Otherwise, run afterDocumentPopulated immediately.
@@ -867,7 +873,7 @@ bool HistoryExecutor::resume_history_navigation_population(CrossProcessId operat
     return true;
 }
 
-void HistoryExecutor::run_ui_changing_navigable_history_job(CrossProcessId operation_id, CrossProcessId navigable_id, SessionHistoryEntryDescriptor target_entry, UserNavigationInvolvement user_involvement, Optional<Bindings::NavigationType> navigation_type, TraversalYieldsTo traversal_yields_to, Optional<Utf16String> canceled_navigation_id, GC::Ref<OnChangingNavigableHistoryStepJobComplete> on_complete, Optional<HistoryNavigationPopulation> population)
+void HistoryExecutor::run_ui_changing_navigable_history_job(CrossProcessId operation_id, CrossProcessId navigable_id, SessionHistoryEntryDescriptor target_entry, UserNavigationInvolvement user_involvement, Optional<Bindings::NavigationType> navigation_type, TraversalYieldsTo traversal_yields_to, Optional<Utf16String> canceled_navigation_id, GC::Ref<OnChangingNavigableHistoryStepJobComplete> on_complete, Optional<HistoryNavigationPopulation> population, u64 content_blocking_load_id)
 {
     auto& operation = ensure_history_operation(operation_id);
     auto source_snapshot_params = operation.source_snapshot_params;
@@ -915,6 +921,7 @@ void HistoryExecutor::run_ui_changing_navigable_history_job(CrossProcessId opera
             .canceled_navigation_id = move(canceled_navigation_id),
             .source_snapshot = operation.serialized_source_snapshot_params,
             .population = move(population),
+            .content_blocking_load_id = content_blocking_load_id,
         },
         source_snapshot_params, pending_document,
         GC::create_function(heap(), [this, operation_id, navigable_id, on_complete](LocalChangingNavigableHistoryStepJobResult result) {

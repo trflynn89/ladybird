@@ -31,6 +31,7 @@
 #include <LibWebCommon/Fetch/Infrastructure/HTTP/RequestPriority.h>
 #include <LibWebCommon/Fetch/Infrastructure/HTTP/RequestReferrer.h>
 #include <LibWebCommon/HTML/Scripting/EnvironmentId.h>
+#include <LibWebCommon/Loader/ContentBlockingRequestContext.h>
 
 namespace Web::Fetch::Infrastructure {
 
@@ -250,6 +251,9 @@ public:
 
     [[nodiscard]] Optional<ParserMetadata> const& parser_metadata() const { return m_parser_metadata; }
     void set_parser_metadata(Optional<ParserMetadata> parser_metadata) { m_parser_metadata = move(parser_metadata); }
+
+    Optional<ContentBlockingRequestContext> const& content_blocking_context() const { return m_content_blocking_context; }
+    void set_content_blocking_context(Optional<ContentBlockingRequestContext> context) { m_content_blocking_context = move(context); }
 
     [[nodiscard]] bool reload_navigation() const { return m_reload_navigation; }
     void set_reload_navigation(bool reload_navigation) { m_reload_navigation = reload_navigation; }
@@ -483,6 +487,7 @@ private:
     // https://fetch.spec.whatwg.org/#concept-request-reload-navigation-flag
     // A request has an associated reload-navigation flag. Unless stated otherwise, it is unset.
     bool m_reload_navigation { false };
+    Optional<ContentBlockingRequestContext> m_content_blocking_context;
 
     // https://fetch.spec.whatwg.org/#concept-request-history-navigation-flag
     // A request has an associated history-navigation flag. Unless stated otherwise, it is unset.

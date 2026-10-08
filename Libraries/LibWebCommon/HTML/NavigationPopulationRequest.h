@@ -46,6 +46,7 @@ struct NavigationStartRequest {
 // The serializable inputs needed to continue the navigate algorithm in the process selected to
 // populate the pending session history entry's document.
 struct NavigationPopulationRequest {
+    u64 content_blocking_load_id { 0 };
     CrossProcessId navigable_id;
     PendingSessionHistoryEntryDescriptor history_entry;
     NavigationSourceSnapshot source_snapshot_params;

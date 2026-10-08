@@ -29,6 +29,9 @@ public:
     {
     }
 
+    Optional<ContentBlockingRequestContext> const& content_blocking_context() const { return m_content_blocking_context; }
+    void set_content_blocking_context(Optional<ContentBlockingRequestContext> context) { m_content_blocking_context = move(context); }
+
     Optional<URL::URL> const& url() const { return m_url; }
     void set_url(Optional<URL::URL> url) { m_url = move(url); }
 
@@ -81,6 +84,7 @@ public:
 
 private:
     Optional<URL::URL> m_url;
+    Optional<ContentBlockingRequestContext> m_content_blocking_context;
     ByteString m_method { "GET" };
     NonnullRefPtr<HTTP::HeaderList> m_headers;
     ByteBuffer m_body;

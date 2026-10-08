@@ -1577,6 +1577,8 @@ public:
     CSS::StyleScope& style_scope() { return m_style_scope; }
 
     bool content_blocking_enabled() const;
+    u64 content_blocking_load_id() const { return m_content_blocking_load_id; }
+    void set_content_blocking_load_id(u64 load_id) { m_content_blocking_load_id = load_id; }
     Utf16String const& content_blocker_style_sheet();
     void invalidate_content_blocker_style_sheet();
     bool content_blocker_style_sheet_may_need_refresh_for_class_or_id(Utf16FlyString const* id, ReadonlySpan<Utf16FlyString> class_names);
@@ -2120,6 +2122,7 @@ private:
     // The style sheet set generation the `@keyframes` rows were last brought up to date at.
     Optional<u64> m_animation_keyframes_published_generation;
 
+    u64 m_content_blocking_load_id { 0 };
     Optional<Utf16String> m_content_blocker_style_sheet;
     // Class/id tokens already covered by the cached content blocker stylesheet.
     HashTable<Utf16FlyString> m_content_blocker_style_sheet_checked_classes;

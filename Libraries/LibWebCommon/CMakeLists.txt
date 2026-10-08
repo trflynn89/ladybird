@@ -41,6 +41,7 @@ set(SOURCES
     HTML/WorkerAgentTypes.cpp
     Infra/Strings.cpp
     Loader/ContentBlocking.cpp
+    Loader/ContentBlockingRequestContext.cpp
     Loader/DownloadFilename.cpp
     Loader/SiteCompatibility.cpp
     MimeSniff/MimeType.cpp
