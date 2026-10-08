@@ -1852,6 +1852,13 @@ void ViewImplementation::request_style_sheet_source(Web::CSS::StyleSheetIdentifi
     page().async_request_style_sheet_source(identifier);
 }
 
+void ViewImplementation::set_content_blocking_enabled(bool enabled)
+{
+    traversable().for_each_hosting_page([&](WebContentPage& page) {
+        page.async_set_content_blocking_enabled(enabled);
+    });
+}
+
 void ViewImplementation::debug_request(ByteString const& request, ByteString const& argument)
 {
     if (request == "dump-session-history"sv)

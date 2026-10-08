@@ -2756,7 +2756,7 @@ void Application::apply_view_options(Badge<ViewImplementation>, ViewImplementati
     // Test mode supplies its own filter lists independently of profile preferences.
     auto content_blocking_enabled = m_browser_options.enable_content_blocker == EnableContentBlocker::Yes
         && (m_web_content_options.is_test_mode == IsTestMode::Yes || m_settings->content_blocker_enabled());
-    page.async_debug_request("content-blocking"sv, content_blocking_enabled ? "on"sv : "off"sv);
+    page.async_set_content_blocking_enabled(content_blocking_enabled);
     if (m_content_blocker_list_buffer.has_value())
         page.client().async_set_content_blockers(*m_content_blocker_list_buffer);
 
@@ -2807,7 +2807,7 @@ void Application::content_blocker_settings_changed(Badge<ApplicationSettingsObse
 
     auto enabled = m_browser_options.enable_content_blocker == EnableContentBlocker::Yes && m_settings->content_blocker_enabled();
     ViewImplementation::for_each_view([enabled](ViewImplementation& view) {
-        view.debug_request("content-blocking"sv, enabled ? "on"sv : "off"sv);
+        view.set_content_blocking_enabled(enabled);
         return IterationDecision::Continue;
     });
 

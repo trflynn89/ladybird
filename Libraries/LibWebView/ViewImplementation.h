@@ -311,6 +311,8 @@ public:
     void list_style_sheets();
     void request_style_sheet_source(Web::CSS::StyleSheetIdentifier const&);
 
+    void set_content_blocking_enabled(bool);
+
     void debug_request(ByteString const& request, ByteString const& argument = {});
 
     void run_javascript(String const&);
