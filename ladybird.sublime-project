@@ -70,14 +70,19 @@
                 "on_save": true,
             },
         },
-        // "LSP": {
-        //     "LSP-clangd": {
-        //         "initializationOptions": {
-        //             "custom_command": [ "/opt/homebrew/opt/llvm/bin/clangd" ],
-        //             "custom_command": [ "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\Llvm\\x64\\bin\\clangd" ],
-        //         },
-        //     },
-        // },
+        "LSP": {
+            // "LSP-clangd": {
+            //     "initializationOptions": {
+            //         "custom_command": [ "/opt/homebrew/opt/llvm/bin/clangd" ],
+            //         "custom_command": [ "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\Llvm\\x64\\bin\\clangd" ],
+            //     },
+            // },
+            "LSP-rust-analyzer": {
+                "initialization_options": {
+                    "cfg.setTest": false,
+                },
+            },
+        },
         "rulers": [120],
     },
 }
