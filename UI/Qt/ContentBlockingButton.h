@@ -22,12 +22,14 @@ public:
     explicit ContentBlockingButton(QWidget* parent);
     void set_snapshot(WebView::ContentBlockingSnapshot const&);
     QString badge_text() const;
+    void set_show_count(bool);
     virtual QSize sizeHint() const override { return { 34, 34 }; }
 
 private:
     virtual void paintEvent(QPaintEvent*) override;
     QIcon m_logo { ":/Icons/ladybird.png" };
     WebView::ContentBlockingSnapshot m_snapshot;
+    bool m_show_count { true };
 };
 
 }

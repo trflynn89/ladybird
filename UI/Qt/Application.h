@@ -144,6 +144,7 @@ private:
 
     virtual bool supports_system_menu_bar() const override;
     virtual bool supports_vertical_tabs() const override { return true; }
+    virtual bool supports_content_blocking_controls() const override { return !browser_options().headless_mode.has_value(); }
     virtual bool supports_private_browsing_windows() const override { return true; }
     virtual bool supports_client_side_window_decorations() const override
     {

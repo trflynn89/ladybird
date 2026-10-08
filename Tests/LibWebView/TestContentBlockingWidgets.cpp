@@ -41,6 +41,10 @@ int main(int argc, char** argv)
             VERIFY(button.toolTip().contains(QString::number(count)));
         VERIFY(!button.grab().isNull());
     }
+    button.set_show_count(false);
+    VERIFY(button.badge_text().isEmpty());
+    VERIFY(button.size() == size);
+    VERIFY(button.toolTip().contains(QString::number(NumericLimits<u64>::max())));
     VERIFY(!QIcon(":/Icons/ladybird.png").isNull());
     VERIFY(button.accessibleName() == "Ad blocking");
     Ladybird::ContentBlockingPopover popover(&parent);
@@ -73,6 +77,9 @@ int main(int argc, char** argv)
     for (auto* label : popover.findChildren<QLabel*>())
         found_exact_count |= label->text().contains(QString::number(NumericLimits<u64>::max()));
     VERIFY(found_exact_count);
+    button.set_show_count(true);
+    VERIFY(button.badge_text() == "99+");
+    VERIFY(button.size() == size);
     parent.show();
     popover.show();
     popover.focus_switch();

@@ -130,6 +130,7 @@ private:
     virtual bool event(QEvent*) override;
 
     virtual void tab_settings_changed() override;
+    virtual void content_blocker_count_visibility_changed() override;
     virtual void config_variable_changed(WebView::ConfigVariableID) override;
 
     void recreate_toolbar_icons();

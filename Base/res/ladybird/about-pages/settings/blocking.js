@@ -14,6 +14,8 @@ const saveCustomFilters = document.querySelector("#save-custom-content-blocker-f
 const customFiltersStatus = document.querySelector("#custom-content-blocker-filters-status");
 const maximumCustomFilterSize = 4 * 1024 * 1024;
 const enableContentBlocking = document.querySelector("#enable-content-blocking");
+const showContentBlockerCount = document.querySelector("#show-content-blocker-count");
+const contentBlockerCountSetting = document.querySelector("#content-blocker-count-setting");
 let updateTimer;
 let savedCustomFilters = "";
 
@@ -67,6 +69,7 @@ function loadSettings(settings) {
         return;
     }
     enableContentBlocking.checked = contentBlockers.enabled;
+    showContentBlockerCount.checked = contentBlockers.showBlockedCount ?? true;
 
     for (const container of [builtInLists, languageLists, customSubscriptions, localLists]) {
         container.replaceChildren();
@@ -164,7 +167,14 @@ saveCustomFilters.addEventListener("click", () => {
     customFiltersStatus.innerText = "Saved";
 });
 
+showContentBlockerCount.addEventListener("change", () => {
+    ladybird.sendMessage("setShowContentBlockerCount", showContentBlockerCount.checked);
+});
+
 document.addEventListener("WebUIMessage", event => {
+    if (event.detail.name === "loadFeatures") {
+        contentBlockerCountSetting.classList.toggle("hidden", !event.detail.data?.contentBlockingControls);
+    }
     if (event.detail.name === "loadSettings") {
         loadSettings(event.detail.data);
     } else if (event.detail.name === "contentBlockerResult") {

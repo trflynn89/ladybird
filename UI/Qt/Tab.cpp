@@ -698,6 +698,7 @@ Tab::Tab(BrowserWindow* window, Optional<WebView::CanonicalTraversable&> travers
     location_edit_layout->addWidget(m_location_edit);
     toolbar_layout->addWidget(location_edit_container, 1);
     m_content_blocking_button = new ContentBlockingButton(m_toolbar);
+    content_blocker_count_visibility_changed();
     toolbar_layout->addWidget(m_content_blocking_button, 0, Qt::AlignVCenter);
     QObject::connect(m_content_blocking_button, &QToolButton::clicked, this, [this] { show_content_blocking_popover(); });
     view().on_content_blocking_change = [this](auto const& snapshot) { update_content_blocking_controls(snapshot); };
@@ -1479,6 +1480,11 @@ void Tab::update_downloads_popover()
 
     if (m_downloads_popover->set_downloads(WebView::Application::the().file_downloader().downloads()))
         position_downloads_popover();
+}
+
+void Tab::content_blocker_count_visibility_changed()
+{
+    m_content_blocking_button->set_show_count(WebView::Application::settings().show_content_blocker_count());
 }
 
 void Tab::update_content_blocking_controls(WebView::ContentBlockingSnapshot const& snapshot)

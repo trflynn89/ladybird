@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/JsonObject.h>
 #include <AK/LexicalPath.h>
 #include <LibCore/File.h>
 #include <LibCore/StandardPaths.h>
@@ -201,4 +202,35 @@ TEST_CASE(content_blocker_site_save_failure_rolls_back)
     EXPECT(settings.set_content_blocker_enabled_for_site("example.com"sv, false).is_error());
     EXPECT(settings.content_blocker_enabled_for_site("example.com"sv));
     MUST(Core::System::rmdir(settings_path()));
+}
+
+TEST_CASE(content_blocker_count_visibility_is_persistent)
+{
+    remove_settings_file();
+    {
+        auto settings = WebView::Settings::create(settings_path());
+        EXPECT(settings.show_content_blocker_count());
+        EXPECT(!settings.content_blocker_enabled());
+        settings.set_show_content_blocker_count(false);
+        EXPECT(!settings.show_content_blocker_count());
+        EXPECT(!settings.content_blocker_enabled());
+        EXPECT_EQ(settings.serialize_json().as_object().get_object("contentBlockers"sv)->get_bool("showBlockedCount"sv).value(), false);
+    }
+    auto reloaded = WebView::Settings::create(settings_path());
+    EXPECT(!reloaded.show_content_blocker_count());
+    reloaded.set_show_content_blocker_count(true);
+    EXPECT(WebView::Settings::create(settings_path()).show_content_blocker_count());
+    remove_settings_file();
+}
+
+TEST_CASE(invalid_content_blocker_count_visibility_defaults_to_true)
+{
+    for (auto value : { "null"sv, "0"sv, "1"sv, "\"false\""sv, "[]"sv, "{}"sv }) {
+        write_settings_file(MUST(String::formatted(R"({{"contentBlockers":{{"showBlockedCount":{}}}}})", value)));
+        auto settings = WebView::Settings::create(settings_path());
+        EXPECT(settings.show_content_blocker_count());
+    }
+    write_settings_file(R"({"contentBlockers":{}})"sv);
+    EXPECT(WebView::Settings::create(settings_path()).show_content_blocker_count());
+    remove_settings_file();
 }

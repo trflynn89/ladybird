@@ -150,6 +150,9 @@ void SettingsUI::register_interfaces()
     register_interface("setContentBlockerListEnabled"sv, [this](auto const& data) {
         set_content_blocker_list_enabled(data);
     });
+    register_interface("setShowContentBlockerCount"sv, [this](auto const& data) {
+        set_show_content_blocker_count(data);
+    });
     register_interface("setContentBlockerEnabled"sv, [this](auto const& data) {
         set_content_blocker_enabled(data);
     });
@@ -179,6 +182,7 @@ void SettingsUI::load_features()
     features.set("menuBar"_string, application.supports_system_menu_bar());
     features.set("primaryPaste"_string, application.supports_clipboard_type(Application::ClipboardType::Selection));
     features.set("verticalTabs"_string, application.supports_vertical_tabs());
+    features.set("contentBlockingControls"_string, application.supports_content_blocking_controls());
     features.set("geolocation"_string, Core::GeolocationProvider::is_available());
 
     async_send_message("loadFeatures"sv, move(features));
@@ -617,6 +621,14 @@ void SettingsUI::set_filter_list_updates_enabled(JsonValue const& enabled)
 void SettingsUI::update_content_blocker_lists(JsonValue const&)
 {
     Application::the().update_content_blocker_lists({});
+    load_current_settings();
+}
+
+void SettingsUI::set_show_content_blocker_count(JsonValue const& show)
+{
+    if (!show.is_bool() || !Application::the().supports_content_blocking_controls())
+        return;
+    Application::settings().set_show_content_blocker_count(show.as_bool());
     load_current_settings();
 }
 

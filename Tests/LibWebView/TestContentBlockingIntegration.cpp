@@ -16,12 +16,23 @@
 #include <LibFileSystem/FileSystem.h>
 #include <LibGfx/SystemTheme.h>
 #include <LibMain/Main.h>
+#include <LibURL/Parser.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/HeadlessWebView.h>
 #include <LibWebView/Utilities.h>
 #include <stdlib.h>
 
 namespace {
+
+class CountVisibilityObserver final : public WebView::SettingsObserver {
+public:
+    virtual void content_blocker_count_visibility_changed() override { ++visibility_changes; }
+    virtual void content_blocker_settings_changed() override { ++list_changes; }
+    virtual void content_blocker_site_policy_changed() override { ++policy_changes; }
+    size_t visibility_changes { 0 };
+    size_t list_changes { 0 };
+    size_t policy_changes { 0 };
+};
 
 class TestApplication : public WebView::Application {
     WEB_VIEW_APPLICATION(TestApplication)
@@ -40,6 +51,8 @@ public:
     }
 
     virtual bool should_coordinate_browser_process() const override { return false; }
+    // Model the Qt capability while keeping this bridge test independent of Qt.
+    virtual bool supports_content_blocking_controls() const override { return true; }
 };
 
 }
@@ -248,6 +261,73 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
     wait("blocked destination"sv, [&] { return loads_finished > previous_loads; });
     VERIFY(view->content_blocking_snapshot().site == snapshot.site);
     VERIFY(view->content_blocking_snapshot().blocked_request_count == 1);
-    outln("PASS: request rejection, frame aggregation, reload identity, and policy counts");
+    CountVisibilityObserver observer;
+    VERIFY(WebView::Application::settings().show_content_blocker_count());
+    previous_loads = loads_finished;
+    view->load(URL::Parser::basic_parse("about:settings#blocking"sv).value());
+    wait("badge settings page"sv, [&] { return loads_finished > previous_loads; });
+    auto settings_load_id = view->content_blocking_snapshot().load_id;
+    history_updated = false;
+    expected_title = "Badge capability ready"_utf16;
+    view->run_javascript(R"(
+        document.addEventListener('WebUIMessage', function receive(event) {
+            if (event.detail.name !== 'loadFeatures') return;
+            document.removeEventListener('WebUIMessage', receive);
+            const option = document.querySelector('#content-blocker-count-setting');
+            const toggle = document.querySelector('#show-content-blocker-count');
+            if (event.detail.data.contentBlockingControls && !option.classList.contains('hidden') && toggle.hasAttribute('switch'))
+                document.title = 'Badge capability ready';
+        });
+        ladybird.sendMessage('loadFeatures');
+    )"_string);
+    wait("badge capability"sv, [&] { return history_updated; });
+    history_updated = false;
+    expected_title = "Invalid badge values rejected"_utf16;
+    view->run_javascript(R"(
+        document.addEventListener('WebUIMessage', function receive(event) {
+            if (event.detail.name !== 'loadSettings') return;
+            document.removeEventListener('WebUIMessage', receive);
+            if (event.detail.data.contentBlockers.showBlockedCount)
+                document.title = 'Invalid badge values rejected';
+        });
+        for (const value of [null, 0, 1, 'false', {}, []])
+            ladybird.sendMessage('setShowContentBlockerCount', value);
+        ladybird.sendMessage('loadCurrentSettings');
+    )"_string);
+    wait("badge boolean validation"sv, [&] { return history_updated; });
+    VERIFY(observer.visibility_changes == 0);
+    history_updated = false;
+    expected_title = "Badge hidden"_utf16;
+    view->run_javascript(R"(
+        document.addEventListener('WebUIMessage', function receive(event) {
+            if (event.detail.name !== 'loadSettings') return;
+            document.removeEventListener('WebUIMessage', receive);
+            if (!event.detail.data.contentBlockers.showBlockedCount && !document.querySelector('#show-content-blocker-count').checked)
+                document.title = 'Badge hidden';
+        });
+        ladybird.sendMessage('setShowContentBlockerCount', false);
+    )"_string);
+    wait("badge hide message"sv, [&] { return history_updated; });
+    VERIFY(!WebView::Application::settings().show_content_blocker_count());
+    VERIFY(observer.visibility_changes == 1);
+    history_updated = false;
+    expected_title = "Badge shown"_utf16;
+    view->run_javascript(R"(
+        document.addEventListener('WebUIMessage', function receive(event) {
+            if (event.detail.name !== 'loadSettings') return;
+            document.removeEventListener('WebUIMessage', receive);
+            if (event.detail.data.contentBlockers.showBlockedCount && document.querySelector('#show-content-blocker-count').checked)
+                document.title = 'Badge shown';
+        });
+        ladybird.sendMessage('setShowContentBlockerCount', true);
+    )"_string);
+    wait("badge show message"sv, [&] { return history_updated; });
+    VERIFY(observer.visibility_changes == 2);
+    VERIFY(observer.list_changes == 0);
+    VERIFY(observer.policy_changes == 0);
+    VERIFY(view->content_blocking_snapshot().load_id == settings_load_id);
+    VERIFY(other_view->content_blocking_snapshot().blocked_request_count == 2);
+    VERIFY(other_view->content_blocking_snapshot().load_id == other_load_id);
+    outln("PASS: request counts, load ownership, private policy, cache, and badge settings");
     return 0;
 }
