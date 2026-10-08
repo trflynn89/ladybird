@@ -28,6 +28,8 @@ target_sources(ladybird PRIVATE
     BookmarksBar.cpp
     BrowserWindow.cpp
     ChromeStyle.cpp
+    ContentBlockingButton.cpp
+    ContentBlockingPopover.cpp
     CrashReportNotifier.cpp
     CrashReportReviewWidget.cpp
     DevToolsBanner.cpp
@@ -170,6 +172,19 @@ qt_deploy_runtime_dependencies(
 endif()
 
 if (BUILD_TESTING)
+    add_executable(TestContentBlockingWidgets
+        ${LADYBIRD_SOURCE_DIR}/Tests/LibWebView/TestContentBlockingWidgets.cpp
+        ContentBlockingButton.cpp
+        ContentBlockingPopover.cpp
+        ChromeStyle.cpp
+        Popover.cpp
+        StringUtils.cpp
+        ladybird.qrc
+    )
+    target_include_directories(TestContentBlockingWidgets PRIVATE ${LADYBIRD_SOURCE_DIR})
+    target_link_libraries(TestContentBlockingWidgets PRIVATE Qt6::Widgets LibWebView LibURL AK)
+    add_test(NAME TestContentBlockingWidgets COMMAND TestContentBlockingWidgets)
+    set_tests_properties(TestContentBlockingWidgets PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     add_executable(TestPerformanceMonitorWidget
         ${LADYBIRD_SOURCE_DIR}/Tests/LibWebView/TestPerformanceMonitorWidget.cpp
         PerformanceMonitorWidget.cpp

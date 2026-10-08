@@ -1353,6 +1353,21 @@ QProgressBar#LadybirdDownloadProgress::chunk {{
         surface, recessed_surface, hover_surface, border, text, muted_text, accent);
 }
 
+QString content_blocking_popover_style_sheet(QPalette const& palette)
+{
+    return qformatted(R"(
+QFrame#LadybirdContentBlockingPopover {{
+    color: {0}; background: {1}; border: 1px solid {2}; border-radius: 8px;
+}}
+QFrame#LadybirdContentBlockingPopover QLabel, QFrame#LadybirdContentBlockingPopover QCheckBox {{ color: {0}; }}
+QLabel#LadybirdContentBlockingSite {{ font-weight: 600; }}
+QLabel#LadybirdContentBlockingCount {{ font-weight: 600; }}
+QLabel#LadybirdContentBlockingNote {{ color: {3}; }}
+)",
+        style_sheet_color(chrome_text(palette)), style_sheet_color(chrome_surface(palette)),
+        style_sheet_color(chrome_border(palette)), style_sheet_color(chrome_muted_text(palette)));
+}
+
 QString message_popover_style_sheet(QPalette const& palette)
 {
     auto text = ChromeStyle::style_sheet_color(ChromeStyle::chrome_text(palette));
