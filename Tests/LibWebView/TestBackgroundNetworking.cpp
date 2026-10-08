@@ -156,3 +156,49 @@ TEST_CASE(content_blocker_list_settings_reject_built_in_identifiers)
     EXPECT(settings.content_blocker_list("easyPrivacy"sv)->built_in);
     remove_settings_file();
 }
+
+TEST_CASE(content_blocker_site_keys_and_persistence)
+{
+    remove_settings_file();
+    auto settings = WebView::Settings::create(settings_path());
+    EXPECT(settings.content_blocker_disabled_sites().is_empty());
+    MUST(settings.set_content_blocker_enabled_for_site("WWW.Example.COM."sv, false));
+    EXPECT(!settings.content_blocker_enabled_for_site("www.example.com"sv));
+    EXPECT(settings.content_blocker_enabled_for_site("example.com"sv));
+    EXPECT(settings.content_blocker_enabled_for_site("shop.example.com"sv));
+    MUST(settings.set_content_blocker_enabled_for_site("[2001:0DB8:0:0::1]"sv, false));
+    EXPECT(!settings.content_blocker_enabled_for_site("[2001:db8::1]"sv));
+    MUST(settings.set_content_blocker_enabled_for_site("127.0.0.1"sv, false));
+    MUST(settings.set_content_blocker_enabled_for_site("LOCALHOST."sv, false));
+    MUST(settings.set_content_blocker_enabled_for_site("bücher.example"sv, false));
+    EXPECT(!settings.content_blocker_enabled_for_site("xn--bcher-kva.example"sv));
+    for (auto malformed : { ""sv, "*.example.com"sv, "https://example.com"sv, "example.com:80"sv, "example.com/a"sv, "user@example.com"sv, "example.com?x"sv, "example.com#x"sv, "example.com\n"sv, "[invalid]"sv })
+        EXPECT(settings.set_content_blocker_enabled_for_site(malformed, false).is_error());
+    auto restored = WebView::Settings::create(settings_path());
+    EXPECT_EQ(restored.content_blocker_disabled_sites().size(), 5u);
+    EXPECT(!restored.content_blocker_enabled_for_site("www.example.com"sv));
+    MUST(restored.set_content_blocker_enabled_for_site("www.example.com"sv, true));
+    EXPECT(WebView::Settings::create(settings_path()).content_blocker_enabled_for_site("www.example.com"sv));
+    remove_settings_file();
+}
+
+TEST_CASE(content_blocker_site_invalid_entries)
+{
+    remove_settings_file();
+    write_settings_file(R"({"contentBlockers":{"disabledSites":["EXAMPLE.COM.","example.com",17,null,"*.bad.com","http://bad.com","localhost"]}})"sv);
+    auto settings = WebView::Settings::create(settings_path());
+    EXPECT_EQ(settings.content_blocker_disabled_sites().size(), 2u);
+    EXPECT(!settings.content_blocker_enabled_for_site("example.com"sv));
+    EXPECT(!settings.content_blocker_enabled_for_site("localhost"sv));
+    remove_settings_file();
+}
+
+TEST_CASE(content_blocker_site_save_failure_rolls_back)
+{
+    remove_settings_file();
+    auto settings = WebView::Settings::create(settings_path());
+    MUST(Core::System::mkdir(settings_path(), 0700));
+    EXPECT(settings.set_content_blocker_enabled_for_site("example.com"sv, false).is_error());
+    EXPECT(settings.content_blocker_enabled_for_site("example.com"sv));
+    MUST(Core::System::rmdir(settings_path()));
+}

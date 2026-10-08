@@ -133,8 +133,14 @@ public:
     void update_bookmark_action_for_current_web_view();
     void bookmarks_changed(Badge<ApplicationBookmarkStoreObserver>);
     void show_bookmarks_bar_changed(Badge<ApplicationSettingsObserver>);
+
     void background_networking_settings_changed(Badge<ApplicationSettingsObserver>);
+
+    bool content_blocking_enabled() const;
+    bool has_content_blocking_rules() const;
+    void apply_content_blocking_policy(WebContentPage&);
     void content_blocker_settings_changed(Badge<ApplicationSettingsObserver>);
+
     bool content_blocker_list_update_in_progress() const;
     void update_content_blocker_lists(Badge<SettingsUI>);
     void download_content_blocker_list_if_needed(Badge<Application, SettingsUI>, StringView identifier);

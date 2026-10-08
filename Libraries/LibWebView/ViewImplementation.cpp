@@ -22,6 +22,7 @@
 #include <LibWebCommon/CSS/SystemColor.h>
 #include <LibWebCommon/Geolocation/GeolocationPositionErrorCode.h>
 #include <LibWebCommon/Infra/Strings.h>
+#include <LibWebCommon/Loader/ContentBlocking.h>
 #include <LibWebCommon/WebDriver/Error.h>
 #include <LibWebCommon/WebView/SiteIsolation.h>
 #include <LibWebView/Application.h>
@@ -1855,8 +1856,23 @@ void ViewImplementation::request_style_sheet_source(Web::CSS::StyleSheetIdentifi
 void ViewImplementation::set_content_blocking_enabled(bool enabled)
 {
     traversable().for_each_hosting_page([&](WebContentPage& page) {
-        page.async_set_content_blocking_enabled(enabled);
+        page.async_set_content_blocking_policy(enabled, Application::settings().content_blocker_disabled_sites().values());
     });
+}
+
+void ViewImplementation::update_content_blocking_policy()
+{
+    set_content_blocking_enabled(Application::the().content_blocking_enabled());
+}
+
+ErrorOr<void> ViewImplementation::set_content_blocker_enabled_for_site(String const& site, bool enabled)
+{
+    if (!Application::the().content_blocking_enabled())
+        return Error::from_string_literal("Ad blocking is disabled globally");
+    auto host = Web::canonical_content_blocking_host(site);
+    if (!host.has_value())
+        return Error::from_string_literal("Invalid site hostname");
+    return Application::settings().set_content_blocker_enabled_for_site(*host, enabled);
 }
 
 void ViewImplementation::debug_request(ByteString const& request, ByteString const& argument)

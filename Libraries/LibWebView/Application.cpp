@@ -149,6 +149,14 @@ struct ApplicationSettingsObserver final : public SettingsObserver {
         Application::the().background_networking_settings_changed({});
     }
 
+    virtual void content_blocker_site_policy_changed() override
+    {
+        ViewImplementation::for_each_view([](ViewImplementation& view) {
+            view.update_content_blocking_policy();
+            return IterationDecision::Continue;
+        });
+    }
+
     virtual void content_blocker_settings_changed() override
     {
         Application::the().content_blocker_settings_changed({});
@@ -2753,12 +2761,7 @@ void Application::apply_view_options(Badge<ViewImplementation>, ViewImplementati
     view.set_preferred_contrast(m_contrast);
     view.set_preferred_motion(m_motion);
 
-    // Test mode supplies its own filter lists independently of profile preferences.
-    auto content_blocking_enabled = m_browser_options.enable_content_blocker == EnableContentBlocker::Yes
-        && (m_web_content_options.is_test_mode == IsTestMode::Yes || m_settings->content_blocker_enabled());
-    page.async_set_content_blocking_enabled(content_blocking_enabled);
-    if (m_content_blocker_list_buffer.has_value())
-        page.client().async_set_content_blockers(*m_content_blocker_list_buffer);
+    apply_content_blocking_policy(page);
 
     page.async_debug_request("set-line-box-borders"sv, m_show_line_box_borders_action->checked() ? "on"sv : "off"sv);
     page.async_debug_request("set-caret-hit-test-debug-overlay"sv, m_show_caret_hit_test_debug_overlay_action->checked() ? "on"sv : "off"sv);
@@ -2800,13 +2803,32 @@ void Application::background_networking_settings_changed(Badge<ApplicationSettin
     start_content_blocker_list_update(ContentBlockerListUpdateTrigger::Automatic);
 }
 
+bool Application::content_blocking_enabled() const
+{
+    // Test mode supplies its own filter lists independently of profile preferences.
+    return m_browser_options.enable_content_blocker == EnableContentBlocker::Yes
+        && (m_web_content_options.is_test_mode == IsTestMode::Yes || m_settings->content_blocker_enabled());
+}
+
+bool Application::has_content_blocking_rules() const
+{
+    return m_content_blocker_list_buffer.has_value() && m_content_blocker_list_buffer->size() > 0;
+}
+
+void Application::apply_content_blocking_policy(WebContentPage& page)
+{
+    page.async_set_content_blocking_policy(content_blocking_enabled(), m_settings->content_blocker_disabled_sites().values());
+
+    if (m_content_blocker_list_buffer.has_value())
+        page.client().async_set_content_blockers(*m_content_blocker_list_buffer);
+}
+
 void Application::content_blocker_settings_changed(Badge<ApplicationSettingsObserver>)
 {
     if (m_web_content_options.is_test_mode == IsTestMode::Yes)
         return;
 
-    auto enabled = m_browser_options.enable_content_blocker == EnableContentBlocker::Yes && m_settings->content_blocker_enabled();
-    ViewImplementation::for_each_view([enabled](ViewImplementation& view) {
+    ViewImplementation::for_each_view([enabled = content_blocking_enabled()](ViewImplementation& view) {
         view.set_content_blocking_enabled(enabled);
         return IterationDecision::Continue;
     });

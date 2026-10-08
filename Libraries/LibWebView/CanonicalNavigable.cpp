@@ -711,7 +711,10 @@ ErrorOr<NonnullRefPtr<WebContentPage>> CanonicalNavigable::obtain_page_to_host(C
         traversable.represent_group_in(*host);
     }
 
-    return *host->page(page_id);
+    auto& page = *host->page(page_id);
+    if (traversable.view().has_value())
+        Application::the().apply_content_blocking_policy(page);
+    return page;
 }
 
 Optional<PopulatedDocument> const& CanonicalNavigable::populated_document() const

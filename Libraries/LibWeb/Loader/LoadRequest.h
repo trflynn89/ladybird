@@ -68,6 +68,9 @@ public:
     Optional<URL::URL> const& source_url() const { return m_source_url; }
     void set_source_url(URL::URL source_url) { m_source_url = move(source_url); }
 
+    Optional<URL::URL> const& content_blocking_top_level_url() const { return m_content_blocking_top_level_url; }
+    void set_content_blocking_top_level_url(Optional<URL::URL> url) { m_content_blocking_top_level_url = move(url); }
+
     void start_timer() { m_load_timer.start(); }
     AK::Duration load_time() const { return m_load_timer.elapsed_time(); }
 
@@ -92,6 +95,7 @@ private:
     bool m_is_navigation_request { false };
     Fetch::Infrastructure::Request::Priority m_priority { Fetch::Infrastructure::Request::Priority::Auto };
     Optional<URL::URL> m_source_url;
+    Optional<URL::URL> m_content_blocking_top_level_url;
     Optional<HTTP::NetworkIsolationKey> m_network_isolation_key;
 };
 

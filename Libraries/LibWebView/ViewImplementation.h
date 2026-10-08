@@ -312,6 +312,8 @@ public:
     void request_style_sheet_source(Web::CSS::StyleSheetIdentifier const&);
 
     void set_content_blocking_enabled(bool);
+    void update_content_blocking_policy();
+    ErrorOr<void> set_content_blocker_enabled_for_site(String const&, bool enabled);
 
     void debug_request(ByteString const& request, ByteString const& argument = {});
 
