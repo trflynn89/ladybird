@@ -695,6 +695,7 @@ QToolButton#LadybirdLocationAction {{
 
 QString bookmarks_bar_style_sheet(QPalette const& palette)
 {
+    auto background = style_sheet_color(chrome_background(palette));
     auto hover = style_sheet_color(chrome_control_surface_hover(palette));
     auto pressed = style_sheet_color(chrome_control_surface_pressed(palette));
     auto control_border = style_sheet_color(chrome_control_border(palette));
@@ -703,6 +704,7 @@ QString bookmarks_bar_style_sheet(QPalette const& palette)
     return qformatted(R"(
 QToolBar#LadybirdBookmarksBar {{
     color: {2};
+    background: {4};
     border: 0;
     padding: 1px 4px;
     spacing: 3px;
@@ -726,7 +728,7 @@ QToolBar#LadybirdBookmarksBar QToolButton:checked {{
     border-color: {3};
 }}
 )",
-        hover, pressed, text, control_border);
+        hover, pressed, text, control_border, background);
 }
 
 QString find_in_page_style_sheet(QPalette const& palette)

@@ -32,6 +32,7 @@
 
 #include <LibWebView/TabPerformanceMonitor.h>
 #include <QColorDialog>
+#include <QCursor>
 #include <QFileDialog>
 #include <QFont>
 #include <QFontMetrics>
@@ -569,7 +570,13 @@ Tab::Tab(BrowserWindow* window, Optional<WebView::CanonicalTraversable&> travers
     m_loading_animation_timer->setInterval(80);
 
     m_bookmarks_bar = new BookmarksBar(this);
-    update_bookmarks_bar_visibility();
+    m_bookmarks_bar_hover_timer = new QTimer(this);
+    m_bookmarks_bar_hover_timer->setInterval(250);
+    connect(m_bookmarks_bar_hover_timer, &QTimer::timeout, this, &Tab::update_bookmarks_bar_hover);
+    m_toolbar->installEventFilter(this);
+    m_bookmarks_bar->installEventFilter(this);
+    m_view->installEventFilter(this);
+    m_toolbar_container->installEventFilter(this);
 
     m_hover_label = new HyperlinkLabel(this);
     m_hover_label->hide();
@@ -590,6 +597,7 @@ Tab::Tab(BrowserWindow* window, Optional<WebView::CanonicalTraversable&> travers
 
     toolbar_container_layout->addWidget(m_toolbar);
     toolbar_container_layout->addWidget(m_bookmarks_bar);
+    update_bookmarks_bar_visibility();
     tab_layout->addWidget(m_view);
     tab_layout->addWidget(m_find_in_page);
 
@@ -763,7 +771,6 @@ Tab::Tab(BrowserWindow* window, Optional<WebView::CanonicalTraversable&> travers
 
     view().on_url_change = [this](URL::URL const& url) {
         m_location_edit->set_url(url);
-        update_bookmarks_bar_visibility();
     };
 
     m_location_edit->on_navigation = [this](auto input, auto fallback_url, auto destination_kind) {
@@ -1354,6 +1361,11 @@ void Tab::hideEvent(QHideEvent* event)
     QWidget::hideEvent(event);
 
     m_hover_label->hide();
+    if (Application::settings().appearance().show_bookmarks_bar == WebView::ShowBookmarksBar::OnLocationHover) {
+        m_bookmarks_bar->hide();
+        m_bookmarks_bar_hover_timer->stop();
+        m_view->set_bookmarks_bar_overlay_height(0);
+    }
 }
 
 void Tab::update_hover_label()
@@ -1386,6 +1398,35 @@ bool Tab::event(QEvent* event)
     }
 
     return QWidget::event(event);
+}
+
+bool Tab::eventFilter(QObject* watched, QEvent* event)
+{
+    if (Application::settings().appearance().show_bookmarks_bar == WebView::ShowBookmarksBar::OnLocationHover) {
+        if (watched == m_view && (event->type() == QEvent::Move || event->type() == QEvent::Resize))
+            update_bookmarks_bar_overlay_geometry();
+
+        if (watched == m_toolbar && event->type() == QEvent::Enter && isVisible() && m_toolbar_container->isVisible()) {
+            update_bookmarks_bar_overlay_geometry();
+            m_bookmarks_bar->show();
+            m_bookmarks_bar->raise();
+            m_view->set_bookmarks_bar_overlay_height(m_bookmarks_bar->height());
+            m_bookmarks_bar_hover_timer->start();
+        }
+
+        if ((watched == m_toolbar || watched == m_bookmarks_bar || watched == m_toolbar_container)
+            && (event->type() == QEvent::Leave || event->type() == QEvent::Hide)) {
+            if (watched == m_bookmarks_bar && event->type() == QEvent::Hide) {
+                m_view->set_bookmarks_bar_overlay_height(0);
+            }
+            QTimer::singleShot(0, this, &Tab::update_bookmarks_bar_hover);
+        }
+
+        if (watched == m_bookmarks_bar && event->type() == QEvent::LayoutRequest)
+            update_bookmarks_bar_overlay_geometry();
+    }
+
+    return QWidget::eventFilter(watched, event);
 }
 
 void Tab::update_chrome_style()
@@ -1603,7 +1644,21 @@ void Tab::find_next()
 
 void Tab::update_bookmarks_bar_visibility()
 {
-    switch (Application::settings().appearance().show_bookmarks_bar) {
+    m_bookmarks_bar_hover_timer->stop();
+    m_view->set_bookmarks_bar_overlay_height(0);
+
+    auto mode = Application::settings().appearance().show_bookmarks_bar;
+    auto* toolbar_layout = m_toolbar_container->layout();
+    if (mode == WebView::ShowBookmarksBar::OnLocationHover) {
+        toolbar_layout->removeWidget(m_bookmarks_bar);
+        m_bookmarks_bar->hide();
+        m_bookmarks_bar->setParent(this);
+    } else if (toolbar_layout->indexOf(m_bookmarks_bar) < 0) {
+        m_bookmarks_bar->hide();
+        toolbar_layout->addWidget(m_bookmarks_bar);
+    }
+
+    switch (mode) {
     case WebView::ShowBookmarksBar::Always:
         m_bookmarks_bar->setVisible(true);
         break;
@@ -1611,10 +1666,40 @@ void Tab::update_bookmarks_bar_visibility()
         m_bookmarks_bar->setVisible(false);
         break;
     case WebView::ShowBookmarksBar::OnLocationHover:
-        // FIXME: Implement this.
-        m_bookmarks_bar->setVisible(true);
+        update_bookmarks_bar_overlay_geometry();
         break;
     }
+}
+
+void Tab::update_bookmarks_bar_overlay_geometry()
+{
+    m_bookmarks_bar->setGeometry(m_view->x(), m_view->y(), m_view->width(), m_bookmarks_bar->sizeHint().height());
+    m_bookmarks_bar->raise();
+    m_view->set_bookmarks_bar_overlay_height(m_bookmarks_bar->isVisible() ? m_bookmarks_bar->height() : 0);
+}
+
+void Tab::update_bookmarks_bar_hover()
+{
+    if (!m_bookmarks_bar_hover_timer->isActive())
+        return;
+
+    if (isVisible() && m_toolbar_container->isVisible() && !m_bookmarks_bar->isHidden()) {
+        if (m_bookmarks_bar->has_open_menu())
+            return;
+
+        auto toolbar_rect = QRect { m_toolbar->mapToGlobal(QPoint {}), m_toolbar->size() };
+        auto bar_rect = QRect { m_bookmarks_bar->mapToGlobal(QPoint {}), m_bookmarks_bar->size() };
+        toolbar_rect.setBottom(bar_rect.top());
+        auto cursor_position = QCursor::pos();
+        auto* hovered_widget = QApplication::widgetAt(cursor_position);
+        if (hovered_widget && hovered_widget->window() == window()
+            && (toolbar_rect.contains(cursor_position) || bar_rect.contains(cursor_position)))
+            return;
+    }
+
+    m_bookmarks_bar->hide();
+    m_bookmarks_bar_hover_timer->stop();
+    m_view->set_bookmarks_bar_overlay_height(0);
 }
 
 void Tab::request_close()

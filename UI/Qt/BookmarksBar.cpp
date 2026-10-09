@@ -175,6 +175,11 @@ BookmarksBar::BookmarksBar(Tab* parent)
     , m_tab(parent)
 {
     setObjectName("LadybirdBookmarksBar");
+#if defined(AK_OS_MACOS) || defined(AK_OS_WINDOWS)
+    // Keep hover overlays above the page's native presentation surface.
+    setAttribute(Qt::WA_DontCreateNativeAncestors);
+    setAttribute(Qt::WA_NativeWindow);
+#endif
     setIconSize({ BOOKMARK_BUTTON_ICON_SIZE, BOOKMARK_BUTTON_ICON_SIZE });
     setVisible(false);
     setMovable(false);
@@ -256,7 +261,9 @@ void BookmarksBar::rebuild()
 
                 auto title = qstring_from_ak_string(folder->title());
 
-                auto* submenu = create_application_menu(*this, *folder);
+                // Parent menus to the tab so Qt uses the browser window, rather than the bar's native child window,
+                // as their transient parent.
+                auto* submenu = create_application_menu(*m_tab, *folder);
                 install_menu_event_filter(this, submenu);
 
                 auto* action = new QAction(title, this);
@@ -280,6 +287,8 @@ void BookmarksBar::rebuild()
 
 void BookmarksBar::show_context_menu(QPoint position, Optional<WebView::BookmarkItem const&> item, Optional<String const&> target_folder_id, Optional<String const&> parent_folder_id)
 {
+    m_is_showing_context_menu = true;
+    ScopeGuard guard { [&] { m_is_showing_context_menu = false; } };
     if (item.has_value()) {
         m_selected_bookmark_menu_item_id = item->id;
         m_selected_bookmark_menu_target_folder_id = target_folder_id.copy();
@@ -296,6 +305,21 @@ void BookmarksBar::show_context_menu(QPoint position, Optional<WebView::Bookmark
 
         execute_context_menu(bookmarks_bar_context_menu(), position);
     }
+}
+
+bool BookmarksBar::has_open_menu() const
+{
+    if (m_is_showing_context_menu)
+        return true;
+    for (auto* action : actions()) {
+        if (auto* menu = action->menu(); menu && menu->isVisible())
+            return true;
+    }
+    for (auto* menu : findChildren<QMenu*>()) {
+        if (menu->isVisible())
+            return true;
+    }
+    return false;
 }
 
 bool BookmarksBar::eventFilter(QObject* object, QEvent* event)
@@ -352,6 +376,9 @@ bool BookmarksBar::handle_middle_mouse_click(QMouseEvent* event, QObject* item)
 
 bool BookmarksBar::handle_right_mouse_click(QMouseEvent* event, QObject* item)
 {
+    m_is_showing_context_menu = true;
+    ScopeGuard guard { [&] { m_is_showing_context_menu = false; } };
+
     // FIXME: The exec() calls below should use execute_context_menu() instead to use native context menus on macOS.
     //        However, more work is needed to ensure that opened bookmark folders do not disappear when the native menu
     //        is shown.
@@ -423,21 +450,21 @@ void BookmarksBar::extract_item_properties(QObject* item)
 QMenu& BookmarksBar::bookmarks_bar_context_menu()
 {
     if (!m_bookmarks_bar_context_menu)
-        m_bookmarks_bar_context_menu = create_application_menu(*this, m_tab->view().bookmarks_bar_context_menu());
+        m_bookmarks_bar_context_menu = create_application_menu(*m_tab, m_tab->view().bookmarks_bar_context_menu());
     return *m_bookmarks_bar_context_menu;
 }
 
 QMenu& BookmarksBar::bookmark_context_menu()
 {
     if (!m_bookmark_context_menu)
-        m_bookmark_context_menu = create_application_menu(*this, m_tab->view().bookmark_context_menu());
+        m_bookmark_context_menu = create_application_menu(*m_tab, m_tab->view().bookmark_context_menu());
     return *m_bookmark_context_menu;
 }
 
 QMenu& BookmarksBar::bookmark_folder_context_menu()
 {
     if (!m_bookmark_folder_context_menu)
-        m_bookmark_folder_context_menu = create_application_menu(*this, m_tab->view().bookmark_folder_context_menu());
+        m_bookmark_folder_context_menu = create_application_menu(*m_tab, m_tab->view().bookmark_folder_context_menu());
     return *m_bookmark_folder_context_menu;
 }
 

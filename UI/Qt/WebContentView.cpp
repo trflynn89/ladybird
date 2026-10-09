@@ -1458,6 +1458,18 @@ void WebContentView::set_vertical_tab_overlay_insets([[maybe_unused]] int left, 
 #endif
 }
 
+void WebContentView::set_bookmarks_bar_overlay_height([[maybe_unused]] int height)
+{
+#ifdef LADYBIRD_QT_USE_VULKAN_WINDOW
+    if (m_bookmarks_bar_overlay_height == height)
+        return;
+
+    m_bookmarks_bar_overlay_height = height;
+    update_vulkan_window_mask();
+    schedule_repaint();
+#endif
+}
+
 void WebContentView::set_zoom_level(double zoom_level)
 {
     m_zoom_level = zoom_level;

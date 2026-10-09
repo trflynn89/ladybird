@@ -127,6 +127,7 @@ private:
     virtual void resizeEvent(QResizeEvent*) override;
     virtual void hideEvent(QHideEvent*) override;
     virtual bool event(QEvent*) override;
+    virtual bool eventFilter(QObject*, QEvent*) override;
 
     virtual void tab_settings_changed() override;
     virtual void config_variable_changed(WebView::ConfigVariableID) override;
@@ -144,6 +145,8 @@ private:
     void position_private_session_popover();
     void set_loading(bool);
     void update_tab_icon();
+    void update_bookmarks_bar_overlay_geometry();
+    void update_bookmarks_bar_hover();
     int tab_index();
     void set_screen_wake_lock_state(Web::ScreenWakeLockState);
 
@@ -178,6 +181,7 @@ private:
     HyperlinkLabel* m_hover_label { nullptr };
     QIcon m_favicon;
     QTimer* m_loading_animation_timer { nullptr };
+    QTimer* m_bookmarks_bar_hover_timer { nullptr };
     bool m_is_loading { false };
     bool m_is_updating_chrome_style { false };
     bool m_vertical_tabs_enabled { false };

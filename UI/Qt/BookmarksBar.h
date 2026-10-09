@@ -26,6 +26,7 @@ public:
     explicit BookmarksBar(Tab* parent);
 
     void rebuild();
+    bool has_open_menu() const;
 
     String const& selected_bookmark_menu_item_id() const { return m_selected_bookmark_menu_item_id; }
     Optional<String> const& selected_bookmark_menu_target_folder_id() const { return m_selected_bookmark_menu_target_folder_id; }
@@ -58,6 +59,7 @@ private:
     Optional<String> m_selected_bookmark_menu_target_folder_id;
     Optional<String> m_selected_bookmark_menu_parent_folder_id;
     bool m_is_updating_chrome_style { false };
+    bool m_is_showing_context_menu { false };
 };
 
 }

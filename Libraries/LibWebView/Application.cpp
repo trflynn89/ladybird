@@ -2607,7 +2607,7 @@ void Application::initialize_actions()
     m_show_bookmarks_bar_menu->add_property("internal"sv, {});
     m_show_bookmarks_bar_always_action = add_show_bookmarks_bar_option("Always"sv, ShowBookmarksBar::Always);
     m_show_bookmarks_bar_never_action = add_show_bookmarks_bar_option("Never"sv, ShowBookmarksBar::Never);
-    m_show_bookmarks_bar_on_location_hover_action = add_show_bookmarks_bar_option("When hovering the location bar"sv, ShowBookmarksBar::OnLocationHover);
+    m_show_bookmarks_bar_on_location_hover_action = add_show_bookmarks_bar_option("When hovering the navigation toolbar"sv, ShowBookmarksBar::OnLocationHover);
     m_bookmarks_menu->add_submenu(*m_show_bookmarks_bar_menu);
     m_bookmarks_menu->add_separator();
 

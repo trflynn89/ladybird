@@ -174,7 +174,7 @@ static constexpr StringView show_bookmarks_bar_to_string(ShowBookmarksBar show_b
     VERIFY_NOT_REACHED();
 }
 
-static Optional<ShowBookmarksBar> bookmarks_bar_position_from_string(StringView show_bookmarks_bar)
+static Optional<ShowBookmarksBar> show_bookmarks_bar_from_string(StringView show_bookmarks_bar)
 {
     if (show_bookmarks_bar == "always"sv)
         return ShowBookmarksBar::Always;
@@ -690,8 +690,10 @@ Appearance Settings::parse_appearance(JsonValue const& settings)
     if (auto show_menu_bar = settings.as_object().get_bool(SHOW_MENU_BAR_KEY); show_menu_bar.has_value())
         appearance.show_menu_bar = *show_menu_bar;
     if (auto show_bookmarks_bar = settings.as_object().get_string(SHOW_BOOKMARKS_BAR_KEY); show_bookmarks_bar.has_value()) {
-        if (auto parsed = bookmarks_bar_position_from_string(*show_bookmarks_bar); parsed.has_value())
+        if (auto parsed = show_bookmarks_bar_from_string(*show_bookmarks_bar); parsed.has_value())
             appearance.show_bookmarks_bar = *parsed;
+    } else if (auto show_bookmarks_bar = settings.as_object().get_bool(SHOW_BOOKMARKS_BAR_KEY); show_bookmarks_bar.has_value()) {
+        appearance.show_bookmarks_bar = *show_bookmarks_bar ? ShowBookmarksBar::Always : ShowBookmarksBar::Never;
     }
 
     return appearance;
