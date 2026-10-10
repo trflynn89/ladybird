@@ -6,9 +6,11 @@
 
 #include <LibTest/TestCase.h>
 
+#include <AK/Array.h>
 #include <AK/ByteString.h>
 #include <AK/StringBuilder.h>
 #include <AK/Time.h>
+#include <AK/Utf16String.h>
 #include <AK/Vector.h>
 
 #ifdef AK_OS_WINDOWS
@@ -343,6 +345,71 @@ TEST_CASE(magnitude_less_than_zero)
     EXPECT_EQ(ByteString::formatted("{}", 0.654), "0.654");
 }
 
+TEST_CASE(floating_point_notation_boundaries)
+{
+    EXPECT_EQ(ByteString::formatted("{}", 1e-6), "0.000001");
+    EXPECT_EQ(ByteString::formatted("{}", 1e-7), "1e-7");
+    EXPECT_EQ(ByteString::formatted("{}", -1e-7), "-1e-7");
+    EXPECT_EQ(ByteString::formatted("{}", 1e20), "100000000000000000000");
+    EXPECT_EQ(ByteString::formatted("{}", 1e21), "1e+21");
+    EXPECT_EQ(ByteString::formatted("{}", 1e100), "1e+100");
+    EXPECT_EQ(ByteString::formatted("{}", 1e-6f), "0.000001");
+    EXPECT_EQ(ByteString::formatted("{}", 1e-7f), "1e-7");
+    EXPECT_EQ(ByteString::formatted("{:.0}", 1.99e30), "1e+30");
+    EXPECT_EQ(ByteString::formatted("{:.{}}", 1.234e30, NumericLimits<size_t>::max()), "1.234e+30");
+    EXPECT_EQ(ByteString::formatted("{:'.1f}", -1e20), "-100,000,000,000,000,000,000.0");
+    EXPECT_EQ(ByteString::formatted("{:.8f}", 1e-7), "0.00000010");
+    EXPECT_EQ(ByteString::formatted("{:.1f}", 1e21), "1000000000000000000000.0");
+}
+
+TEST_CASE(floating_point_rounding)
+{
+    // Round exact halfway values to even, including a carry into the integral part.
+    EXPECT_EQ(ByteString::formatted("{:.0f}", 2.5), "2");
+    EXPECT_EQ(ByteString::formatted("{:.0f}", 3.5), "4");
+    EXPECT_EQ(ByteString::formatted("{:.0f}", -2.5), "-2");
+    EXPECT_EQ(ByteString::formatted("{:.1f}", 1.25), "1.2");
+    EXPECT_EQ(ByteString::formatted("{:.1f}", 1.75), "1.8");
+    EXPECT_EQ(ByteString::formatted("{:.1f}", 9.75), "9.8");
+    EXPECT_EQ(ByteString::formatted("{:.1f}", 1.25f), "1.2");
+    EXPECT_EQ(ByteString::formatted("{:.1f}", 1.25L), "1.2");
+    EXPECT_EQ(ByteString::formatted("{}", -0.0), "0");
+    EXPECT_EQ(ByteString::formatted("{:+.2f}", -0.0), "+0.00");
+    EXPECT_EQ(ByteString::formatted("{:f}", 1.5), "1.500000");
+    EXPECT_EQ(ByteString::formatted("{:x>8.1f}", 1.25), "xxxxx1.2");
+    EXPECT_EQ(Utf16String::formatted("{:'.1f}", -9999.99), Utf16String::from_utf8("-10,000.0"sv));
+}
+
+TEST_CASE(floating_point_large_precision)
+{
+    StringBuilder expected;
+    expected.append("1.5"sv);
+    expected.append_repeated('0', 399);
+    EXPECT_EQ(ByteString::formatted("{:.400f}", 1.5), expected.string_view());
+    EXPECT_EQ(ByteString::formatted("{:.400f}", 1.5L), expected.string_view());
+
+    auto maximum = ByteString::formatted("{:.1f}", NumericLimits<double>::max());
+    EXPECT_EQ(maximum.length(), 311u);
+    EXPECT(maximum.ends_with(".0"sv));
+    EXPECT_EQ(maximum.to_number<double>().value(), NumericLimits<double>::max());
+
+    StringBuilder builder;
+    auto result = builder.try_appendff("{:.{}f}", 1.0, NumericLimits<size_t>::max());
+    EXPECT(result.is_error());
+}
+
+TEST_CASE(hexadecimal_floating_point)
+{
+    EXPECT_EQ(ByteString::formatted("{:a}", 1.5), "0x1.8p+0");
+    EXPECT_EQ(ByteString::formatted("{:A}", 3.25), "0X1.AP+1");
+    EXPECT_EQ(ByteString::formatted("{:.3a}", -1.5), "-0x1.800p+0");
+    EXPECT_EQ(ByteString::formatted("{:a}", 1.5f), "0x1.8p+0");
+    EXPECT_EQ(ByteString::formatted("{:.3a}", 1.5L), "0x1.800p+0");
+    EXPECT_EQ(ByteString::formatted("{:a}", 0.0), "0x0p+0");
+    EXPECT_EQ(ByteString::formatted("{:+A}", INFINITY), "+INF");
+    EXPECT_EQ(ByteString::formatted("{: A}", NAN), " NAN");
+}
+
 TEST_CASE(format_nullptr)
 {
     EXPECT_EQ(ByteString::formatted("{}", nullptr), ByteString::formatted("{:p}", static_cast<FlatPtr>(0)));
@@ -519,4 +586,45 @@ TEST_CASE(format_duration)
 
     EXPECT_EQ(ByteString::formatted("{:#}", AK::Duration::from_milliseconds(12'054)), "12.054s");
     EXPECT_EQ(ByteString::formatted("{:^#8}", AK::Duration::from_milliseconds(1'512)), " 1.512s ");
+}
+
+template<typename FormatCallback>
+static void bench_float_formatting(FormatCallback format)
+{
+    static constexpr auto numbers = to_array<double>({
+        123.456789,
+        0.000000123456789,
+        9876543210123456.0,
+        1.23e-7,
+        58.0,
+    });
+
+    StringBuilder builder;
+    for (size_t i = 0; i < 2'000'000; ++i) {
+        builder.clear();
+        format(builder, numbers[i % numbers.size()]);
+        auto length = builder.length();
+        AK::taint_for_optimizer(length);
+    }
+}
+
+BENCHMARK_CASE(bench_float_formatting_shortest)
+{
+    bench_float_formatting([](StringBuilder& builder, double value) {
+        builder.appendff("{}", value);
+    });
+}
+
+BENCHMARK_CASE(bench_float_formatting_precision)
+{
+    bench_float_formatting([](StringBuilder& builder, double value) {
+        builder.appendff("{:.6}", value);
+    });
+}
+
+BENCHMARK_CASE(bench_float_formatting_fixed)
+{
+    bench_float_formatting([](StringBuilder& builder, double value) {
+        builder.appendff("{:.6f}", value);
+    });
 }
