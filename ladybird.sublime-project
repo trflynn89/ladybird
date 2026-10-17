@@ -54,7 +54,7 @@
         },
         "format": {
             "clang-format": {
-                // "path": "/opt/homebrew/bin",
+                // "path": "/opt/homebrew/opt/llvm@22/bin",
                 // "path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\Llvm\\x64\\bin",
                 "on_save": true,
             },
