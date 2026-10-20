@@ -266,10 +266,13 @@ enum class PolicyControlledFeature : u8 {
     FocusWithoutUserActivation,
     Fullscreen,
     Gamepad,
+    Geolocation,
     Microphone,
     PictureInPicture,
     WindowManagement,
 };
+
+WEB_API Optional<PolicyControlledFeature> policy_controlled_feature_from_name(Utf16View);
 
 struct PendingFullscreenEvent {
     enum class Type {

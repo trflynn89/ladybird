@@ -6812,6 +6812,31 @@ void Document::unload(GC::Ptr<Document> new_document)
     did_stop_being_active_document_in_navigable();
 }
 
+Optional<PolicyControlledFeature> policy_controlled_feature_from_name(Utf16View name)
+{
+    struct NamedFeature {
+        Utf16View name;
+        PolicyControlledFeature feature;
+    };
+    constexpr Array features {
+        NamedFeature { u"autoplay"sv, PolicyControlledFeature::Autoplay },
+        NamedFeature { u"camera"sv, PolicyControlledFeature::Camera },
+        NamedFeature { u"encrypted-media"sv, PolicyControlledFeature::EncryptedMedia },
+        NamedFeature { u"focus-without-user-activation"sv, PolicyControlledFeature::FocusWithoutUserActivation },
+        NamedFeature { u"fullscreen"sv, PolicyControlledFeature::Fullscreen },
+        NamedFeature { u"gamepad"sv, PolicyControlledFeature::Gamepad },
+        NamedFeature { u"geolocation"sv, PolicyControlledFeature::Geolocation },
+        NamedFeature { u"microphone"sv, PolicyControlledFeature::Microphone },
+        NamedFeature { u"picture-in-picture"sv, PolicyControlledFeature::PictureInPicture },
+        NamedFeature { u"window-management"sv, PolicyControlledFeature::WindowManagement },
+    };
+    for (auto const& [feature_name, feature] : features) {
+        if (name == feature_name)
+            return feature;
+    }
+    return {};
+}
+
 // https://html.spec.whatwg.org/multipage/iframe-embed-object.html#allowed-to-use
 // The default allowlist of a policy-controlled feature is "self", which enables it in a document only if every
 // navigable between it and the top level is same origin with it. The origin of a navigable another process hosts is
@@ -6862,6 +6887,12 @@ bool Document::is_allowed_to_use_feature(PolicyControlledFeature feature) const
     case PolicyControlledFeature::Gamepad:
         // FIXME: Implement allowlist for this.
         return true;
+    case PolicyControlledFeature::Geolocation:
+        // Tests supply emulated positions, including to cross-origin frames.
+        if (HTML::Window::in_test_mode())
+            return true;
+        // FIXME: Implement the allow attribute for cross-origin delegation.
+        return default_allowlist_enables_feature_in(*this);
     case PolicyControlledFeature::Microphone:
         // FIXME: Implement allowlist for this.
         return true;

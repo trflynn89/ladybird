@@ -3212,7 +3212,7 @@ bool HTMLMediaElement::is_allowed_to_play() const
     if (auto window = document().window(); window && window->has_sticky_activation())
         return true;
 
-    switch (AutoplaySettings::the().decision_for_origin(document(), document().origin())) {
+    switch (autoplay_decision_for_origin(document(), document().origin())) {
     case AutoplayDecision::Allowed:
         return true;
     case AutoplayDecision::AllowedIfInaudible:

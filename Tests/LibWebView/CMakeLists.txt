@@ -352,6 +352,12 @@ if (BUILD_TESTING AND NOT WIN32)
     set_tests_properties(TestWebDriverSearchEngineSettings PROPERTIES TIMEOUT 120)
 
     add_test(
+        NAME TestWebDriverSiteSettings
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-site-settings.py $<TARGET_FILE:WebDriver>
+    )
+    set_tests_properties(TestWebDriverSiteSettings PROPERTIES TIMEOUT 120)
+
+    add_test(
         NAME TestWebDriverSettingsChanges
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-settings-changes.py $<TARGET_FILE:WebDriver>
     )

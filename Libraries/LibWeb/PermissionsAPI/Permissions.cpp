@@ -18,6 +18,7 @@
 #include <LibWeb/PermissionsAPI/PermissionStatus.h>
 #include <LibWeb/PermissionsAPI/PermissionStore.h>
 #include <LibWeb/PermissionsAPI/Permissions.h>
+#include <LibWeb/Platform/SiteSettings.h>
 #include <LibWeb/WebIDL/DOMException.h>
 #include <LibWeb/WebIDL/Promise.h>
 
@@ -62,7 +63,7 @@ PermissionState request_permission(PermissionDescriptor const& descriptor)
 
     // 4. If the user gives express permission to use the powerful feature, set current state to "granted"; otherwise to "denied".
     // The user's interaction may provide new information about the user's intent for the origin.
-    if (descriptor.name == "geolocation"_utf16 || HTML::Window::in_test_mode()) {
+    if (HTML::Window::in_test_mode()) {
         current_state = PermissionState::Granted;
     } else {
         current_state = PermissionState::Denied;
@@ -131,12 +132,18 @@ PermissionState permission_state(PermissionDescriptor descriptor, Optional<HTML:
     if (!HTML::is_secure_context(settings_object))
         return PermissionState::Denied;
 
-    // FIXME: 3. Let feature be descriptor's name.
+    // 3. Let feature be descriptor's name.
+    auto const& feature = descriptor.name;
 
-    // FIXME: 4. If there exists a policy-controlled feature for feature and settings' relevant global object has an associated Document run the following step:
-    if (false) {
-        // 1. Let document be settings' relevant global object's associated Document.
-        // 2. If document is not allowed to use feature, return "denied".
+    // 4. If there exists a policy-controlled feature for feature and settings' relevant global object has an associated Document run the following step:
+    if (auto policy_controlled_feature = DOM::policy_controlled_feature_from_name(feature.utf16_view()); policy_controlled_feature.has_value()) {
+        if (auto* window = HTML::window_from_global_object(settings_object.global_object())) {
+            // 1. Let document be settings' relevant global object's associated Document.
+            auto const& document = window->associated_document();
+            // 2. If document is not allowed to use feature, return "denied".
+            if (!document.is_allowed_to_use_feature(*policy_controlled_feature))
+                return PermissionState::Denied;
+        }
     }
 
     // 5. Let key be the result of generating a permission key for descriptor with settings's top-level origin and settings's origin.
@@ -151,6 +158,9 @@ PermissionState permission_state(PermissionDescriptor descriptor, Optional<HTML:
         return entry.release_value().state;
 
     // 8. Return the PermissionState enum value that represents the permission state of feature, taking into account any permission state constraints for descriptor's name.
+    auto value = Platform::SiteSettings::the().value_for_origin(descriptor.name, key);
+    if (value.has_value() && value->has<PermissionState>())
+        return value->get<PermissionState>();
     return PermissionState::Prompt;
 }
 

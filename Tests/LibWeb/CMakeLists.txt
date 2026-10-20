@@ -25,6 +25,7 @@ set(TEST_SOURCES
     TestSessionHistoryEntry.cpp
     TestSharedCompiledStyleSheet.cpp
     TestSimpleRealm.cpp
+    TestSiteSettings.cpp
     TestSourceHighlighter.cpp
     TestStructuredSerializeCorpus.cpp
     TestStructuredSerializeDurability.cpp
@@ -76,6 +77,7 @@ target_link_libraries(TestStructuredSerializeFormat PRIVATE LibGC LibJS LibCrypt
 target_link_libraries(TestStructuredSerializeHardening PRIVATE LibGC LibJS LibCrypto LibGfx LibIPC)
 target_link_libraries(TestStructuredSerializeSharedArrayBuffer PRIVATE LibGC LibJS LibIPC)
 target_link_libraries(TestSecureContexts PRIVATE LibURL)
+target_link_libraries(TestSiteSettings PRIVATE LibURL)
 target_link_libraries(TestSessionHistoryEntry PRIVATE LibJS LibURL)
 target_link_libraries(TestSourceHighlighter PRIVATE LibURL)
 target_link_libraries(TestWrapperWorld PRIVATE LibGC LibJS LibURL)

@@ -6,13 +6,10 @@
 
 #pragma once
 
-#include <AK/Utf16String.h>
-#include <AK/Vector.h>
-#include <AK/kmalloc.h>
+#include <AK/Types.h>
 #include <LibURL/Forward.h>
 #include <LibWeb/Export.h>
 #include <LibWeb/Forward.h>
-#include <LibWebCommon/HTML/AutoplayPolicy.h>
 
 namespace Web::HTML {
 
@@ -22,24 +19,6 @@ enum class AutoplayDecision : u8 {
     Blocked,
 };
 
-// Holds the user agent's autoplay configuration for this process: the global policy plus the set of
-// origins that may always autoplay regardless of that policy. Populated from the browser process.
-class WEB_API AutoplaySettings {
-public:
-    AK_ALLOC_WITH_KMALLOC;
-
-    static AutoplaySettings& the();
-
-    AutoplayDecision decision_for_origin(DOM::Document const&, URL::Origin const&) const;
-
-    void set_policy(AutoplayPolicy, ReadonlySpan<Utf16String> allowlist);
-
-private:
-    AutoplaySettings();
-    ~AutoplaySettings();
-
-    AutoplayPolicy m_policy { AutoplayPolicy::BlockAudio };
-    Vector<URL::Origin> m_allowlist;
-};
+WEB_API AutoplayDecision autoplay_decision_for_origin(DOM::Document const&, URL::Origin const&);
 
 }

@@ -60,7 +60,6 @@
 #include <LibWeb/FileAPI/BlobURLStore.h>
 #include <LibWeb/Gamepad/GamepadRegistry.h>
 #include <LibWeb/Geometry/DOMRect.h>
-#include <LibWeb/HTML/AutoplaySettings.h>
 #include <LibWeb/HTML/BroadcastChannel.h>
 #include <LibWeb/HTML/BrowsingContext.h>
 #include <LibWeb/HTML/EventLoop/EventLoop.h>
@@ -93,6 +92,7 @@
 #include <LibWeb/PictureInPicture/PictureInPictureController.h>
 #include <LibWeb/Platform/EventLoopPlugin.h>
 #include <LibWeb/Platform/FontPlugin.h>
+#include <LibWeb/Platform/SiteSettings.h>
 #include <LibWeb/Selection/Selection.h>
 #include <LibWeb/UIEvents/InputTypes.h>
 #include <LibWebCommon/HTML/SelectedFile.h>
@@ -3115,9 +3115,9 @@ void ConnectionFromClient::set_content_blockers(Core::AnonymousBuffer patterns_b
         m_page_host->invalidate_user_style();
 }
 
-void ConnectionFromClient::set_autoplay_settings(Web::PageId, Web::HTML::AutoplayPolicy policy, Vector<Utf16String> allowlist)
+void ConnectionFromClient::set_site_setting(Web::PageId, Utf16String name, Web::SiteSettingValue default_value, Web::SiteSettingValue allowlist_value, Vector<Utf16String> allowlist)
 {
-    Web::HTML::AutoplaySettings::the().set_policy(policy, allowlist);
+    Web::Platform::SiteSettings::the().set(move(name), move(default_value), move(allowlist_value), allowlist);
 }
 
 void ConnectionFromClient::set_preferred_color_scheme(Web::PageId page_id, Web::CSS::PreferredColorScheme color_scheme)

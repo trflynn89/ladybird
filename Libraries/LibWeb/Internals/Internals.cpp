@@ -64,7 +64,6 @@
 #include <LibWeb/Geolocation/Geolocation.h>
 #include <LibWeb/Geometry/DOMRect.h>
 #include <LibWeb/HTML/AnimatedBitmapDecodedImageData.h>
-#include <LibWeb/HTML/AutoplaySettings.h>
 #include <LibWeb/HTML/BrowsingContext.h>
 #include <LibWeb/HTML/EventLoop/EventLoop.h>
 #include <LibWeb/HTML/EventLoop/TaskQueue.h>
@@ -102,6 +101,7 @@
 #include <LibWeb/Painting/PaintingRustBridge.h>
 #include <LibWeb/Painting/Scrolling.h>
 #include <LibWeb/PictureInPicture/PictureInPictureController.h>
+#include <LibWeb/Platform/SiteSettings.h>
 #include <LibWeb/ResizeObserver/ResizeObserver.h>
 #include <LibWeb/StyleValueRustFFI.h>
 #include <LibWeb/WebIDL/ExceptionOr.h>
@@ -1497,7 +1497,7 @@ void Internals::record_display_list_for_testing(bool paint_overlay, bool cold)
 void Internals::set_autoplay_policy(Utf16String const& policy)
 {
     if (auto parsed = HTML::autoplay_policy_from_string(policy.utf16_view()); parsed.has_value())
-        HTML::AutoplaySettings::the().set_policy(*parsed, {});
+        Platform::SiteSettings::the().set("autoplay"_utf16, *parsed, HTML::AutoplayPolicy::AllowAudioAndVideo, {});
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static

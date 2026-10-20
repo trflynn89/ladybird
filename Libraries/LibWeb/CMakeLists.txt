@@ -819,6 +819,7 @@ set(SOURCES
     Platform/FontPlugin.cpp
     Platform/ImageCodecPlugin.cpp
     Platform/RemoteImageCodecPlugin.cpp
+    Platform/SiteSettings.cpp
     Platform/Timer.cpp
     ReferrerPolicy/AbstractOperations.cpp
     RequestIdleCallback/IdleDeadline.cpp

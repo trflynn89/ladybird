@@ -33,7 +33,6 @@
 #include <LibWebCommon/Forward.h>
 #include <LibWebCommon/Gamepad/GamepadSnapshot.h>
 #include <LibWebCommon/Gamepad/GamepadStateBuffer.h>
-#include <LibWebCommon/HTML/AutoplayPolicy.h>
 #include <LibWebCommon/HTML/WorkerAgentTypes.h>
 #include <LibWebCommon/Page/EventResult.h>
 #include <LibWebCommon/Page/InputEvent.h>
@@ -44,6 +43,7 @@
 #include <LibWebCommon/WebView/Debugger.h>
 #include <LibWebCommon/WebView/Geolocation.h>
 #include <LibWebCommon/WebView/PageInfo.h>
+#include <LibWebCommon/WebView/SiteSettings.h>
 #include <WebContent/Forward.h>
 #include <WebContent/WebContentClientEndpoint.h>
 #include <WebContent/WebContentConsoleClient.h>
@@ -234,7 +234,7 @@ private:
     virtual void set_content_blocking_policy(Web::PageId page_id, bool enabled, Vector<String> disabled_sites) override;
     virtual void set_content_blockers(Core::AnonymousBuffer patterns) override;
 
-    virtual void set_autoplay_settings(Web::PageId page_id, Web::HTML::AutoplayPolicy policy, Vector<Utf16String> allowlist) override;
+    virtual void set_site_setting(Web::PageId page_id, Utf16String name, Web::SiteSettingValue default_value, Web::SiteSettingValue allowlist_value, Vector<Utf16String> allowlist) override;
     virtual void set_preferred_color_scheme(Web::PageId page_id, Web::CSS::PreferredColorScheme) override;
     virtual void set_preferred_contrast(Web::PageId page_id, Web::CSS::PreferredContrast) override;
     virtual void set_preferred_motion(Web::PageId page_id, Web::CSS::PreferredMotion) override;

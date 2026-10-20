@@ -1138,7 +1138,14 @@ static void send_autoplay_settings(WebContentPage const& page)
     for (auto const& site_filter : autoplay_settings.site_filters)
         allowlist.unchecked_append(Utf16String::from_utf8(site_filter));
 
-    page.async_set_autoplay_settings(policy, move(allowlist));
+    page.async_set_site_setting("autoplay"_utf16, policy, Web::HTML::AutoplayPolicy::AllowAudioAndVideo, move(allowlist));
+}
+
+static void send_geolocation_settings(WebContentPage const& page)
+{
+    using Web::Bindings::PermissionState;
+    auto allowed = Application::web_content_options().is_test_mode == IsTestMode::Yes || Application::settings().geolocation_enabled();
+    page.async_set_site_setting("geolocation"_utf16, allowed ? PermissionState::Granted : PermissionState::Denied, PermissionState::Granted, {});
 }
 
 static void send_global_privacy_control(WebContentPage const& page)
@@ -1164,6 +1171,7 @@ void ViewImplementation::send_preferences_to_page(WebContentPage& page)
     page.async_set_zoom_level(m_zoom_level);
     send_browsing_behavior(page);
     send_autoplay_settings(page);
+    send_geolocation_settings(page);
     send_global_privacy_control(page);
     page.async_set_spell_checking_available(Application::the().spell_checker() != nullptr);
     send_geolocation_emulated_position(page);
@@ -3730,6 +3738,8 @@ void ViewImplementation::global_privacy_control_changed()
 
 void ViewImplementation::geolocation_settings_changed()
 {
+    traversable().for_each_hosting_page(send_geolocation_settings);
+
     using ErrorCode = Web::Geolocation::GeolocationPositionErrorCode;
 
     if (Application::web_content_options().is_test_mode != IsTestMode::Yes && !Application::settings().geolocation_enabled()) {
