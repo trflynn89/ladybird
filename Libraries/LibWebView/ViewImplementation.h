@@ -527,9 +527,9 @@ public:
     Function<void()> on_fullscreen_window;
     Function<void()> on_exit_fullscreen_window;
     Function<void(Color current_color)> on_request_color_picker;
-    Function<void(WebContentPage& requesting_page, u64 request_id)> on_request_geolocation_position;
+    Function<void(WebContentPage& requesting_page, u64 request_id, Web::HTML::EnvironmentId const&)> on_request_geolocation_position;
     Function<void(WebContentPage& requesting_page, u64 request_id)> on_cancel_geolocation_position_request;
-    Function<void(WebContentPage& requesting_page, u64 request_id)> on_start_geolocation_position_watch;
+    Function<void(WebContentPage& requesting_page, u64 request_id, Web::HTML::EnvironmentId const&)> on_start_geolocation_position_watch;
     Function<void(WebContentPage& requesting_page, u64 request_id)> on_stop_geolocation_position_watch;
     Function<void(Utf16String const& name, URL::Origin const&, Function<void(bool granted)> on_decided)> on_request_permission;
     Function<void(Web::HTML::FileFilter const& accepted_file_types, Web::HTML::AllowMultipleFiles)> on_request_file_picker;
@@ -994,8 +994,13 @@ protected:
     Vector<Utf16String> m_spelling_guesses;
     RefPtr<WebContentPage> m_spelling_context_menu_page;
 
-    HashMap<GeolocationRequestKey, Core::GeolocationProvider::RequestId> m_geolocation_position_request_ids;
-    HashMap<GeolocationRequestKey, Core::GeolocationProvider::WatchId> m_geolocation_watch_ids;
+    template<typename Id>
+    struct NativeGeolocationRequest {
+        Id provider_id;
+        Web::HTML::EnvironmentId environment_id;
+    };
+    HashMap<GeolocationRequestKey, NativeGeolocationRequest<Core::GeolocationProvider::RequestId>> m_geolocation_position_request_ids;
+    HashMap<GeolocationRequestKey, NativeGeolocationRequest<Core::GeolocationProvider::WatchId>> m_geolocation_watch_ids;
 
     Core::AnonymousBuffer m_document_cookie_version_buffer;
     HashMap<String, Core::SharedVersionIndex> m_document_cookie_version_indices;

@@ -64,7 +64,6 @@ private:
     void add_site_setting_filter(JsonValue const&);
     void remove_site_setting_filter(JsonValue const&);
     void remove_all_site_setting_filters(JsonValue const&);
-    void set_geolocation_enabled(JsonValue const&);
 
     void estimate_browsing_data_sizes(JsonValue const&);
     void set_browsing_data_settings(JsonValue const&);

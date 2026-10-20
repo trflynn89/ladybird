@@ -9,6 +9,7 @@
 #include <AK/JsonObject.h>
 #include <LibCore/ElapsedTimer.h>
 #include <LibCore/EventLoop.h>
+#include <LibCore/GeolocationProvider.h>
 #include <LibDevTools/StorageHelpers.h>
 #include <LibHTTP/Cookie/ParsedCookie.h>
 #include <LibWebCommon/HTML/BrowsingContext.h>
@@ -1476,10 +1477,42 @@ void WebContentPage::did_request_color_picker(Color current_color)
     view().did_request_color_picker({}, *this, current_color);
 }
 
-void WebContentPage::did_request_geolocation_position(u64 request_id)
+bool WebContentPage::is_geolocation_allowed(Web::HTML::EnvironmentId const& environment_id) const
+{
+    auto document = document_with_hosted_environment(environment_id);
+    if (!is_open() || !document.has_value() || document->browsing_context().has_been_discarded()
+        || document->browsing_context().active_document().ptr() != &*document)
+        return false;
+
+    auto const& origin = document->origin();
+    if (origin.is_opaque() || (origin.scheme() != "https"sv && !origin.host().is_loopback_or_localhost()))
+        return false;
+
+    // FIXME: Support cross-origin frames once geolocation Permissions Policy delegation is implemented.
+    bool is_fully_active = false;
+    traversable().for_each_in_inclusive_subtree([&](CanonicalNavigable const& navigable) {
+        if (&navigable.active_document() != &*document)
+            return IterationDecision::Continue;
+        is_fully_active = true;
+        for (auto* child = &navigable; child->parent(); child = child->parent()) {
+            auto const& parent_document = child->parent()->active_document();
+            if (!parent_document.origin().is_same_origin(origin) || child->container_document() != &parent_document) {
+                is_fully_active = false;
+                break;
+            }
+        }
+        return IterationDecision::Break;
+    });
+    if (!is_fully_active)
+        return false;
+
+    return Core::GeolocationProvider::is_available() && Application::settings().geolocation_settings().is_allowed(document->origin());
+}
+
+void WebContentPage::did_request_geolocation_position(u64 request_id, Web::HTML::EnvironmentId environment_id)
 {
     if (view().on_request_geolocation_position)
-        view().on_request_geolocation_position(*this, request_id);
+        view().on_request_geolocation_position(*this, request_id, environment_id);
 }
 
 void WebContentPage::did_request_permission(u64 request_id, Utf16String name)
@@ -1515,10 +1548,10 @@ void WebContentPage::did_cancel_geolocation_position_request(u64 request_id)
         view().on_cancel_geolocation_position_request(*this, request_id);
 }
 
-void WebContentPage::did_start_geolocation_position_watch(u64 request_id)
+void WebContentPage::did_start_geolocation_position_watch(u64 request_id, Web::HTML::EnvironmentId environment_id)
 {
     if (view().on_start_geolocation_position_watch)
-        view().on_start_geolocation_position_watch(*this, request_id);
+        view().on_start_geolocation_position_watch(*this, request_id, environment_id);
 }
 
 void WebContentPage::did_stop_geolocation_position_watch(u64 request_id)

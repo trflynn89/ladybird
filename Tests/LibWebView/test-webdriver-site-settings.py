@@ -142,7 +142,7 @@ def run_test(webdriver_binary):
 
                 assert permission() == "denied"
                 if available:
-                    change("setGeolocationEnabled", True)
+                    change("setSiteSettingPolicy", {"setting": "geolocation", "policy": "allow"})
                     switch(page)
                     assert permission() == "granted", "An existing process did not receive a permission update"
 
@@ -151,7 +151,7 @@ def run_test(webdriver_binary):
                     "A new process did not receive its initial settings"
                 )
                 if available:
-                    change("setGeolocationEnabled", False)
+                    change("setSiteSettingPolicy", {"setting": "geolocation", "policy": "block"})
                     switch(later_page)
                     assert permission() == "denied"
                     switch(page)

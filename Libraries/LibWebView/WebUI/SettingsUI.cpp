@@ -137,9 +137,6 @@ void SettingsUI::register_interfaces()
     register_interface("removeAllSiteSettingFilters"sv, [this](auto const& data) {
         remove_all_site_setting_filters(data);
     });
-    register_interface("setGeolocationEnabled"sv, [this](auto const& data) {
-        set_geolocation_enabled(data);
-    });
 
     register_interface("estimateBrowsingDataSizes"sv, [this](auto const& data) {
         estimate_browsing_data_sizes(data);
@@ -406,6 +403,7 @@ void SettingsUI::remove_custom_search_engine(JsonValue const& search_engine)
 
 enum class SiteSettingType {
     Autoplay,
+    Geolocation,
 };
 
 static constexpr StringView site_setting_type_to_string(SiteSettingType setting)
@@ -413,6 +411,8 @@ static constexpr StringView site_setting_type_to_string(SiteSettingType setting)
     switch (setting) {
     case SiteSettingType::Autoplay:
         return "autoplay"sv;
+    case SiteSettingType::Geolocation:
+        return "geolocation"sv;
     }
     VERIFY_NOT_REACHED();
 }
@@ -428,6 +428,8 @@ static Optional<SiteSettingType> site_setting_type(JsonValue const& settings)
 
     if (*setting_type == "autoplay"sv)
         return SiteSettingType::Autoplay;
+    if (*setting_type == "geolocation"sv)
+        return SiteSettingType::Geolocation;
     return {};
 }
 
@@ -452,10 +454,17 @@ void SettingsUI::set_site_setting_policy(JsonValue const& site_setting)
         return;
 
     switch (*setting) {
-    case SiteSettingType::Autoplay:
+    case SiteSettingType::Autoplay: {
         auto policy_utf16 = Utf16String::from_utf8_without_validation(*policy);
         if (auto parsed = Web::HTML::autoplay_policy_from_string(policy_utf16.utf16_view()); parsed.has_value())
             Application::settings().set_autoplay_policy(*parsed);
+        break;
+    }
+    case SiteSettingType::Geolocation:
+        if (*policy == "allow"sv)
+            Application::settings().set_geolocation_policy(GeolocationPolicy::Allow);
+        else if (*policy == "block"sv)
+            Application::settings().set_geolocation_policy(GeolocationPolicy::Block);
         break;
     }
 }
@@ -474,6 +483,9 @@ void SettingsUI::add_site_setting_filter(JsonValue const& site_setting)
     case SiteSettingType::Autoplay:
         Application::settings().add_autoplay_site_filter(*filter);
         break;
+    case SiteSettingType::Geolocation:
+        Application::settings().add_geolocation_site_filter(*filter);
+        break;
     }
 }
 
@@ -491,6 +503,9 @@ void SettingsUI::remove_site_setting_filter(JsonValue const& site_setting)
     case SiteSettingType::Autoplay:
         Application::settings().remove_autoplay_site_filter(*filter);
         break;
+    case SiteSettingType::Geolocation:
+        Application::settings().remove_geolocation_site_filter(*filter);
+        break;
     }
 }
 
@@ -504,15 +519,10 @@ void SettingsUI::remove_all_site_setting_filters(JsonValue const& site_setting)
     case SiteSettingType::Autoplay:
         Application::settings().remove_all_autoplay_site_filters();
         break;
+    case SiteSettingType::Geolocation:
+        Application::settings().remove_all_geolocation_site_filters();
+        break;
     }
-}
-
-void SettingsUI::set_geolocation_enabled(JsonValue const& enabled)
-{
-    if (!enabled.is_bool())
-        return;
-
-    Application::settings().set_geolocation_enabled(enabled.as_bool());
 }
 
 void SettingsUI::estimate_browsing_data_sizes(JsonValue const& options)

@@ -326,7 +326,7 @@ public:
         OneShot,
         Watch,
     };
-    u64 request_geolocation_position(GeolocationPositionCallback, GeolocationRequestType = GeolocationRequestType::OneShot);
+    u64 request_geolocation_position(HTML::EnvironmentId const&, GeolocationPositionCallback, GeolocationRequestType = GeolocationRequestType::OneShot);
     void cancel_geolocation_position_request(u64 request_id);
     void receive_geolocation_position(u64 request_id, GeolocationPositionResult);
 
@@ -557,7 +557,6 @@ private:
     };
     HashMap<u64, PendingGeolocationRequest> m_pending_geolocation_requests;
     u64 m_next_geolocation_request_id { 0 };
-    Optional<u64> m_active_geolocation_request_id;
 
     HashMap<u64, PermissionPromptCallback> m_pending_permission_requests;
     u64 m_next_permission_request_id { 0 };
@@ -850,9 +849,9 @@ public:
     virtual void page_did_request_color_picker([[maybe_unused]] Color current_color) { }
     virtual void page_did_request_file_picker([[maybe_unused]] HTML::FileFilter const& accepted_file_types, Web::HTML::AllowMultipleFiles) { }
     virtual void page_did_request_select_dropdown([[maybe_unused]] HTML::CrossProcessId local_root_id, [[maybe_unused]] Web::CSSPixelPoint content_position, [[maybe_unused]] Web::CSSPixels minimum_width, [[maybe_unused]] Vector<Web::HTML::SelectItem> items) { }
-    virtual void page_did_request_geolocation_position([[maybe_unused]] u64 request_id) { }
+    virtual void page_did_request_geolocation_position([[maybe_unused]] u64 request_id, HTML::EnvironmentId const&) { }
     virtual void page_did_cancel_geolocation_position_request([[maybe_unused]] u64 request_id) { }
-    virtual void page_did_start_geolocation_position_watch([[maybe_unused]] u64 request_id) { }
+    virtual void page_did_start_geolocation_position_watch([[maybe_unused]] u64 request_id, HTML::EnvironmentId const&) { }
     virtual void page_did_stop_geolocation_position_watch([[maybe_unused]] u64 request_id) { }
     virtual void page_did_request_permission([[maybe_unused]] u64 request_id, [[maybe_unused]] Utf16String const& name) { }
 

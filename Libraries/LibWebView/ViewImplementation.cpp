@@ -1144,8 +1144,17 @@ static void send_autoplay_settings(WebContentPage const& page)
 static void send_geolocation_settings(WebContentPage const& page)
 {
     using Web::Bindings::PermissionState;
-    auto allowed = Application::web_content_options().is_test_mode == IsTestMode::Yes || Application::settings().geolocation_enabled();
-    page.async_set_site_setting("geolocation"_utf16, allowed ? PermissionState::Granted : PermissionState::Denied, PermissionState::Granted, {});
+    auto const& geolocation_settings = Application::settings().geolocation_settings();
+    auto in_test_mode = Application::web_content_options().is_test_mode == IsTestMode::Yes;
+    auto available = in_test_mode || Core::GeolocationProvider::is_available();
+    auto allowed = in_test_mode || (available && geolocation_settings.policy == GeolocationPolicy::Allow);
+
+    Vector<Utf16String> allowlist;
+    allowlist.ensure_capacity(geolocation_settings.site_filters.size());
+    for (auto const& site_filter : geolocation_settings.site_filters)
+        allowlist.unchecked_append(Utf16String::from_utf8(site_filter));
+
+    page.async_set_site_setting("geolocation"_utf16, allowed ? PermissionState::Granted : PermissionState::Denied, available ? PermissionState::Granted : PermissionState::Denied, move(allowlist));
 }
 
 static void send_global_privacy_control(WebContentPage const& page)
@@ -2632,11 +2641,11 @@ void ViewImplementation::initialize_tab(Web::HTML::VisibilityState system_visibi
         VERIFY_NOT_REACHED();
     };
 
-    auto make_geolocation_success_handler = [this](WebContentPage& request_page, u64 request_id, bool is_watch) {
+    auto make_geolocation_success_handler = [this](WebContentPage& request_page, u64 request_id, Web::HTML::EnvironmentId const& environment_id, bool is_watch) {
         auto weak_this = make_weak_ptr();
         auto key = GeolocationRequestKey { request_page, request_id };
 
-        return [weak_this, request_page = NonnullRefPtr<WebContentPage>(request_page), request_id, key, is_watch](Core::GeolocationCoordinates coords) {
+        return [weak_this, request_page = NonnullRefPtr<WebContentPage>(request_page), request_id, key, environment_id, is_watch](Core::GeolocationCoordinates coords) {
             auto* view = weak_this.ptr();
             if (!view || !request_page->is_open())
                 return;
@@ -2648,9 +2657,9 @@ void ViewImplementation::initialize_tab(Web::HTML::VisibilityState system_visibi
                 return;
             }
 
-            if (!Application::settings().geolocation_enabled()) {
+            if (!request_page->is_geolocation_allowed(environment_id)) {
                 if (auto provider_watch_id = view->m_geolocation_watch_ids.take(key); provider_watch_id.has_value())
-                    Application::the().stop_watching_geolocation_position(*provider_watch_id);
+                    Application::the().stop_watching_geolocation_position(provider_watch_id->provider_id);
                 request_page->async_geolocation_position_response(request_id, {}, to_underlying(GeolocationErrorCode::PermissionDenied));
                 return;
             }
@@ -2680,50 +2689,50 @@ void ViewImplementation::initialize_tab(Web::HTML::VisibilityState system_visibi
             if (is_watch && code == GeolocationErrorCode::PermissionDenied) {
                 auto provider_watch_id = view->m_geolocation_watch_ids.take(key);
                 if (provider_watch_id.has_value())
-                    Application::the().stop_watching_geolocation_position(*provider_watch_id);
+                    Application::the().stop_watching_geolocation_position(provider_watch_id->provider_id);
             }
 
             request_page->async_geolocation_position_response(request_id, {}, to_underlying(code));
         };
     };
 
-    on_request_geolocation_position = [this, geolocation_error_code, make_geolocation_success_handler, make_geolocation_error_handler](WebContentPage& requesting_page, u64 request_id) {
-        if (!Application::settings().geolocation_enabled()) {
+    on_request_geolocation_position = [this, geolocation_error_code, make_geolocation_success_handler, make_geolocation_error_handler](WebContentPage& requesting_page, u64 request_id, Web::HTML::EnvironmentId const& environment_id) {
+        if (!requesting_page.is_geolocation_allowed(environment_id)) {
             requesting_page.async_geolocation_position_response(request_id, {}, to_underlying(GeolocationErrorCode::PermissionDenied));
             return;
         }
 
         if (auto previous_provider_request_id = m_geolocation_position_request_ids.take({ requesting_page, request_id }); previous_provider_request_id.has_value())
-            Application::the().cancel_geolocation_position_request(*previous_provider_request_id);
+            Application::the().cancel_geolocation_position_request(previous_provider_request_id->provider_id);
 
         auto provider_request_id = Application::the().request_geolocation_position(
-            make_geolocation_success_handler(requesting_page, request_id, false),
+            make_geolocation_success_handler(requesting_page, request_id, environment_id, false),
             make_geolocation_error_handler(requesting_page, request_id, false));
         if (provider_request_id.is_error()) {
             requesting_page.async_geolocation_position_response(request_id, {}, to_underlying(geolocation_error_code(provider_request_id.error())));
             return;
         }
 
-        m_geolocation_position_request_ids.set({ requesting_page, request_id }, provider_request_id.release_value());
+        m_geolocation_position_request_ids.set({ requesting_page, request_id }, NativeGeolocationRequest<Core::GeolocationProvider::RequestId> { provider_request_id.release_value(), environment_id });
     };
 
     on_cancel_geolocation_position_request = [this](WebContentPage& requesting_page, u64 request_id) {
         auto provider_request_id = m_geolocation_position_request_ids.take({ requesting_page, request_id });
         if (provider_request_id.has_value())
-            Application::the().cancel_geolocation_position_request(*provider_request_id);
+            Application::the().cancel_geolocation_position_request(provider_request_id->provider_id);
     };
 
-    on_start_geolocation_position_watch = [this, geolocation_error_code, make_geolocation_success_handler, make_geolocation_error_handler](WebContentPage& requesting_page, u64 request_id) {
-        if (!Application::settings().geolocation_enabled()) {
+    on_start_geolocation_position_watch = [this, geolocation_error_code, make_geolocation_success_handler, make_geolocation_error_handler](WebContentPage& requesting_page, u64 request_id, Web::HTML::EnvironmentId const& environment_id) {
+        if (!requesting_page.is_geolocation_allowed(environment_id)) {
             requesting_page.async_geolocation_position_response(request_id, {}, to_underlying(GeolocationErrorCode::PermissionDenied));
             return;
         }
 
         if (auto previous_provider_watch_id = m_geolocation_watch_ids.take({ requesting_page, request_id }); previous_provider_watch_id.has_value())
-            Application::the().stop_watching_geolocation_position(*previous_provider_watch_id);
+            Application::the().stop_watching_geolocation_position(previous_provider_watch_id->provider_id);
 
         auto provider_watch_id = Application::the().start_watching_geolocation_position(
-            make_geolocation_success_handler(requesting_page, request_id, true),
+            make_geolocation_success_handler(requesting_page, request_id, environment_id, true),
             make_geolocation_error_handler(requesting_page, request_id, true));
 
         if (provider_watch_id.is_error()) {
@@ -2731,7 +2740,7 @@ void ViewImplementation::initialize_tab(Web::HTML::VisibilityState system_visibi
             return;
         }
 
-        m_geolocation_watch_ids.set({ requesting_page, request_id }, provider_watch_id.release_value());
+        m_geolocation_watch_ids.set({ requesting_page, request_id }, NativeGeolocationRequest<Core::GeolocationProvider::WatchId> { provider_watch_id.release_value(), environment_id });
     };
 
     on_stop_geolocation_position_watch = [this](WebContentPage& requesting_page, u64 request_id) {
@@ -2739,7 +2748,7 @@ void ViewImplementation::initialize_tab(Web::HTML::VisibilityState system_visibi
         if (!provider_watch_id.has_value())
             return;
 
-        Application::the().stop_watching_geolocation_position(*provider_watch_id);
+        Application::the().stop_watching_geolocation_position(provider_watch_id->provider_id);
     };
 }
 
@@ -2747,11 +2756,11 @@ void ViewImplementation::cancel_all_native_geolocation_requests()
 {
     auto geolocation_position_request_ids = move(m_geolocation_position_request_ids);
     for (auto const& request : geolocation_position_request_ids)
-        Application::the().cancel_geolocation_position_request(request.value);
+        Application::the().cancel_geolocation_position_request(request.value.provider_id);
 
     auto geolocation_watch_ids = move(m_geolocation_watch_ids);
     for (auto const& watch : geolocation_watch_ids)
-        Application::the().stop_watching_geolocation_position(watch.value);
+        Application::the().stop_watching_geolocation_position(watch.value.provider_id);
 }
 
 void ViewImplementation::did_start_navigation()
@@ -3742,18 +3751,26 @@ void ViewImplementation::geolocation_settings_changed()
 
     using ErrorCode = Web::Geolocation::GeolocationPositionErrorCode;
 
-    if (Application::web_content_options().is_test_mode != IsTestMode::Yes && !Application::settings().geolocation_enabled()) {
-        auto geolocation_position_request_ids = move(m_geolocation_position_request_ids);
-        for (auto const& request : geolocation_position_request_ids) {
-            Application::the().cancel_geolocation_position_request(request.value);
-            request.key.page->async_geolocation_position_response(request.key.request_id, {}, to_underlying(ErrorCode::PermissionDenied));
-        }
+    Vector<GeolocationRequestKey> denied_requests;
+    for (auto const& request : m_geolocation_position_request_ids) {
+        if (!request.key.page->is_geolocation_allowed(request.value.environment_id))
+            denied_requests.append(request.key);
+    }
+    for (auto const& key : denied_requests) {
+        auto request = m_geolocation_position_request_ids.take(key).release_value();
+        Application::the().cancel_geolocation_position_request(request.provider_id);
+        key.page->async_geolocation_position_response(key.request_id, {}, to_underlying(ErrorCode::PermissionDenied));
+    }
 
-        auto geolocation_watch_ids = move(m_geolocation_watch_ids);
-        for (auto const& watch : geolocation_watch_ids) {
-            Application::the().stop_watching_geolocation_position(watch.value);
-            watch.key.page->async_geolocation_position_response(watch.key.request_id, {}, to_underlying(ErrorCode::PermissionDenied));
-        }
+    Vector<GeolocationRequestKey> denied_watches;
+    for (auto const& watch : m_geolocation_watch_ids) {
+        if (!watch.key.page->is_geolocation_allowed(watch.value.environment_id))
+            denied_watches.append(watch.key);
+    }
+    for (auto const& key : denied_watches) {
+        auto watch = m_geolocation_watch_ids.take(key).release_value();
+        Application::the().stop_watching_geolocation_position(watch.provider_id);
+        key.page->async_geolocation_position_response(key.request_id, {}, to_underlying(ErrorCode::PermissionDenied));
     }
 
     send_geolocation_emulated_position(page());
@@ -3765,14 +3782,10 @@ void ViewImplementation::geolocation_settings_changed()
 
 void ViewImplementation::send_geolocation_emulated_position(WebContentPage& page)
 {
-    using ErrorCode = Web::Geolocation::GeolocationPositionErrorCode;
-
     if (Application::web_content_options().is_test_mode == IsTestMode::Yes)
         page.async_set_geolocation_emulated_position({ 37.7647658, -122.4345892, 100.0, 0.0, 0.0, 0.0, 0.0 }, {});
-    else if (Application::settings().geolocation_enabled())
-        page.async_set_geolocation_emulated_position({}, {});
     else
-        page.async_set_geolocation_emulated_position({}, to_underlying(ErrorCode::PermissionDenied));
+        page.async_set_geolocation_emulated_position({}, {});
 }
 
 void ViewImplementation::bookmarks_changed()

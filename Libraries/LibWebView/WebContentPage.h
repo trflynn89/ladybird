@@ -84,6 +84,7 @@ public:
     CanonicalTraversable& traversable() const;
     ViewImplementation& view() const;
     bool displays_tab() const;
+    bool is_geolocation_allowed(Web::HTML::EnvironmentId const&) const;
     String dump_process_tree() const;
     Optional<CanonicalNavigable&> hosted_navigable(Web::HTML::CrossProcessId) const;
     Optional<CanonicalEnvironmentSettingsObject const&> hosted_environment(Web::HTML::EnvironmentId const& environment_id) const;
@@ -249,9 +250,9 @@ private:
     virtual void did_change_picture_in_picture_player_controls_visibility(bool shown) override;
     virtual void did_request_file(ByteString path, i32 request_id) override;
     virtual void did_request_color_picker(Color current_color) override;
-    virtual void did_request_geolocation_position(u64 request_id) override;
+    virtual void did_request_geolocation_position(u64 request_id, Web::HTML::EnvironmentId environment_id) override;
     virtual void did_cancel_geolocation_position_request(u64 request_id) override;
-    virtual void did_start_geolocation_position_watch(u64 request_id) override;
+    virtual void did_start_geolocation_position_watch(u64 request_id, Web::HTML::EnvironmentId environment_id) override;
     virtual void did_stop_geolocation_position_watch(u64 request_id) override;
     virtual void did_request_permission(u64 request_id, Utf16String name) override;
     virtual void did_request_file_picker(Web::HTML::FileFilter accepted_file_types, Web::HTML::AllowMultipleFiles allow_multiple_files) override;

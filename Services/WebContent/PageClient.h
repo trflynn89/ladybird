@@ -341,9 +341,9 @@ private:
     virtual void page_did_request_color_picker(Color current_color) override;
     virtual void page_did_request_file_picker(Web::HTML::FileFilter const& accepted_file_types, Web::HTML::AllowMultipleFiles) override;
     virtual void page_did_request_select_dropdown(Web::HTML::CrossProcessId local_root_id, Web::CSSPixelPoint content_position, Web::CSSPixels minimum_width, Vector<Web::HTML::SelectItem> items) override;
-    virtual void page_did_request_geolocation_position(u64 request_id) override;
+    virtual void page_did_request_geolocation_position(u64 request_id, Web::HTML::EnvironmentId const& environment_id) override;
     virtual void page_did_cancel_geolocation_position_request(u64 request_id) override;
-    virtual void page_did_start_geolocation_position_watch(u64 request_id) override;
+    virtual void page_did_start_geolocation_position_watch(u64 request_id, Web::HTML::EnvironmentId const& environment_id) override;
     virtual void page_did_stop_geolocation_position_watch(u64 request_id) override;
     virtual void page_did_request_permission(u64 request_id, Utf16String const& name) override;
     virtual void page_did_finish_test(Utf16String const& text) override;

@@ -79,6 +79,17 @@ struct AutoplaySiteSetting : public SiteSetting {
     Web::HTML::AutoplayPolicy policy { Web::HTML::AutoplayPolicy::BlockAudio };
 };
 
+enum class GeolocationPolicy : u8 {
+    Allow,
+    Block,
+};
+
+struct WEBVIEW_API GeolocationSiteSetting : public SiteSetting {
+    GeolocationPolicy policy { GeolocationPolicy::Block };
+
+    bool is_allowed(URL::Origin const&) const;
+};
+
 struct BrowsingDataSettings {
     HTTP::DiskCacheSettings disk_cache_settings;
 };
@@ -207,8 +218,11 @@ public:
     void remove_autoplay_site_filter(String const&);
     void remove_all_autoplay_site_filters();
 
-    bool geolocation_enabled() const { return m_geolocation_enabled; }
-    void set_geolocation_enabled(bool);
+    GeolocationSiteSetting const& geolocation_settings() const { return m_geolocation; }
+    void set_geolocation_policy(GeolocationPolicy);
+    void add_geolocation_site_filter(String const&);
+    void remove_geolocation_site_filter(String const&);
+    void remove_all_geolocation_site_filters();
 
     static BrowsingDataSettings parse_browsing_data_settings(JsonValue const&);
     BrowsingDataSettings const& browsing_data_settings() const { return m_browsing_data_settings; }
@@ -291,7 +305,7 @@ private:
     Vector<SearchEngine> m_custom_search_engines;
 
     AutoplaySiteSetting m_autoplay;
-    bool m_geolocation_enabled { false };
+    GeolocationSiteSetting m_geolocation;
 
     BrowsingDataSettings m_browsing_data_settings;
     GlobalPrivacyControl m_global_privacy_control { GlobalPrivacyControl::No };

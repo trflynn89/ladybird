@@ -11,9 +11,9 @@
 #include <AK/JsonValue.h>
 #include <AK/Random.h>
 #include <AK/Utf16String.h>
-#include <LibCore/GeolocationProvider.h>
 #include <LibCore/StandardPaths.h>
 #include <LibURL/InternalURLs.h>
+#include <LibURL/Origin.h>
 #include <LibURL/Parser.h>
 #include <LibUnicode/Locale.h>
 #include <LibWebCommon/Loader/ContentBlocking.h>
@@ -72,7 +72,7 @@ static constexpr auto SITE_SETTING_POLICY_KEY = "policy"sv;
 static constexpr auto SITE_SETTING_SITE_FILTERS_KEY = "siteFilters"sv;
 
 static constexpr auto AUTOPLAY_KEY = "autoplay"sv;
-static constexpr auto GEOLOCATION_ENABLED_KEY = "geolocationEnabled"sv;
+static constexpr auto GEOLOCATION_KEY = "geolocation"sv;
 
 static constexpr auto BROWSING_DATA_KEY = "browsingData"sv;
 static constexpr auto DISK_CACHE_KEY = "diskCache"sv;
@@ -376,14 +376,13 @@ Settings Settings::create(ByteString settings_path, Vector<String> platform_lang
         }
     }
 
-    auto load_site_setting = [&](AutoplaySiteSetting& site_setting, StringView key) {
+    auto load_site_setting = [&](auto& site_setting, StringView key, auto parse_policy) {
         auto saved_settings = settings_json.value().get_object(key);
         if (!saved_settings.has_value())
             return;
 
         if (auto policy = saved_settings->get_string(SITE_SETTING_POLICY_KEY); policy.has_value()) {
-            auto policy_utf16 = Utf16String::from_utf8_without_validation(*policy);
-            if (auto parsed = Web::HTML::autoplay_policy_from_string(policy_utf16.utf16_view()); parsed.has_value())
+            if (auto parsed = parse_policy(*policy); parsed.has_value())
                 site_setting.policy = *parsed;
         }
 
@@ -397,10 +396,18 @@ Settings Settings::create(ByteString settings_path, Vector<String> platform_lang
         }
     };
 
-    load_site_setting(settings.m_autoplay, AUTOPLAY_KEY);
+    load_site_setting(settings.m_autoplay, AUTOPLAY_KEY, [](String const& policy) {
+        auto policy_utf16 = Utf16String::from_utf8_without_validation(policy);
+        return Web::HTML::autoplay_policy_from_string(policy_utf16.utf16_view());
+    });
 
-    if (auto geolocation_enabled = settings_json.value().get_bool(GEOLOCATION_ENABLED_KEY); geolocation_enabled.has_value())
-        settings.m_geolocation_enabled = *geolocation_enabled && Core::GeolocationProvider::is_available();
+    load_site_setting(settings.m_geolocation, GEOLOCATION_KEY, [](String const& policy) -> Optional<GeolocationPolicy> {
+        if (policy == "allow"sv)
+            return GeolocationPolicy::Allow;
+        if (policy == "block"sv)
+            return GeolocationPolicy::Block;
+        return {};
+    });
 
     if (auto browsing_data_settings = settings_json.value().get(BROWSING_DATA_KEY); browsing_data_settings.has_value())
         settings.m_browsing_data_settings = parse_browsing_data_settings(*browsing_data_settings);
@@ -611,7 +618,7 @@ JsonValue Settings::serialize_json() const
     search_engine.set(SEARCH_SUGGESTIONS_ENABLED_KEY, m_search_engine_settings.suggestions);
     settings.set(SEARCH_ENGINE_KEY, move(search_engine));
 
-    auto save_site_setting = [&](AutoplaySiteSetting const& site_setting, StringView key) {
+    auto save_site_setting = [&](auto const& site_setting, StringView key, StringView policy) {
         JsonArray site_filters;
         site_filters.ensure_capacity(site_setting.site_filters.size());
 
@@ -619,15 +626,14 @@ JsonValue Settings::serialize_json() const
             site_filters.must_append(site_filter);
 
         JsonObject setting;
-        setting.set(SITE_SETTING_POLICY_KEY, MUST(Web::HTML::autoplay_policy_to_string(site_setting.policy).to_utf8()));
+        setting.set(SITE_SETTING_POLICY_KEY, policy);
         setting.set(SITE_SETTING_SITE_FILTERS_KEY, move(site_filters));
 
         settings.set(key, move(setting));
     };
 
-    save_site_setting(m_autoplay, AUTOPLAY_KEY);
-
-    settings.set(GEOLOCATION_ENABLED_KEY, m_geolocation_enabled);
+    save_site_setting(m_autoplay, AUTOPLAY_KEY, MUST(Web::HTML::autoplay_policy_to_string(m_autoplay.policy).to_utf8()));
+    save_site_setting(m_geolocation, GEOLOCATION_KEY, m_geolocation.policy == GeolocationPolicy::Allow ? "allow"sv : "block"sv);
 
     JsonObject disk_cache_settings;
     disk_cache_settings.set(DISK_CACHE_MAXIMUM_SIZE_KEY, m_browsing_data_settings.disk_cache_settings.maximum_size);
@@ -1083,9 +1089,64 @@ void Settings::remove_all_autoplay_site_filters()
         observer.autoplay_settings_changed();
 }
 
-void Settings::set_geolocation_enabled(bool enabled)
+static Optional<URL::Origin> parse_geolocation_origin(String const& filter)
 {
-    m_geolocation_enabled = enabled && Core::GeolocationProvider::is_available();
+    auto trimmed = MUST(filter.trim_whitespace());
+    if (trimmed.is_empty())
+        return {};
+
+    auto url = URL::Parser::basic_parse(trimmed.contains("://"sv) ? trimmed : MUST(String::formatted("https://{}", trimmed)));
+    if (!url.has_value() || !url->scheme().is_one_of("https"sv, "http"sv) || url->origin().is_opaque())
+        return {};
+    return url->origin();
+}
+
+bool GeolocationSiteSetting::is_allowed(URL::Origin const& origin) const
+{
+    if (origin.is_opaque())
+        return false;
+    if (policy == GeolocationPolicy::Allow)
+        return true;
+    for (auto const& filter : site_filters) {
+        if (auto allowed = parse_geolocation_origin(filter); allowed.has_value() && allowed->is_same_origin(origin))
+            return true;
+    }
+    return false;
+}
+
+void Settings::set_geolocation_policy(GeolocationPolicy policy)
+{
+    m_geolocation.policy = policy;
+    persist_settings();
+
+    for (auto& observer : m_observers)
+        observer.geolocation_settings_changed();
+}
+
+void Settings::add_geolocation_site_filter(String const& site_filter)
+{
+    auto origin = parse_geolocation_origin(site_filter);
+    if (!origin.has_value())
+        return;
+    m_geolocation.site_filters.set(origin->serialize());
+    persist_settings();
+
+    for (auto& observer : m_observers)
+        observer.geolocation_settings_changed();
+}
+
+void Settings::remove_geolocation_site_filter(String const& site_filter)
+{
+    m_geolocation.site_filters.remove(site_filter);
+    persist_settings();
+
+    for (auto& observer : m_observers)
+        observer.geolocation_settings_changed();
+}
+
+void Settings::remove_all_geolocation_site_filters()
+{
+    m_geolocation.site_filters.clear();
     persist_settings();
 
     for (auto& observer : m_observers)

@@ -10,6 +10,7 @@ const siteSettingsRemoveAll = document.querySelector("#site-settings-remove-all"
 const siteSettingsTitle = document.querySelector("#site-settings-title");
 
 const autoplaySettings = document.querySelector("#autoplay-settings");
+const geolocationSettings = document.querySelector("#geolocation-settings");
 
 const SITE_SETTING_POLICY_OPTIONS = {
     autoplay: [
@@ -17,21 +18,30 @@ const SITE_SETTING_POLICY_OPTIONS = {
         { value: "block-audio", label: "Block Audio" },
         { value: "block-audio-and-video", label: "Block Audio and Video" },
     ],
+    geolocation: [
+        { value: "block", label: "Block" },
+        { value: "allow", label: "Allow" },
+    ],
 };
 
-let AUTOPLAY_SETTINGS = {};
+const PERMISSIONS = {
+    autoplay: {},
+    geolocation: {},
+};
 
 function loadSiteSettings(settings) {
-    if (!Object.hasOwn(settings, "autoplay")) {
-        return;
-    }
-
-    AUTOPLAY_SETTINGS = settings.autoplay;
-
     const siteSetting = currentSiteSetting();
 
-    if (siteSetting === "autoplay") {
-        showSiteSettings("Autoplay", AUTOPLAY_SETTINGS);
+    for (const type of Object.keys(PERMISSIONS)) {
+        if (!Object.hasOwn(settings, type)) {
+            continue;
+        }
+
+        PERMISSIONS[type] = settings[type];
+
+        if (siteSetting === type) {
+            showSiteSettings(siteSettingsTitle.innerText, PERMISSIONS[type]);
+        }
     }
 }
 
@@ -156,23 +166,34 @@ siteSettingsRemoveAll.addEventListener("click", () => {
     });
 });
 
-registerDialogDeepLink({
-    hash: "autoplay",
-    tab: "permissions",
-    dialog: siteSettings,
-    onOpen: () => showSiteSettings("Autoplay", AUTOPLAY_SETTINGS),
-});
+function createDialogDeepLink(title, element) {
+    const setting = title.toLowerCase();
 
-autoplaySettings.addEventListener("click", () => {
-    location.hash = "autoplay";
-});
+    registerDialogDeepLink({
+        hash: setting,
+        tab: "permissions",
+        dialog: siteSettings,
+        onOpen: () => {
+            showSiteSettings(title, PERMISSIONS[setting]);
+        },
+    });
+
+    element.addEventListener("click", () => {
+        location.hash = setting;
+    });
+}
+
+createDialogDeepLink("Autoplay", autoplaySettings);
+createDialogDeepLink("Geolocation", geolocationSettings);
 
 document.addEventListener("WebUILoaded", () => {
     ladybird.sendMessage("loadForciblyEnabledSiteSettings");
 });
 
 document.addEventListener("WebUIMessage", event => {
-    if (event.detail.name === "loadSettings") {
+    if (event.detail.name === "loadFeatures") {
+        geolocationSettings.disabled = event.detail.data.geolocation !== true;
+    } else if (event.detail.name === "loadSettings") {
         loadSiteSettings(event.detail.data);
     } else if (event.detail.name === "forciblyEnableSiteSettings") {
         forciblyEnableSiteSettings(event.detail.data);

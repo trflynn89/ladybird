@@ -473,7 +473,7 @@ void Geolocation::acquire_position_from_page(GC::Ref<WebIDL::CallbackType> succe
             }
         });
 
-    request_state->request_id = page.request_geolocation_position(position_callback, watch_id.has_value() ? Page::GeolocationRequestType::Watch : Page::GeolocationRequestType::OneShot);
+    request_state->request_id = page.request_geolocation_position(HTML::current_settings_object().id, position_callback, watch_id.has_value() ? Page::GeolocationRequestType::Watch : Page::GeolocationRequestType::OneShot);
     if (watch_id.has_value())
         m_pending_watch_position_request_ids.set(*watch_id, request_state->request_id);
 

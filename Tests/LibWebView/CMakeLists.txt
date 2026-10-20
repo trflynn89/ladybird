@@ -10,6 +10,7 @@ set(TEST_SOURCES
     TestDownloadStore.cpp
     TestExternalURLHandler.cpp
     TestFaviconStore.cpp
+    TestGeolocationSettings.cpp
     TestHistoryStore.cpp
     TestHelperProcessEnvironment.cpp
     TestHSTSStore.cpp
@@ -224,6 +225,13 @@ if (NOT WIN32)
         target_compile_definitions(TestRendererCookieAccess PRIVATE LADYBIRD_BINARY_PATH="$<TARGET_FILE_DIR:ladybird>")
     endif()
 
+    add_executable(TestGeolocationPermissions TestGeolocationPermissions.cpp)
+    add_dependencies(TestGeolocationPermissions ladybird_build_resource_files ${ladybird_helper_processes})
+    target_link_libraries(TestGeolocationPermissions PRIVATE AK LibCore LibFileSystem LibGfx LibIPC LibMain LibURL LibWebView)
+    if (APPLE)
+        target_compile_definitions(TestGeolocationPermissions PRIVATE LADYBIRD_BINARY_PATH="$<TARGET_FILE_DIR:ladybird>")
+    endif()
+
     add_executable(TestRendererOriginClaims TestRendererOriginClaims.cpp)
     add_dependencies(TestRendererOriginClaims ladybird_build_resource_files ${ladybird_helper_processes})
     target_link_libraries(TestRendererOriginClaims PRIVATE AK LibCore LibFileSystem LibGfx LibHTTP LibIPC LibMain LibURL LibWeb LibWebView)
@@ -346,6 +354,12 @@ if (BUILD_TESTING AND NOT WIN32)
     set_tests_properties(TestWebDriverContentBlockers PROPERTIES TIMEOUT 180)
 
     add_test(
+        NAME TestWebDriverGeolocationSettings
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-geolocation-settings.py $<TARGET_FILE:WebDriver>
+    )
+    set_tests_properties(TestWebDriverGeolocationSettings PROPERTIES TIMEOUT 120)
+
+    add_test(
         NAME TestWebDriverSearchEngineSettings
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-search-engine-settings.py $<TARGET_FILE:WebDriver>
     )
@@ -430,6 +444,8 @@ if (BUILD_TESTING AND NOT WIN32)
     set_tests_properties(TestCompositorInputRouting PROPERTIES TIMEOUT 60 ENVIRONMENT LADYBIRD_SOURCE_DIR=${LADYBIRD_SOURCE_DIR})
     add_test(NAME TestRendererCookieAccess COMMAND $<TARGET_FILE:TestRendererCookieAccess>)
     set_tests_properties(TestRendererCookieAccess PROPERTIES TIMEOUT 60 ENVIRONMENT LADYBIRD_SOURCE_DIR=${LADYBIRD_SOURCE_DIR})
+    add_test(NAME TestGeolocationPermissions COMMAND $<TARGET_FILE:TestGeolocationPermissions>)
+    set_tests_properties(TestGeolocationPermissions PROPERTIES TIMEOUT 60 ENVIRONMENT LADYBIRD_SOURCE_DIR=${LADYBIRD_SOURCE_DIR})
     add_test(NAME TestRendererOriginClaims COMMAND $<TARGET_FILE:TestRendererOriginClaims>)
     set_tests_properties(TestRendererOriginClaims PROPERTIES TIMEOUT 60 ENVIRONMENT LADYBIRD_SOURCE_DIR=${LADYBIRD_SOURCE_DIR})
     add_test(NAME TestImageDecoderIsolation COMMAND $<TARGET_FILE:TestImageDecoderIsolation>)
