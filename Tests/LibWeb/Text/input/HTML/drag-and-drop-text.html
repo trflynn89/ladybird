@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<style>
+    #fixtures { font: 20px monospace; }
+    #fixtures > * { display: block; width: 500px; height: 40px; margin: 0; padding: 0; border: 0; font: inherit; white-space: pre; }
+</style>
+<div id="fixtures"></div>
+<script src="../include.js"></script>
+<script>
+    test(() => {
+        const fixtures = document.getElementById("fixtures");
+        const selection = getSelection();
+        let source, target;
+        let events;
+        function setup(sourceKind = "editable", targetKind = "editable") {
+            fixtures.replaceChildren();
+            selection.removeAllRanges();
+            events = [];
+            function make(kind, text) {
+                const element = document.createElement(["input", "textarea"].includes(kind) ? kind : "div");
+                if (kind === "editable") element.contentEditable = "true";
+                if ("value" in element) element.value = text;
+                else element.textContent = text;
+                fixtures.append(element);
+                for (const type of ["beforeinput", "input"]) {
+                    element.addEventListener(type, e => {
+                        events.push(`${type}:${e.inputType}`);
+                        if (type === "beforeinput") {
+                            if (!e.isTrusted) events.push("untrusted beforeinput");
+                            const expectedRanges = "value" in element ? 0 : 1;
+                            if (e.getTargetRanges().length !== expectedRanges)
+                                events.push(`incorrect target ranges: ${e.getTargetRanges().length}`);
+                        }
+                    });
+                }
+                return element;
+            }
+            source = make(sourceKind, "abcdef");
+            target = make(targetKind, "1234");
+        }
+        function value(element) {
+            return ("value" in element ? element.value : element.textContent).replaceAll("\u00a0", " ");
+        }
+        function point(element, offset) {
+            const rect = element.getBoundingClientRect();
+            const measure = document.createRange();
+            // Measure the rendered prefix using ordinary DOM text, including for text controls.
+            const probe = document.createElement("span");
+            probe.textContent = value(element).slice(0, offset);
+            probe.style.font = "20px monospace";
+            fixtures.append(probe);
+            measure.selectNodeContents(probe);
+            const width = measure.getBoundingClientRect().width;
+            probe.remove();
+            return [rect.x + width + 1, rect.y + 12];
+        }
+        function select(element, start = 1, end = 3) {
+            element.focus();
+            if ("setSelectionRange" in element) element.setSelectionRange(start, end);
+            else selection.setBaseAndExtent(element.firstChild, start, element.firstChild, end);
+        }
+        function drag(destination = target, offset = 2) {
+            const [x, y] = point(source, 2);
+            const [dx, dy] = point(destination, offset);
+            internals.mouseDown(x, y);
+            internals.mouseMove(x + 6, y);
+            internals.mouseMove(dx, dy);
+            internals.mouseUp(dx, dy);
+        }
+        function expect(label, actual, expected) {
+            println(`${actual === expected ? "PASS" : "FAIL"}: ${label}${actual === expected ? "" : ` (expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)})`}`);
+        }
+
+        setup("plain");
+        select(source);
+        source.addEventListener("dragstart", e => {
+            expect("selection drag supplies text/plain", e.dataTransfer.getData("text/plain"), "bc");
+            expect("selection drag starts at text node", e.target, source.firstChild);
+        });
+        let effect;
+        source.addEventListener("dragend", e => effect = e.dataTransfer.dropEffect);
+        drag();
+        expect("non-editable source is copied", value(source), "abcdef");
+        expect("copy inserted at drop position", value(target), "12bc34");
+        expect("copy effect", effect, "copy");
+        expect("copy input events", events.join(","), "beforeinput:insertFromDrop,input:insertFromDrop");
+        target.focus();
+        document.execCommand("undo");
+        expect("drop can be undone", value(target), "1234");
+        document.execCommand("redo");
+        expect("drop can be redone", value(target), "12bc34");
+
+        for (const sourceKind of ["editable", "input", "textarea"]) {
+            for (const targetKind of ["editable", "input", "textarea"]) {
+                setup(sourceKind, targetKind);
+                select(source);
+                effect = undefined;
+                source.addEventListener("dragend", e => effect = e.dataTransfer.dropEffect);
+                drag();
+                expect(`${sourceKind} to ${targetKind}: source removed`, value(source), "adef");
+                expect(`${sourceKind} to ${targetKind}: destination inserted`, value(target), "12bc34");
+                expect(`${sourceKind} to ${targetKind}: move effect`, effect, "move");
+                expect(`${sourceKind} to ${targetKind}: input events`, events.join(","), "beforeinput:insertFromDrop,beforeinput:deleteByDrag,input:deleteByDrag,input:insertFromDrop");
+            }
+            for (const [offset, expected] of [[0, "bcadef"], [6, "adefbc"], [2, "abcdef"]]) {
+                setup(sourceKind);
+                select(source);
+                drag(source, offset);
+                expect(`${sourceKind}: drop within source at ${offset}`, value(source), expected);
+            }
+        }
+
+        for (const kind of ["input", "textarea"]) {
+            setup("plain", kind);
+            select(source);
+            drag();
+            expect(`non-editable to ${kind}: source copied`, value(source), "abcdef");
+            expect(`non-editable to ${kind}: text inserted`, value(target), "12bc34");
+        }
+
+        for (const editable of [false, true]) {
+            setup(editable ? "editable" : "plain");
+            source.innerHTML = "ab<b>cd</b>ef";
+            source.focus();
+            selection.setBaseAndExtent(source.firstChild, 1, source.lastChild, 1);
+            drag();
+            expect(`multi-node ${editable ? "move" : "copy"}: source`, value(source), editable ? "af" : "abcdef");
+            expect(`multi-node ${editable ? "move" : "copy"}: destination`, value(target), "12bcde34");
+        }
+
+        for (const kind of ["editable", "input", "textarea"]) {
+            setup("plain", kind);
+            if ("value" in target) target.value = "";
+            else target.textContent = "";
+            select(source);
+            drag(target, 0);
+            expect(`drop into empty ${kind}`, value(target), "bc");
+        }
+
+        setup();
+        source.focus();
+        selection.selectAllChildren(source);
+        drag();
+        expect("element-boundary selection moved", value(source), "");
+        expect("element-boundary selection inserted", value(target), "12abcdef34");
+
+        setup();
+        source.innerHTML = "ab<span contenteditable='false'>cd</span>ef";
+        source.focus();
+        selection.setBaseAndExtent(source.firstChild, 1, source.lastChild, 1);
+        drag();
+        expect("selection containing non-editable text is copied", value(source), "abcdef");
+        expect("mixed selection inserted", value(target), "12bcde34");
+
+        for (const kind of ["editable", "input", "textarea"]) {
+            setup(kind);
+            if ("value" in source) source.value = "a😀def";
+            else source.textContent = "a😀def";
+            select(source);
+            drag(source, 6);
+            expect(`UTF-16 selection moved within ${kind}`, value(source), "adef😀");
+        }
+
+        setup();
+        select(source);
+        target.addEventListener("dragover", e => e.preventDefault());
+        target.addEventListener("drop", e => {
+            e.preventDefault();
+            target.textContent = e.dataTransfer.getData("text/plain");
+        });
+        drag();
+        expect("script-handled move deletes source", value(source), "adef");
+        expect("script-handled drop gets dragged text", value(target), "bc");
+
+        for (const allowed of ["none", "copy", "move", "copyMove", "all"]) {
+            setup();
+            select(source);
+            source.addEventListener("dragstart", e => e.dataTransfer.effectAllowed = allowed);
+            drag();
+            expect(`effectAllowed ${allowed}: source`, value(source), ["none", "copy"].includes(allowed) ? "abcdef" : "adef");
+            expect(`effectAllowed ${allowed}: destination`, value(target), allowed === "none" ? "1234" : "12bc34");
+        }
+
+        for (const kind of ["input", "textarea"]) {
+            setup("editable", kind);
+            target.maxLength = 5;
+            select(source);
+            drag();
+            expect(`maxlength ${kind}: source preserved`, value(source), "abcdef");
+            expect(`maxlength ${kind}: target preserved`, value(target), "1234");
+            setup(kind);
+            source.maxLength = 6;
+            select(source);
+            drag(source, 6);
+            expect(`maxlength ${kind}: move within full control`, value(source), "adefbc");
+        }
+
+        for (const kind of ["input", "textarea"]) {
+            setup("editable", kind);
+            target.style.paddingLeft = "20px";
+            select(source);
+            drag(target, 0);
+            expect(`drop on ${kind} padding uses control caret`, value(target), "bc1234");
+        }
+
+        setup();
+        select(source);
+        source.addEventListener("beforeinput", () => select(source, 4, 6));
+        drag();
+        expect("beforeinput selection change deletes original source", value(source), "adef");
+        expect("beforeinput selection change preserves drop position", value(target), "12bc34");
+
+        setup();
+        select(source);
+        target.addEventListener("drop", () => source.textContent = "changed");
+        drag();
+        expect("drop script changes source safely", value(source), "changed");
+        expect("changed source cancels default move", value(target), "1234");
+
+        setup();
+        select(source);
+        const [sx, sy] = point(source, 2);
+        const [tx, ty] = point(target, 2);
+        internals.mouseDown(sx, sy);
+        internals.mouseMove(sx + 6, sy);
+        internals.mouseMove(tx, ty);
+        internals.sendKey(source, "Escape");
+        internals.mouseUp(tx, ty);
+        expect("Escape preserves source", value(source), "abcdef");
+        expect("Escape preserves target", value(target), "1234");
+
+        for (const event of ["dragstart", "dragover", "drop", "beforeinput"]) {
+            setup();
+            select(source);
+            (event === "dragstart" ? source : target).addEventListener(event, e => {
+                e.preventDefault();
+                if (event === "dragover" || event === "drop") e.dataTransfer.dropEffect = "none";
+            });
+            drag();
+            expect(`cancel ${event}: source unchanged`, value(source), "abcdef");
+            expect(`cancel ${event}: target unchanged`, value(target), "1234");
+        }
+        setup();
+        select(source);
+        source.addEventListener("beforeinput", e => e.preventDefault());
+        drag();
+        expect("cancel source deletion: source unchanged", value(source), "abcdef");
+        expect("cancel source deletion: target unchanged", value(target), "1234");
+
+        for (const kind of ["input", "textarea"]) {
+            setup("editable", kind);
+            target.readOnly = true;
+            select(source);
+            drag();
+            expect(`readonly ${kind} rejects drop`, value(target), "1234");
+            expect(`readonly ${kind} preserves source`, value(source), "abcdef");
+            setup(kind);
+            source.readOnly = true;
+            select(source);
+            drag();
+            expect(`readonly ${kind} source copied`, value(source), "abcdef");
+            expect(`readonly ${kind} text inserted`, value(target), "12bc34");
+        }
+    });
+</script>

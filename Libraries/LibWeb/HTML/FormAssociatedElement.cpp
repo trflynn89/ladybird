@@ -1284,10 +1284,10 @@ void FormAssociatedTextControlElement::handle_insert(Utf16FlyString const& input
     auto selection_start = this->selection_start();
     auto selection_end = this->selection_end();
 
-    // Record the edit on the document's editing history so the user can undo it. Pastes never
-    // coalesce with typing, like in the editing host path.
+    // Record the edit on the document's editing history so the user can undo it. Pastes and drops never coalesce with
+    // typing, like in the editing host path.
     auto& html_element = text_control_to_html_element();
-    auto category = first_is_one_of(input_type, UIEvents::InputTypes::insertFromPaste, UIEvents::InputTypes::insertReplacementText)
+    auto category = first_is_one_of(input_type, UIEvents::InputTypes::insertFromPaste, UIEvents::InputTypes::insertFromDrop, UIEvents::InputTypes::insertReplacementText)
         ? Editing::UndoStep::Category::Other
         : Editing::UndoStep::Category::Insertion;
     auto history = html_element.document().editing_history();
@@ -1315,7 +1315,7 @@ void FormAssociatedTextControlElement::handle_insert(Utf16FlyString const& input
     // The input event's data attribute is only set for certain input types according to:
     // https://w3c.github.io/input-events/#overview
     Optional<Utf16String> data_for_input_event;
-    if (first_is_one_of(input_type, UIEvents::InputTypes::insertText, UIEvents::InputTypes::insertCompositionText, UIEvents::InputTypes::insertFromPaste, UIEvents::InputTypes::insertReplacementText))
+    if (first_is_one_of(input_type, UIEvents::InputTypes::insertText, UIEvents::InputTypes::insertCompositionText, UIEvents::InputTypes::insertFromPaste, UIEvents::InputTypes::insertFromDrop, UIEvents::InputTypes::insertReplacementText))
         data_for_input_event = Utf16String::from_utf16(data_for_insertion);
 
     did_edit_text_node(input_type, data_for_input_event);

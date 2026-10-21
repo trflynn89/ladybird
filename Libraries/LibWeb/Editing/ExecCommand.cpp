@@ -176,12 +176,12 @@ WebIDL::ExceptionOr<bool> Document::exec_command_internal(Utf16FlyString const& 
 
     // AD-HOC: Record the mutations performed by the command action on the editing history, so the user can undo them.
     //         end_recording() is a no-op if the guard below already ended the recording.
-    bool is_cut_or_paste = user_input_type == UIEvents::InputTypes::deleteByCut || user_input_type == UIEvents::InputTypes::insertFromPaste;
+    bool is_cut_or_paste_or_drop = first_is_one_of(user_input_type, UIEvents::InputTypes::deleteByCut, UIEvents::InputTypes::insertFromPaste, UIEvents::InputTypes::deleteByDrag, UIEvents::InputTypes::insertFromDrop);
     if (affected_editing_host) {
         auto category = Editing::UndoStep::Category::Other;
-        // INTEROP: Cut and paste are standalone undo units in Chromium: they never coalesce with typing or deletion
-        //          runs, so they categorize as Other even though they run the delete and insertText commands.
-        if (!is_cut_or_paste && !deletion_range) {
+        // INTEROP: Cut, paste, and drag-and-drop edits are standalone undo units: they never coalesce with typing
+        //          or deletion runs, even though they run the delete and insertText commands.
+        if (!is_cut_or_paste_or_drop && !deletion_range) {
             if (command_definition.command.is_one_of(Editing::CommandNames::insertText, Editing::CommandNames::insertLineBreak, Editing::CommandNames::insertParagraph))
                 category = Editing::UndoStep::Category::Insertion;
             else if (command_definition.command == Editing::CommandNames::delete_)
@@ -248,7 +248,7 @@ WebIDL::ExceptionOr<bool> Document::exec_command_internal(Utf16FlyString const& 
     //          settles the caret even when the pasted fragment reduces to nothing but transport markers.
     bool tree_was_modified = dom_tree_version() != old_dom_tree_version
         || character_data_version() != old_character_data_version
-        || (is_cut_or_paste && command_result);
+        || (is_cut_or_paste_or_drop && command_result);
     if (affected_editing_host && m_selection && tree_was_modified)
         Editing::canonicalize_collapsed_selection_for_editing(*m_selection);
 

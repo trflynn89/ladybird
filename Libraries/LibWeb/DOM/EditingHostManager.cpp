@@ -99,7 +99,7 @@ void EditingHostManager::set_selection_anchor(GC::Ref<DOM::Node> anchor_node, si
 
 void EditingHostManager::set_selection_focus(GC::Ref<DOM::Node> focus_node, size_t focus_offset, TextAffinity affinity)
 {
-    if (!m_active_contenteditable_element || !m_active_contenteditable_element->is_ancestor_of(*focus_node))
+    if (!m_active_contenteditable_element || !m_active_contenteditable_element->is_inclusive_ancestor_of(*focus_node))
         return;
     auto selection = m_document->get_selection();
     if (!selection->anchor_node())

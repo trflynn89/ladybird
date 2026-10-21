@@ -6,37 +6,59 @@
 
 #include <AK/ScopeGuard.h>
 #include <AK/Utf16StringBuilder.h>
+#include <LibWeb/CSS/VisualViewport.h>
 #include <LibWeb/DOM/Document.h>
 #include <LibWeb/DOM/Element.h>
+#include <LibWeb/DOM/Range.h>
+#include <LibWeb/DOM/Text.h>
 #include <LibWeb/HTML/AttributeNames.h>
 #include <LibWeb/HTML/DragEvent.h>
 #include <LibWeb/HTML/EventNames.h>
+#include <LibWeb/HTML/Focus.h>
+#include <LibWeb/HTML/FormAssociatedElement.h>
 #include <LibWeb/HTML/HTMLAnchorElement.h>
 #include <LibWeb/HTML/HTMLElement.h>
 #include <LibWeb/HTML/HTMLImageElement.h>
 #include <LibWeb/HTML/HTMLInputElement.h>
 #include <LibWeb/HTML/HTMLTextAreaElement.h>
+#include <LibWeb/HTML/LocalNavigable.h>
 #include <LibWeb/HTML/Scripting/Environments.h>
 #include <LibWeb/HTML/WindowProxy.h>
 #include <LibWeb/HighResolutionTime/TimeOrigin.h>
 #include <LibWeb/MimeSniff/Resource.h>
 #include <LibWeb/Page/DragAndDropEventHandler.h>
+#include <LibWeb/Page/EventHandler.h>
+#include <LibWeb/Painting/HitTestResult.h>
+#include <LibWeb/UIEvents/EventNames.h>
+#include <LibWeb/UIEvents/InputTypes.h>
 #include <LibWebCommon/HTML/SelectedFile.h>
 #include <LibWebCommon/UIEvents/KeyCode.h>
 
 namespace Web {
+
+static GC::Ptr<HTML::FormAssociatedTextControlElement> text_control_for_node(DOM::Node& node)
+{
+    for (auto* ancestor = &node; ancestor; ancestor = ancestor->parent_or_shadow_host()) {
+        if (auto* control = as_if<HTML::FormAssociatedTextControlElement>(*ancestor))
+            return control;
+    }
+    return {};
+}
 
 void DragAndDropEventHandler::visit_edges(JS::Cell::Visitor& visitor) const
 {
     visitor.visit(m_source_node);
     visitor.visit(m_immediate_user_selection);
     visitor.visit(m_current_target_element);
+    visitor.visit(m_dragged_selection);
+    visitor.visit(m_source_editing_host);
 }
 
 // https://html.spec.whatwg.org/multipage/dnd.html#drag-and-drop-processing-model
 EventResult DragAndDropEventHandler::handle_drag_start(
     JS::Object const& relevant_global_object,
     GC::Ptr<DOM::Node> drag_target,
+    GC::Ptr<DOM::Range> dragged_selection,
     CSSPixelPoint screen_position,
     CSSPixelPoint page_offset,
     CSSPixelPoint client_offset,
@@ -53,12 +75,34 @@ EventResult DragAndDropEventHandler::handle_drag_start(
     // 1. Determine what is being dragged, as follows:
     GC::Ptr<DOM::Node> dragged_node;
 
-    //    FIXME: If the drag operation was invoked on a selection, then it is the selection that is being dragged.
+    //    If the drag operation was invoked on a selection, then it is the selection that is being dragged.
+    m_dragged_selection = dragged_selection;
+    if (m_dragged_selection) {
+        m_dragged_text = m_dragged_selection->to_string();
+        if (m_dragged_text.is_empty()) {
+            reset();
+            return EventResult::Cancelled;
+        }
+
+        if (auto control = text_control_for_node(*drag_target)) {
+            auto& element = control->text_control_to_html_element();
+
+            // Password selections must not be exposed through drag data.
+            if (auto* input = as_if<HTML::HTMLInputElement>(element); input && input->type_state() == HTML::HTMLInputElement::TypeAttributeState::Password) {
+                reset();
+                return EventResult::Cancelled;
+            }
+
+            m_source_editing_host = element;
+        } else {
+            m_source_editing_host = drag_target->editing_host();
+        }
+    }
 
     //    Otherwise, if the drag operation was invoked on a Document, it is the first element, going up the ancestor chain,
     //    starting at the node that the user tried to drag, that has the IDL attribute draggable set to true. If there is
     //    no such element, then nothing is being dragged; return, the drag-and-drop operation is never started.
-    if (drag_target) {
+    if (drag_target && !m_dragged_selection) {
         drag_target->for_each_inclusive_ancestor_of_type<HTML::HTMLElement>([&](HTML::HTMLElement& node) {
             if (!node.draggable())
                 return IterationDecision::Continue;
@@ -80,13 +124,15 @@ EventResult DragAndDropEventHandler::handle_drag_start(
 
     // 3. Establish which DOM node is the source node, as follows:
     //
-    //    FIXME: If it is a selection that is being dragged, then the source node is the Text node that the user started the
-    //           drag on (typically the Text node that the user originally clicked). If the user did not specify a particular
-    //           node, for example if the user just told the user agent to begin a drag of "the selection", then the source
-    //           node is the first Text node containing a part of the selection.
-
+    //    If it is a selection that is being dragged, then the source node is the Text node that the user started the
+    //    drag on (typically the Text node that the user originally clicked). If the user did not specify a particular
+    //    node, for example if the user just told the user agent to begin a drag of "the selection", then the source
+    //    node is the first Text node containing a part of the selection.
+    if (m_dragged_selection) {
+        m_source_node = drag_target;
+    }
     //    Otherwise, if it is an element that is being dragged, then the source node is the element that is being dragged.
-    if (dragged_node) {
+    else if (dragged_node) {
         m_source_node = dragged_node;
     }
     //    Otherwise, the source node is part of another document or application. When this specification requires that
@@ -112,7 +158,15 @@ EventResult DragAndDropEventHandler::handle_drag_start(
     //        Text
     //    The actual data
     //        The text of the selection
-    //
+    if (m_dragged_selection) {
+        m_drag_data_store->add_item({
+            .kind = HTML::DragDataStoreItem::Kind::Text,
+            .type_string = "text/plain"_utf16,
+            .data = m_dragged_text,
+            .file_data = {},
+            .file_name = {},
+        });
+    }
     //    Otherwise, if any files are being dragged, then add one item per file to the drag data store item list, with
     //    their properties set as follows:
     //
@@ -122,17 +176,19 @@ EventResult DragAndDropEventHandler::handle_drag_start(
     //        File
     //    The actual data
     //        The file's contents and name.
-    for (auto& file : files) {
-        auto contents = file.take_contents();
-        auto mime_type = MimeSniff::Resource::sniff(contents);
+    else {
+        for (auto& file : files) {
+            auto contents = file.take_contents();
+            auto mime_type = MimeSniff::Resource::sniff(contents);
 
-        m_drag_data_store->add_item({
-            .kind = HTML::DragDataStoreItem::Kind::File,
-            .type_string = Utf16String::from_utf8(mime_type.essence()),
-            .data = {},
-            .file_data = move(contents),
-            .file_name = file.name(),
-        });
+            m_drag_data_store->add_item({
+                .kind = HTML::DragDataStoreItem::Kind::File,
+                .type_string = Utf16String::from_utf8(mime_type.essence()),
+                .data = {},
+                .file_data = move(contents),
+                .file_name = file.name(),
+            });
+        }
     }
 
     // FIXME: 6. If the list of dragged nodes is not empty, then extract the microdata from those nodes into a JSON form, and
@@ -243,6 +299,9 @@ EventResult DragAndDropEventHandler::handle_drag_move(
     if (!has_ongoing_drag_and_drop_operation())
         return EventResult::Cancelled;
 
+    if (auto control = text_control_for_node(*node))
+        node = control->text_control_to_html_element();
+
     auto fire_a_drag_and_drop_event = [&](GC::Ptr<DOM::EventTarget> target, Utf16FlyString const& name, GC::Ptr<DOM::EventTarget> related_target = nullptr) {
         return this->fire_a_drag_and_drop_event(relevant_global_object, target, name, screen_position, page_offset, client_offset, offset, button, buttons, modifiers, related_target);
     };
@@ -324,7 +383,8 @@ EventResult DragAndDropEventHandler::handle_drag_move(
                 if (allow_text_drop(*m_current_target_element)) {
                     // Set the current drag operation to either "copy" or "move", as appropriate given the platform
                     // conventions.
-                    m_current_drag_operation = HTML::DataTransferEffect::copy;
+                    auto effect = drag_event->data_transfer()->drop_effect();
+                    m_current_drag_operation = effect.is_one_of(HTML::DataTransferEffect::copy, HTML::DataTransferEffect::move) ? effect : HTML::DataTransferEffect::none;
                 }
                 // -> Otherwise
                 else {
@@ -479,10 +539,12 @@ EventResult DragAndDropEventHandler::handle_drag_end(
                 //    item list has an item with the drag data item type string "text/plain" and the drag data item
                 //    kind text
                 if (allow_text_drop(*m_current_target_element)) {
-                    // FIXME: Insert the actual data of the first item in the drag data store item list to have a drag data item
-                    //        type string of "text/plain" and a drag data item kind that is text into the text control or editing
-                    //        host or editable element in a manner consistent with platform-specific conventions (e.g. inserting
-                    //        it at the current mouse cursor position, or inserting it at the end of the field).
+                    // Insert the actual data of the first item in the drag data store item list to have a drag data
+                    // item type string of "text/plain" and a drag data item kind that is text into the text control or
+                    // editing host or editable element in a manner consistent with platform-specific conventions (e.g.
+                    // inserting it at the current mouse cursor position, or inserting it at the end of the field).
+                    if (!insert_dropped_text(client_offset))
+                        m_current_drag_operation = HTML::DataTransferEffect::none;
                 }
                 // -> Otherwise
                 else {
@@ -496,17 +558,21 @@ EventResult DragAndDropEventHandler::handle_drag_end(
         fire_a_drag_and_drop_event(m_source_node, HTML::EventNames::dragend);
 
         // 3. Run the appropriate steps from the following list as the default action of the dragend event:
+        bool should_delete_source = dropped && m_current_drag_operation == HTML::DataTransferEffect::move && !m_did_delete_source;
+        bool source_is_text_control = is<HTML::FormAssociatedTextControlElement>(m_source_editing_host.ptr());
 
         // -> If dropped is true, the current target element is a text control (see below), the current drag operation
         //    is "move", and the source of the drag-and-drop operation is a selection in the DOM that is entirely
         //    contained within an editing host
-        if (false) {
-            // FIXME: Delete the selection.
+        if (should_delete_source && !source_is_text_control) {
+            // Delete the selection.
+            (void)delete_dragged_selection();
         }
         // -> If dropped is true, the current target element is a text control (see below), the current drag operation
         //    is "move", and the source of the drag-and-drop operation is a selection in a text control
-        else if (false) {
-            // FIXME: The user agent should delete the dragged selection from the relevant text control.
+        else if (should_delete_source && source_is_text_control) {
+            // The user agent should delete the dragged selection from the relevant text control.
+            (void)delete_dragged_selection();
         }
         // -> If dropped is false or if the current drag operation is "none"
         else if (!dropped || m_current_drag_operation == HTML::DataTransferEffect::none) {
@@ -595,12 +661,13 @@ GC::Ref<HTML::DragEvent> DragAndDropEventHandler::fire_a_drag_and_drop_event(
         if (data_transfer->effect_allowed() == none)          data_transfer->set_drop_effect(none);
         else if (data_transfer->effect_allowed() == copy)     data_transfer->set_drop_effect(copy);
         else if (data_transfer->effect_allowed() == copyLink) data_transfer->set_drop_effect(copy);
-        else if (data_transfer->effect_allowed() == copyMove) data_transfer->set_drop_effect(copy);
-        else if (data_transfer->effect_allowed() == all)      data_transfer->set_drop_effect(copy);
+        else if (data_transfer->effect_allowed() == copyMove) data_transfer->set_drop_effect(source_is_editable() ? move : copy);
+        else if (data_transfer->effect_allowed() == all)      data_transfer->set_drop_effect(source_is_editable() ? move : copy);
         else if (data_transfer->effect_allowed() == link)     data_transfer->set_drop_effect(link);
         else if (data_transfer->effect_allowed() == linkMove) data_transfer->set_drop_effect(link);
         else if (data_transfer->effect_allowed() == move)     data_transfer->set_drop_effect(move);
-        // FIXME: Handle "uninitialized" when element drag operations are supported.
+        else if (data_transfer->effect_allowed() == uninitialized && source_is_editable()) data_transfer->set_drop_effect(move);
+        // FIXME: Handle "uninitialized" when dragging links.
         else data_transfer->set_drop_effect(copy);
         // clang-format on
     }
@@ -664,23 +731,142 @@ GC::Ref<HTML::DragEvent> DragAndDropEventHandler::fire_a_drag_and_drop_event(
     return event;
 }
 
-bool DragAndDropEventHandler::allow_text_drop(GC::Ref<DOM::Node> node) const
+bool DragAndDropEventHandler::source_is_editable() const
 {
-    if (!m_drag_data_store->has_text_item())
+    if (!m_dragged_selection || !m_source_editing_host || !m_source_editing_host->is_connected())
+        return false;
+    if (auto* control = as_if<HTML::FormAssociatedTextControlElement>(*m_source_editing_host))
+        return as<HTML::FormAssociatedElement>(control->text_control_to_html_element()).is_mutable();
+    if (m_dragged_selection->start_container()->editing_host() != m_source_editing_host
+        || m_dragged_selection->end_container()->editing_host() != m_source_editing_host)
+        return false;
+    bool entirely_editable = true;
+    m_dragged_selection->for_each_contained([&](DOM::Node const& node) {
+        if (node.is_editable_or_editing_host())
+            return IterationDecision::Continue;
+        entirely_editable = false;
+        return IterationDecision::Break;
+    });
+    return entirely_editable;
+}
+
+bool DragAndDropEventHandler::delete_dragged_selection()
+{
+    if (!source_is_editable() || m_dragged_selection->collapsed() || m_dragged_selection->to_string() != m_dragged_text)
         return false;
 
-    if (node->is_editable_or_editing_host())
-        return true;
+    auto& document = m_source_editing_host->document();
+    HTML::run_focusing_steps(m_source_editing_host);
+    auto* target = document.active_input_events_target(m_dragged_selection->start_container().ptr());
+    if (!target)
+        return false;
+    target->set_selection_anchor(m_dragged_selection->start_container(), m_dragged_selection->start_offset());
+    target->set_selection_focus(m_dragged_selection->end_container(), m_dragged_selection->end_offset());
+    if (EventHandler::input_event(UIEvents::EventNames::beforeinput, UIEvents::InputTypes::deleteByDrag, *document.navigable(), 0u) != EventResult::Accepted)
+        return false;
+    if (!source_is_editable() || document.active_input_events_target(m_dragged_selection->start_container().ptr()) != target
+        || m_dragged_selection->to_string() != m_dragged_text)
+        return false;
+    // A beforeinput listener may have changed the selection. Delete only the original dragged range.
+    target->set_selection_anchor(m_dragged_selection->start_container(), m_dragged_selection->start_offset());
+    target->set_selection_focus(m_dragged_selection->end_container(), m_dragged_selection->end_offset());
+    target->handle_delete(UIEvents::InputTypes::deleteByDrag);
+    m_did_delete_source = true;
+    return true;
+}
 
-    if (is<HTML::HTMLTextAreaElement>(*node))
-        return true;
+bool DragAndDropEventHandler::insert_dropped_text(CSSPixelPoint client_offset)
+{
+    GC::Ref<DOM::Node> drop_target = *m_current_target_element;
+    auto& document = drop_target->document();
+    auto position = document.visual_viewport()->map_from_layout_viewport(client_offset);
+    auto caret = document.navigable()->event_handler().prepare_mouse_selection(document, position);
+    if (!caret.has_value())
+        return false;
+    auto boundary = caret->boundary_node();
+    if (!boundary)
+        return false;
 
-    if (is<HTML::HTMLInputElement>(*node)) {
-        auto const& input = static_cast<HTML::HTMLInputElement const&>(*node);
-        return input.type_state() == HTML::HTMLInputElement::TypeAttributeState::Text;
+    auto* target = document.active_input_events_target(boundary.ptr());
+    auto host = document.focused_area();
+    if (!target || !host || !host->is_shadow_including_inclusive_ancestor_of(*drop_target))
+        return false;
+    GC::Ptr control = as_if<HTML::FormAssociatedTextControlElement>(*host);
+
+    auto destination = DOM::Range::create(*boundary, caret->boundary.offset, *boundary, caret->boundary.offset);
+    if (m_dragged_selection) {
+        auto inside_source = m_dragged_selection->is_point_in_range(*boundary, caret->boundary.offset);
+        if (!inside_source.is_exception() && inside_source.value()) {
+            // Dropping on the dragged selection must neither duplicate nor delete it.
+            m_current_drag_operation = HTML::DataTransferEffect::none;
+            return false;
+        }
     }
 
-    return false;
+    Utf16String text;
+    for (auto const& item : m_drag_data_store->item_list()) {
+        if (item.kind == HTML::DragDataStoreItem::Kind::Text && item.type_string == "text/plain"_utf16) {
+            text = item.data;
+            break;
+        }
+    }
+
+    if (!host->is_connected() || !allow_text_drop(drop_target))
+        return false;
+    target->set_selection_anchor(*boundary, destination->start_offset(), caret->affinity);
+    if (EventHandler::input_event(UIEvents::EventNames::beforeinput, UIEvents::InputTypes::insertFromDrop, *document.navigable(), text) != EventResult::Accepted)
+        return false;
+    if (!host->is_connected() || !allow_text_drop(drop_target) || document.active_input_events_target(boundary.ptr()) != target)
+        return false;
+
+    if (m_current_drag_operation == HTML::DataTransferEffect::move && source_is_editable()) {
+        if (control) {
+            auto text_node = control->form_associated_element_to_text_node();
+            if (!text_node)
+                return false;
+            if (auto max_length = text_node->max_length(); max_length.has_value()) {
+                auto length_after_deletion = text_node->length();
+                if (m_source_editing_host == host)
+                    length_after_deletion -= m_dragged_selection->end_offset() - m_dragged_selection->start_offset();
+                if (length_after_deletion + text.length_in_code_units() > *max_length)
+                    return false;
+            }
+        }
+        // Text controls replace their backing text node's data wholesale, so a live DOM range cannot track
+        // the destination through the deletion. Adjust its offset explicitly for a move within one control.
+        auto destination_offset = destination->start_offset();
+        bool same_control = control && m_source_editing_host == host;
+        if (same_control && destination_offset > m_dragged_selection->end_offset())
+            destination_offset -= m_dragged_selection->end_offset() - m_dragged_selection->start_offset();
+        if (!delete_dragged_selection())
+            return false;
+        if (same_control) {
+            MUST(destination->set_start(*boundary, destination_offset));
+            destination->collapse(true);
+        }
+        HTML::run_focusing_steps(host);
+    }
+
+    if (!host->is_connected() || !allow_text_drop(drop_target) || document.active_input_events_target(destination->start_container().ptr()) != target)
+        return false;
+    target->set_selection_anchor(destination->start_container(), destination->start_offset(), caret->affinity);
+    target->handle_insert(UIEvents::InputTypes::insertFromDrop, text);
+    return true;
+}
+
+bool DragAndDropEventHandler::allow_text_drop(GC::Ref<DOM::Node> node) const
+{
+    if (!m_drag_data_store->has_text_item() || !node->is_connected())
+        return false;
+    if (auto control = text_control_for_node(*node)) {
+        auto& element = control->text_control_to_html_element();
+        if (!as<HTML::FormAssociatedElement>(element).is_mutable())
+            return false;
+        if (auto* input = as_if<HTML::HTMLInputElement>(element))
+            return input->can_have_text_editing_cursor();
+        return is<HTML::HTMLTextAreaElement>(element);
+    }
+    return node->is_editable_or_editing_host();
 }
 
 void DragAndDropEventHandler::reset()
@@ -688,6 +874,10 @@ void DragAndDropEventHandler::reset()
     // When the drag-and-drop operation has completed, we no longer need the drag data store and its related fields.
     // Clear them, as we currently use the existence of the drag data store to ignore other input events.
     m_drag_data_store.clear();
+    m_dragged_selection = nullptr;
+    m_source_editing_host = nullptr;
+    m_dragged_text = {};
+    m_did_delete_source = false;
     m_source_node = nullptr;
     m_immediate_user_selection = nullptr;
     m_current_target_element = nullptr;

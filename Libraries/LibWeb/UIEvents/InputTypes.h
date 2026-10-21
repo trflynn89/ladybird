@@ -14,6 +14,7 @@ namespace Web::UIEvents::InputTypes {
 // https://w3c.github.io/input-events/#interface-InputEvent-Attributes
 #define ENUMERATE_INPUT_TYPES                     \
     __ENUMERATE_INPUT_TYPE(deleteByCut)           \
+    __ENUMERATE_INPUT_TYPE(deleteByDrag)          \
     __ENUMERATE_INPUT_TYPE(deleteContentBackward) \
     __ENUMERATE_INPUT_TYPE(deleteWordBackward)    \
     __ENUMERATE_INPUT_TYPE(deleteWordForward)     \
@@ -22,6 +23,7 @@ namespace Web::UIEvents::InputTypes {
     __ENUMERATE_INPUT_TYPE(historyRedo)           \
     __ENUMERATE_INPUT_TYPE(historyUndo)           \
     __ENUMERATE_INPUT_TYPE(insertCompositionText) \
+    __ENUMERATE_INPUT_TYPE(insertFromDrop)        \
     __ENUMERATE_INPUT_TYPE(insertFromPaste)       \
     __ENUMERATE_INPUT_TYPE(insertLineBreak)       \
     __ENUMERATE_INPUT_TYPE(insertParagraph)       \

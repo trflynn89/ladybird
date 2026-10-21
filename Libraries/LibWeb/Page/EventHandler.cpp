@@ -84,6 +84,8 @@
 
 namespace Web {
 
+static bool selection_contains_position(DOM::Document&, Painting::CaretPosition const&);
+
 #define FIRE(expression)                                                          \
     if (auto event_result = (expression); event_result == EventResult::Cancelled) \
         return event_result;
@@ -521,9 +523,7 @@ EventResult EventHandler::handle_mousemove(CSSPixelPoint visual_viewport_positio
 
         if (delta.x().abs() >= DRAG_THRESHOLD || delta.y().abs() >= DRAG_THRESHOLD) {
             auto result = handle_drag_and_drop_event(DragEvent::Type::DragStart, visual_viewport_position, screen_position, UIEvents::MouseButton::Primary, buttons, modifiers, {});
-#if defined(AK_OS_MACOS)
             bool should_start_selection_from_preserved_mousedown = m_mousedown_preserved_selection && result != EventResult::Handled;
-#endif
 
             if (result == EventResult::Handled) {
                 m_navigable->page().cursor().request(Gfx::StandardCursor::Drag);
@@ -542,10 +542,8 @@ EventResult EventHandler::handle_mousemove(CSSPixelPoint visual_viewport_positio
             if (!has_committed_root_box())
                 return EventResult::Accepted;
 
-#if defined(AK_OS_MACOS)
             if (should_start_selection_from_preserved_mousedown)
                 start_selection_from_preserved_mousedown(read, *document);
-#endif
         }
     }
 
@@ -798,12 +796,10 @@ EventResult EventHandler::handle_mouseup(CSSPixelPoint visual_viewport_position,
     auto coordinates = compute_mouse_event_coordinates(visual_viewport_position, viewport_position, *layout_node);
     [[maybe_unused]] auto dispatch_result = dispatch_a_pointer_event_for_a_device_that_supports_hover(PointerEventType::PointerUp, *node, chrome_widget, coordinates, screen_position, {}, button, buttons, modifiers, click_count);
 
-#if defined(AK_OS_MACOS)
     // INTEROP: Blink, WebKit, and Gecko defer changing a selection clicked for a possible drag until an uncancelled
     //          mouseup. Blink and WebKit clear non-editable selections, while Gecko collapses them to a caret.
     if (m_mousedown_preserved_selection && dispatch_result == PointerEventDispatchResult::RunDefaultActions)
         finish_selection_from_preserved_mousedown(*document, visual_viewport_position);
-#endif
 
     // NB: If the middle button was used to scroll, suppress click and activation behavior.
     auto click_target = target_for_click_event(m_mousedown_target, *node);
@@ -2332,8 +2328,23 @@ EventResult EventHandler::handle_drag_and_drop_event(DragEvent::Type type, CSSPi
             document.page().invalidate_compositor_keyboard_scroll_state_for_document(document);
     };
     switch (type) {
-    case DragEvent::Type::DragStart:
-        return m_drag_and_drop_event_handler->handle_drag_start(HTML::relevant_global_object(document), m_mousedown_target.ptr(), screen_position, page_offset, viewport_position, offset, button, buttons, modifiers, move(files));
+    case DragEvent::Type::DragStart: {
+        GC::Ptr<DOM::Range> dragged_selection;
+        auto drag_source = m_mousedown_target.ptr();
+        if (m_mousedown_preserved_selection && m_mousedown_visual_viewport_position.has_value()) {
+            auto caret = document.caret_position_from_point_for_selection_start(read, *m_mousedown_visual_viewport_position);
+            if (caret.has_value() && selection_contains_position(document, *caret)) {
+                drag_source = caret->boundary_node();
+                if (auto* control = as_if<HTML::FormAssociatedTextControlElement>(document.focused_area().ptr()); control && document.active_input_events_target(drag_source.ptr()) == control) {
+                    if (auto text = control->form_associated_element_to_text_node())
+                        dragged_selection = DOM::Range::create(*text, control->selection_start(), *text, control->selection_end());
+                } else if (auto range = document.get_selection()->range()) {
+                    dragged_selection = range->clone_range();
+                }
+            }
+        }
+        return m_drag_and_drop_event_handler->handle_drag_start(HTML::relevant_global_object(document), drag_source, dragged_selection, screen_position, page_offset, viewport_position, offset, button, buttons, modifiers, move(files));
+    }
     case DragEvent::Type::DragMove:
         return m_drag_and_drop_event_handler->handle_drag_move(HTML::relevant_global_object(document), *node, screen_position, page_offset, viewport_position, offset, button, buttons, modifiers);
     case DragEvent::Type::DragEnd:
@@ -2771,6 +2782,8 @@ static GC::Ptr<DOM::StaticRange> collapsed_delete_target_range_for_input_event(D
 static GC::RootVector<GC::Ref<DOM::StaticRange>> target_ranges_for_input_event(DOM::Document const& document, Utf16FlyString const& input_type)
 {
     GC::RootVector<GC::Ref<DOM::StaticRange>> target_ranges;
+    if (is<HTML::FormAssociatedTextControlElement>(document.focused_area().ptr()))
+        return target_ranges;
     if (auto selection = document.get_selection(); selection) {
         if (auto range = selection->range()) {
             if (selection->is_collapsed()) {
@@ -2779,7 +2792,7 @@ static GC::RootVector<GC::Ref<DOM::StaticRange>> target_ranges_for_input_event(D
                     return target_ranges;
                 }
 
-                if (input_type != UIEvents::InputTypes::insertText)
+                if (!input_type.is_one_of(UIEvents::InputTypes::insertText, UIEvents::InputTypes::insertFromDrop))
                     return target_ranges;
             }
 
@@ -2896,10 +2909,13 @@ EventResult EventHandler::input_event(Utf16FlyString const& event_name, Utf16Fly
         }
 
         auto event = UIEvents::InputEvent::create_from_platform_event(event_name, input_event_init, move(target_ranges), HighResolutionTime::current_high_resolution_time(HTML::relevant_global_object(*document)));
+        event->set_is_trusted(true);
         return focused_area->dispatch_event(event) ? EventResult::Accepted : EventResult::Cancelled;
     }
 
     auto event = UIEvents::InputEvent::create_from_platform_event(event_name, input_event_init, move(target_ranges), HighResolutionTime::current_high_resolution_time(HTML::relevant_global_object(*document)));
+
+    event->set_is_trusted(true);
 
     if (auto* body = document->body())
         return body->dispatch_event(event) ? EventResult::Accepted : EventResult::Cancelled;
@@ -3116,8 +3132,6 @@ GC::Ptr<DOM::Node> EventHandler::focus_candidate_for_position(Layout::BegunRead 
     return focus_dom_node;
 }
 
-static bool selection_contains_position(DOM::Document&, Painting::CaretPosition const&);
-
 void EventHandler::run_mousedown_default_actions(Layout::BegunRead const& read, DOM::Document& document, CSSPixelPoint visual_viewport_position, unsigned button, unsigned modifiers, int click_count)
 {
     if (m_middle_button_scroll_handler) {
@@ -3166,12 +3180,10 @@ void EventHandler::run_mousedown_default_actions(Layout::BegunRead const& read, 
     if (user_select == CSS::UserSelect::None)
         return;
 
-#if defined(AK_OS_MACOS)
     if (click_count == 1 && !(modifiers & UIEvents::KeyModifier::Mod_Shift) && selection_contains_position(document, *caret_position)) {
         m_mousedown_preserved_selection = true;
         return;
     }
-#endif
 
     auto selection_started = [&] {
         if (click_count == 3)
@@ -3345,6 +3357,7 @@ bool EventHandler::select_word_at_position(Layout::BegunRead const& read, DOM::D
     }
     return false;
 }
+#endif
 
 void EventHandler::start_selection_from_preserved_mousedown(Layout::BegunRead const& read, DOM::Document& document)
 {
@@ -3397,7 +3410,6 @@ void EventHandler::finish_selection_from_preserved_mousedown(DOM::Document& docu
         document.set_needs_repaint(Badge<EventHandler> {}, InvalidateDisplayList::PaintCommands);
     }
 }
-#endif
 
 void EventHandler::run_activation_behavior(GC::Ref<DOM::Node> node, unsigned button, unsigned modifiers)
 {
@@ -4158,9 +4170,7 @@ void EventHandler::clear_mousedown_tracking()
     m_mousedown_visual_viewport_position = {};
     m_mousedown_click_count = 0;
     m_mousedown_target_is_drag_candidate = false;
-#if defined(AK_OS_MACOS)
     m_mousedown_preserved_selection = false;
-#endif
 }
 
 void EventHandler::stop_updating_selection()

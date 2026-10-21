@@ -51,6 +51,7 @@ struct RemoteInputEventTarget {
 
 class WEB_API EventHandler {
     friend class AutoScrollHandler;
+    friend class DragAndDropEventHandler;
 
 public:
     EventHandler(Badge<HTML::LocalNavigable>, HTML::LocalNavigable&);
@@ -132,7 +133,7 @@ private:
 
     EventResult fire_keyboard_event(Utf16FlyString const& event_name, HTML::LocalNavigable&, UIEvents::KeyCode, unsigned modifiers, u32 code_point, bool repeat);
     [[nodiscard]] EventResult fire_text_input_event(HTML::LocalNavigable&, Utf16String const& data);
-    [[nodiscard]] EventResult input_event(Utf16FlyString const& event_name, Utf16FlyString const& input_type, HTML::LocalNavigable&, Variant<u32, Utf16String> code_point_or_string, GC::Ptr<DOM::StaticRange> deletion_range = nullptr);
+    [[nodiscard]] static EventResult input_event(Utf16FlyString const& event_name, Utf16FlyString const& input_type, HTML::LocalNavigable&, Variant<u32, Utf16String> code_point_or_string, GC::Ptr<DOM::StaticRange> deletion_range = nullptr);
 
     [[nodiscard]] EventResult perform_copy_action();
     [[nodiscard]] EventResult perform_cut_action();
@@ -182,9 +183,9 @@ private:
     static GC::Ptr<DOM::Range> context_menu_url_token_range(DOM::Text&, size_t offset);
 #if defined(AK_OS_MACOS)
     bool select_word_at_position(Layout::BegunRead const& read, DOM::Document&, CSSPixelPoint visual_viewport_position);
+#endif
     void start_selection_from_preserved_mousedown(Layout::BegunRead const& read, DOM::Document&);
     void finish_selection_from_preserved_mousedown(DOM::Document&, CSSPixelPoint visual_viewport_position);
-#endif
 
     void update_mouse_selection(Layout::BegunRead const& read, CSSPixelPoint visual_viewport_position);
     void apply_mouse_selection(Layout::BegunRead const& read, CSSPixelPoint visual_viewport_position);
@@ -241,9 +242,7 @@ private:
     Optional<CSSPixelPoint> m_mousedown_visual_viewport_position;
     int m_mousedown_click_count { 0 };
     bool m_mousedown_target_is_drag_candidate { false };
-#if defined(AK_OS_MACOS)
     bool m_mousedown_preserved_selection { false };
-#endif
 
     // https://w3c.github.io/pointerevents/#the-pointerdown-event
     // The PREVENT MOUSE EVENT flag.

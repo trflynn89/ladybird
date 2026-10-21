@@ -1,0 +1,115 @@
+PASS: selection drag supplies text/plain
+PASS: selection drag starts at text node
+PASS: non-editable source is copied
+PASS: copy inserted at drop position
+PASS: copy effect
+PASS: copy input events
+PASS: drop can be undone
+PASS: drop can be redone
+PASS: editable to editable: source removed
+PASS: editable to editable: destination inserted
+PASS: editable to editable: move effect
+PASS: editable to editable: input events
+PASS: editable to input: source removed
+PASS: editable to input: destination inserted
+PASS: editable to input: move effect
+PASS: editable to input: input events
+PASS: editable to textarea: source removed
+PASS: editable to textarea: destination inserted
+PASS: editable to textarea: move effect
+PASS: editable to textarea: input events
+PASS: editable: drop within source at 0
+PASS: editable: drop within source at 6
+PASS: editable: drop within source at 2
+PASS: input to editable: source removed
+PASS: input to editable: destination inserted
+PASS: input to editable: move effect
+PASS: input to editable: input events
+PASS: input to input: source removed
+PASS: input to input: destination inserted
+PASS: input to input: move effect
+PASS: input to input: input events
+PASS: input to textarea: source removed
+PASS: input to textarea: destination inserted
+PASS: input to textarea: move effect
+PASS: input to textarea: input events
+PASS: input: drop within source at 0
+PASS: input: drop within source at 6
+PASS: input: drop within source at 2
+PASS: textarea to editable: source removed
+PASS: textarea to editable: destination inserted
+PASS: textarea to editable: move effect
+PASS: textarea to editable: input events
+PASS: textarea to input: source removed
+PASS: textarea to input: destination inserted
+PASS: textarea to input: move effect
+PASS: textarea to input: input events
+PASS: textarea to textarea: source removed
+PASS: textarea to textarea: destination inserted
+PASS: textarea to textarea: move effect
+PASS: textarea to textarea: input events
+PASS: textarea: drop within source at 0
+PASS: textarea: drop within source at 6
+PASS: textarea: drop within source at 2
+PASS: non-editable to input: source copied
+PASS: non-editable to input: text inserted
+PASS: non-editable to textarea: source copied
+PASS: non-editable to textarea: text inserted
+PASS: multi-node copy: source
+PASS: multi-node copy: destination
+PASS: multi-node move: source
+PASS: multi-node move: destination
+PASS: drop into empty editable
+PASS: drop into empty input
+PASS: drop into empty textarea
+PASS: element-boundary selection moved
+PASS: element-boundary selection inserted
+PASS: selection containing non-editable text is copied
+PASS: mixed selection inserted
+PASS: UTF-16 selection moved within editable
+PASS: UTF-16 selection moved within input
+PASS: UTF-16 selection moved within textarea
+PASS: script-handled move deletes source
+PASS: script-handled drop gets dragged text
+PASS: effectAllowed none: source
+PASS: effectAllowed none: destination
+PASS: effectAllowed copy: source
+PASS: effectAllowed copy: destination
+PASS: effectAllowed move: source
+PASS: effectAllowed move: destination
+PASS: effectAllowed copyMove: source
+PASS: effectAllowed copyMove: destination
+PASS: effectAllowed all: source
+PASS: effectAllowed all: destination
+PASS: maxlength input: source preserved
+PASS: maxlength input: target preserved
+PASS: maxlength input: move within full control
+PASS: maxlength textarea: source preserved
+PASS: maxlength textarea: target preserved
+PASS: maxlength textarea: move within full control
+PASS: drop on input padding uses control caret
+PASS: drop on textarea padding uses control caret
+PASS: beforeinput selection change deletes original source
+PASS: beforeinput selection change preserves drop position
+PASS: drop script changes source safely
+PASS: changed source cancels default move
+PASS: Escape preserves source
+PASS: Escape preserves target
+PASS: cancel dragstart: source unchanged
+PASS: cancel dragstart: target unchanged
+PASS: cancel dragover: source unchanged
+PASS: cancel dragover: target unchanged
+PASS: cancel drop: source unchanged
+PASS: cancel drop: target unchanged
+PASS: cancel beforeinput: source unchanged
+PASS: cancel beforeinput: target unchanged
+PASS: cancel source deletion: source unchanged
+PASS: cancel source deletion: target unchanged
+PASS: readonly input rejects drop
+PASS: readonly input preserves source
+PASS: readonly input source copied
+PASS: readonly input text inserted
+PASS: readonly textarea rejects drop
+PASS: readonly textarea preserves source
+PASS: readonly textarea source copied
+PASS: readonly textarea text inserted

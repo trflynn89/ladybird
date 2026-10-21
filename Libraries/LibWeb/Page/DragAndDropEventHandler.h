@@ -25,7 +25,7 @@ public:
 
     bool has_ongoing_drag_and_drop_operation() const { return !m_drag_data_store.is_null(); }
 
-    EventResult handle_drag_start(JS::Object const& relevant_global_object, GC::Ptr<DOM::Node> drag_target, CSSPixelPoint screen_position, CSSPixelPoint page_offset, CSSPixelPoint client_offset, CSSPixelPoint offset, unsigned button, unsigned buttons, unsigned modifiers, Vector<HTML::SelectedFile> files);
+    EventResult handle_drag_start(JS::Object const& relevant_global_object, GC::Ptr<DOM::Node> drag_target, GC::Ptr<DOM::Range> dragged_selection, CSSPixelPoint screen_position, CSSPixelPoint page_offset, CSSPixelPoint client_offset, CSSPixelPoint offset, unsigned button, unsigned buttons, unsigned modifiers, Vector<HTML::SelectedFile> files);
     EventResult handle_drag_move(JS::Object const& relevant_global_object, GC::Ref<DOM::Node>, CSSPixelPoint screen_position, CSSPixelPoint page_offset, CSSPixelPoint client_offset, CSSPixelPoint offset, unsigned button, unsigned buttons, unsigned modifiers);
     EventResult handle_drag_leave(JS::Object const& relevant_global_object, CSSPixelPoint screen_position, CSSPixelPoint page_offset, CSSPixelPoint client_offset, CSSPixelPoint offset, unsigned button, unsigned buttons, unsigned modifiers);
     EventResult handle_drag_cancel(JS::Object const& relevant_global_object, CSSPixelPoint screen_position, CSSPixelPoint page_offset, CSSPixelPoint client_offset, CSSPixelPoint offset, unsigned button, unsigned buttons, unsigned modifiers);
@@ -53,6 +53,10 @@ private:
         unsigned modifiers,
         GC::Ptr<DOM::EventTarget> related_target = nullptr);
 
+    bool insert_dropped_text(CSSPixelPoint client_offset);
+    bool delete_dragged_selection();
+    bool source_is_editable() const;
+
     bool allow_text_drop(GC::Ref<DOM::Node>) const;
 
     RefPtr<HTML::DragDataStore> m_drag_data_store;
@@ -68,6 +72,11 @@ private:
 
     // https://html.spec.whatwg.org/multipage/dnd.html#current-drag-operation
     Utf16FlyString m_current_drag_operation;
+
+    GC::Ptr<DOM::Range> m_dragged_selection;
+    GC::Ptr<DOM::Node> m_source_editing_host;
+    Utf16String m_dragged_text;
+    bool m_did_delete_source { false };
 };
 
 }
