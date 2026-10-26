@@ -4,17 +4,20 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Array.h>
 #include <AK/Atomic.h>
 #include <AK/Function.h>
+#include <AK/NumericLimits.h>
 #include <AK/Time.h>
+#include <AK/Vector.h>
 #include <LibCore/AnonymousBuffer.h>
 #include <LibCore/Futex.h>
 #include <LibCore/System.h>
 #include <LibTest/TestCase.h>
 #include <LibThreading/Thread.h>
 
-// Back the word with cross-process shared memory — as a real SharedArrayBuffer word is — so os_sync and the kernel
-// futex operate on the same kind of memory they do in production.
+// Use the same backing memory as a SharedArrayBuffer. All wait/notify semantics are provided by the common
+// registry; the memory value is never used as a substitute for an explicit notification.
 static Core::AnonymousBuffer make_word_buffer()
 {
     return MUST(Core::AnonymousBuffer::create_with_size(sizeof(u64)));
@@ -26,9 +29,7 @@ TEST_CASE(wait_returns_not_equal_on_mismatch)
     auto* word = buffer.data<u32>();
     *word = 42;
 
-    // A mismatched value must return "not-equal" immediately without blocking — even with no timeout. On macOS, this is
-    // the regression guard: os_sync_wait_on_address reports a mismatch as a successful (wake) return — so without the
-    // userspace pre-compare, this would wrongly report "ok".
+    // A mismatched value returns "not-equal" immediately, even without a timeout.
     EXPECT(Core::atomic_wait(word, 99, sizeof(u32), {}) == Core::AtomicWaitResult::NotEqual);
 }
 
@@ -136,8 +137,7 @@ TEST_CASE(notify_wakes_an_eight_byte_waiter)
 
     auto thread = Threading::Thread::construct("FutexWaiter64"sv, [&]() {
         waiter_ready.store(true);
-        // The value never changes — so only a real notify (not a value change) can wake this 8-byte waiter. Under the
-        // old poll fallback, this hangs to the timeout — since polling only ever observes value changes.
+        // Only an explicit notification can wake this waiter; the value stays unchanged.
         auto wait_result = Core::atomic_wait(word, 0x0000000100000042ULL, sizeof(u64), AK::Duration::from_milliseconds(5000));
         result.store(static_cast<int>(wait_result));
         return 0;
@@ -157,7 +157,7 @@ TEST_CASE(notify_wakes_an_eight_byte_waiter)
 
     (void)thread->join();
     EXPECT(result.load() == static_cast<int>(Core::AtomicWaitResult::Woken));
-    // An 8-byte notify now reports the woken count accurately (the poll fallback always returned 0).
+    // An 8-byte notify reports the selected waiter in its count.
     EXPECT(max_woken == 1u);
 }
 
@@ -170,9 +170,7 @@ TEST_CASE(notify_from_a_four_byte_view_wakes_an_eight_byte_waiter)
     IGNORE_USE_IN_ESCAPING_LAMBDA AK::Atomic<bool> waiter_ready { false };
     IGNORE_USE_IN_ESCAPING_LAMBDA AK::Atomic<int> result { -1 };
 
-    // An 8-byte (BigInt64) waiter and a 4-byte (Int32) notify at the same address are one WaiterList — so, the notify
-    // must wake the waiter. Keying the kernel wait/wake by element size (as os_sync does natively) rejects this
-    // mixed-size pair with EINVAL, and the waiter never wakes — unless both normalize to the low 32-bit half.
+    // Both widths at one address share a waiter list.
     auto thread = Threading::Thread::construct("FutexWaiterMixed64"sv, [&]() {
         waiter_ready.store(true);
         auto wait_result = Core::atomic_wait(word, 0x0000000100000042ULL, sizeof(u64), AK::Duration::from_milliseconds(5000));
@@ -221,4 +219,150 @@ TEST_CASE(notify_from_an_eight_byte_view_wakes_a_four_byte_waiter)
 
     (void)thread->join();
     EXPECT(result.load() == static_cast<int>(Core::AtomicWaitResult::Woken));
+}
+
+namespace {
+
+struct WaiterContext {
+    Atomic<bool> ready { false };
+    Atomic<bool> cancelled { false };
+};
+
+bool observe_waiter(void* context)
+{
+    auto& waiter = *static_cast<WaiterContext*>(context);
+    // The host cancellation callback runs after the waiter is enqueued, while the list is locked. This gives the
+    // tests a deterministic enrollment barrier without sleeps that guess when a thread entered the kernel.
+    waiter.ready.store(true);
+    return waiter.cancelled.load();
+}
+
+bool wait_until(Function<bool()> const& condition)
+{
+    auto deadline = MonotonicTime::now() + AK::Duration::from_seconds(2);
+    while (!condition()) {
+        if (MonotonicTime::now() >= deadline)
+            return false;
+        (void)Core::System::sleep_ms(1);
+    }
+    return true;
+}
+
+}
+
+TEST_CASE(notify_counts_each_waiter_once)
+{
+    auto buffer = make_word_buffer();
+    IGNORE_USE_IN_ESCAPING_LAMBDA auto* word = buffer.data<u64>();
+    *word = 42;
+    IGNORE_USE_IN_ESCAPING_LAMBDA Array<WaiterContext, 3> contexts;
+    IGNORE_USE_IN_ESCAPING_LAMBDA Array<Atomic<u8>, 3> results;
+    Vector<NonnullRefPtr<Threading::Thread>> threads;
+    for (size_t i = 0; i < contexts.size(); ++i) {
+        auto thread = Threading::Thread::construct("CountWaiter"sv, [&, i] {
+            results[i].store(Core::core_atomic_wait(word, 42, i == 1 ? 8 : 4, 5'000'000'000, observe_waiter, &contexts[i]));
+            return 0;
+        });
+        thread->start();
+        threads.append(move(thread));
+        EXPECT(wait_until([&] { return contexts[i].ready.load(); }));
+    }
+    EXPECT_EQ(Core::atomic_notify(word, 4, 0), 0u);
+    EXPECT_EQ(Core::atomic_notify(word, 4, 1), 1u);
+    EXPECT_EQ(Core::atomic_notify(word, 8, NumericLimits<size_t>::max()), 2u);
+    EXPECT_EQ(Core::atomic_notify(word, 4, NumericLimits<size_t>::max()), 0u);
+    for (size_t i = 0; i < threads.size(); ++i) {
+        (void)threads[i]->join();
+        EXPECT_EQ(results[i].load(), to_underlying(Core::AtomicWaitResult::Woken));
+    }
+}
+
+TEST_CASE(notify_selects_waiters_in_fifo_order)
+{
+    auto buffer = make_word_buffer();
+    IGNORE_USE_IN_ESCAPING_LAMBDA auto* word = buffer.data<u64>();
+    *word = 42;
+    IGNORE_USE_IN_ESCAPING_LAMBDA Array<WaiterContext, 3> contexts;
+    IGNORE_USE_IN_ESCAPING_LAMBDA Array<Atomic<int>, 3> results;
+    for (auto& result : results)
+        result.store(-1);
+    Vector<NonnullRefPtr<Threading::Thread>> threads;
+    for (size_t i = 0; i < contexts.size(); ++i) {
+        auto thread = Threading::Thread::construct("FIFOWaiter"sv, [&, i] {
+            results[i].store(Core::core_atomic_wait(word, 42, i == 1 ? 8 : 4, 5'000'000'000, observe_waiter, &contexts[i]));
+            return 0;
+        });
+        thread->start();
+        threads.append(move(thread));
+        EXPECT(wait_until([&] { return contexts[i].ready.load(); }));
+    }
+    for (size_t i = 0; i < contexts.size(); ++i) {
+        EXPECT_EQ(Core::atomic_notify(word, 8, 1), 1u);
+        EXPECT(wait_until([&] { return results[i].load() != -1; }));
+        EXPECT_EQ(results[i].load(), static_cast<int>(Core::AtomicWaitResult::Woken));
+        for (size_t j = i + 1; j < contexts.size(); ++j)
+            EXPECT_EQ(results[j].load(), -1);
+    }
+    for (auto& thread : threads)
+        (void)thread->join();
+}
+
+TEST_CASE(changing_the_word_does_not_notify_a_waiter)
+{
+    auto buffer = make_word_buffer();
+    IGNORE_USE_IN_ESCAPING_LAMBDA auto* word = buffer.data<u64>();
+    *word = 42;
+    IGNORE_USE_IN_ESCAPING_LAMBDA WaiterContext context;
+    IGNORE_USE_IN_ESCAPING_LAMBDA Atomic<u8> result;
+    auto thread = Threading::Thread::construct("StoreWaiter"sv, [&] {
+        result.store(Core::core_atomic_wait(word, 42, 8, 50'000'000, observe_waiter, &context));
+        return 0;
+    });
+    thread->start();
+    EXPECT(wait_until([&] { return context.ready.load(); }));
+    __atomic_store_n(word, 43, __ATOMIC_SEQ_CST);
+    (void)thread->join();
+    EXPECT_EQ(result.load(), to_underlying(Core::AtomicWaitResult::TimedOut));
+    EXPECT_EQ(Core::atomic_notify(word, 8, 1), 0u);
+}
+
+TEST_CASE(cancellation_removes_an_abandoned_waiter)
+{
+    auto buffer = make_word_buffer();
+    IGNORE_USE_IN_ESCAPING_LAMBDA auto* word = buffer.data<u64>();
+    *word = 42;
+    IGNORE_USE_IN_ESCAPING_LAMBDA WaiterContext context;
+    IGNORE_USE_IN_ESCAPING_LAMBDA Atomic<u8> result;
+    auto thread = Threading::Thread::construct("CancelledWaiter"sv, [&] {
+        result.store(Core::core_atomic_wait(word, 42, 8, -1, observe_waiter, &context));
+        return 0;
+    });
+    thread->start();
+    EXPECT(wait_until([&] { return context.ready.load(); }));
+    context.cancelled.store(true);
+    EXPECT_EQ(Core::atomic_notify(word, 8, 1), 0u);
+    (void)thread->join();
+    EXPECT_EQ(result.load(), to_underlying(Core::AtomicWaitResult::TimedOut));
+    EXPECT_EQ(Core::atomic_notify(word, 8, 1), 0u);
+}
+
+TEST_CASE(shared_location_is_independent_of_mapping_address)
+{
+    IGNORE_USE_IN_ESCAPING_LAMBDA u64 first_mapping = 42;
+    u64 second_mapping = 42;
+    IGNORE_USE_IN_ESCAPING_LAMBDA WaiterContext context;
+    IGNORE_USE_IN_ESCAPING_LAMBDA Atomic<u8> result;
+    // Two addresses represent views of one shared location. The object ID and byte offset identify its list;
+    // neither the mapping's address nor the element width contributes to that identity.
+    auto thread = Threading::Thread::construct("AliasWaiter"sv, [&] {
+        result.store(Core::core_atomic_wait(&first_mapping, 42, 8, 5'000'000'000, observe_waiter, &context, 1234, 8));
+        return 0;
+    });
+    thread->start();
+    EXPECT(wait_until([&] { return context.ready.load(); }));
+    EXPECT_EQ(Core::core_atomic_notify(&second_mapping, 1, 1234, 0), 0u);
+    EXPECT_EQ(Core::core_atomic_notify(&second_mapping, 1, 5678, 8), 0u);
+    EXPECT_EQ(Core::core_atomic_notify(&second_mapping, 1, 1234, 8), 1u);
+    (void)thread->join();
+    EXPECT_EQ(result.load(), to_underlying(Core::AtomicWaitResult::Woken));
 }

@@ -177,6 +177,9 @@ pub struct VmOptions {
     pub become_process_default_heap: bool,
     /// Backs SharedArrayBuffers with shared memory, which other processes can map.
     pub shared_memory_shared_array_buffers: bool,
+    /// Required for wait/notify coordination when the host runs agents in separate processes.
+    /// Without these callbacks, agents share the process-local LibCore registry.
+    pub shared_memory_operations: Option<&'static crate::runtime::array_buffer::SharedMemoryOperations>,
 }
 
 /// An execution context stack that VM::save_execution_context_stack() set aside, with the TypeErrorRealmScope that

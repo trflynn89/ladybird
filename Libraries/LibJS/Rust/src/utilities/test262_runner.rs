@@ -601,6 +601,8 @@ fn run_program(vm: &Vm, program: ScriptOrModuleProgram) -> Result<(), TestError>
 fn create_vm() -> Box<Vm> {
     Vm::create_with(VmOptions {
         shared_memory_shared_array_buffers: true,
+        #[cfg(unix)]
+        shared_memory_operations: Some(&agents::waiters::OPERATIONS),
         ..VmOptions::default()
     })
 }

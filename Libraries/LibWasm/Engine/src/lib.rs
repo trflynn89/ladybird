@@ -9,6 +9,9 @@
 //! A WebAssembly engine: the binary format decoder, the validator, which also builds the side tables the in-place
 //! interpreter branches with, the runtime, the interpreter, and the JIT's runtime half (the compiler is
 //! libwasm_jit).
+//!
+//! Atomic waits use LibCore's process-wide waiter registry. CMake supplies that dependency; standalone Cargo
+//! executables and tests must also link the built LibCore library.
 
 #[cfg(feature = "allocator")]
 extern crate ladybird_allocator;

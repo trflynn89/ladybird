@@ -13,6 +13,9 @@
 //! reads them in the order the agents wrote them. An agent exits when the test's end of its socket closes, so no agent
 //! outlives the test that started it, even when the test is killed for running too long.
 
+#[path = "waiters.rs"]
+pub(crate) mod waiters;
+
 use core::ffi::c_int;
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -197,7 +200,11 @@ fn never_raise_sigpipe(socket: &UnixStream) -> std::io::Result<()> {
 /// What the test sends an agent.
 #[derive(Debug)]
 enum ControlMessage {
-    Source { agent_index: u32, source: Vec<u8> },
+    Source {
+        agent_index: u32,
+        source: Vec<u8>,
+        waiters: OwnedFd,
+    },
     Broadcast(Broadcast),
 }
 
@@ -330,7 +337,12 @@ impl ControlReader {
                 let agent_index = u32::from_le_bytes(self.read_bytes()?);
                 let length = u32::from_le_bytes(self.read_bytes()?);
                 let source = self.read_vector(length as usize)?;
-                Ok(ControlMessage::Source { agent_index, source })
+                let waiters = self.received_descriptors.pop_front().ok_or_else(invalid_data)?;
+                Ok(ControlMessage::Source {
+                    agent_index,
+                    source,
+                    waiters,
+                })
             }
             BROADCAST_MESSAGE => {
                 let byte_length =
@@ -522,6 +534,7 @@ impl ReportPipe {
 #[derive(Default)]
 struct RunningAgents {
     agents: Vec<RunningAgent>,
+    waiters: waiters::Server,
     report_pipe: Option<ReportPipe>,
     /// How many of the failures in the report pipe getReport() has thrown.
     thrown_failure_count: usize,
@@ -529,6 +542,7 @@ struct RunningAgents {
 
 impl RunningAgents {
     fn start(&mut self, launcher: &AgentLauncher, source: &[u8]) -> std::io::Result<()> {
+        let waiters = self.waiters.connect()?;
         let report_pipe = match &mut self.report_pipe {
             Some(report_pipe) => report_pipe,
             None => self.report_pipe.insert(ReportPipe::create()?),
@@ -548,7 +562,11 @@ impl RunningAgents {
             exit_was_reported: false,
         });
         let agent = self.agents.last_mut().expect("the agent was just added");
-        send_all(agent.socket.as_fd(), &encode_source_message(agent_index, source))?;
+        send_with_descriptor(
+            agent.socket.as_fd(),
+            &encode_source_message(agent_index, source),
+            waiters.as_fd(),
+        )?;
         agent.wait_for_acknowledgement(AGENT_STARTED_ACKNOWLEDGEMENT)
     }
 
@@ -629,6 +647,7 @@ pub fn take_report() -> Result<Option<Vec<u8>>, AgentFailure> {
 /// Ends the agents of the test that ran last, and returns how each one that failed did, whether getReport() threw it
 /// or not.
 pub fn terminate_agents() -> Vec<AgentFailure> {
+    waiters::clear_client();
     let running_agents = RUNNING_AGENTS.take();
     let failures = running_agents
         .report_pipe
@@ -678,9 +697,15 @@ pub fn connect_to_test() -> std::io::Result<Vec<u8>> {
     let socket = take_inherited_descriptor(libc::STDIN_FILENO)?;
     let report_pipe = take_inherited_descriptor(libc::STDOUT_FILENO)?;
     let mut reader = ControlReader::new(socket.try_clone()?);
-    let ControlMessage::Source { agent_index, source } = reader.read_message()? else {
+    let ControlMessage::Source {
+        agent_index,
+        source,
+        waiters,
+    } = reader.read_message()?
+    else {
         return Err(std::io::ErrorKind::InvalidData.into());
     };
+    waiters::set_client(UnixStream::from(waiters));
     let connection = TestConnection {
         agent_index,
         socket,
@@ -760,4 +785,9 @@ pub fn report_uncaught_exception(name: &str, message: &str) {
 /// Tells the test that the agent panicked, as a failed assertion in the runtime does.
 pub fn report_panic(message: &str) {
     write_to_report_pipe(PANIC_FRAME, message.as_bytes());
+}
+
+/// Connects the test's own agent to the same registry as its child agents.
+fn connect_waiters() -> std::io::Result<UnixStream> {
+    RUNNING_AGENTS.with_borrow_mut(|agents| agents.waiters.connect())
 }

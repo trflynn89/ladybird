@@ -94,3 +94,51 @@ describe("Atomics on shared memory", () => {
         });
     });
 });
+
+describe("wait and notify on shared memory", () => {
+    [Int32Array, BigInt64Array].forEach(T => {
+        const value = T === BigInt64Array ? 42n : 42;
+        const otherValue = T === BigInt64Array ? 43n : 43;
+        const makeArray = () => {
+            const buffer = new SharedArrayBuffer(T.BYTES_PER_ELEMENT * 4);
+            const array = new T(buffer, T.BYTES_PER_ELEMENT, 2);
+            array[1] = value;
+            return array;
+        };
+
+        test(`${T.name}: a mismatched value returns not-equal before checking the timeout`, () => {
+            const array = makeArray();
+            expect(Atomics.wait(array, 1, otherValue, 0)).toBe("not-equal");
+            expect(Atomics.wait(array, 1, otherValue)).toBe("not-equal");
+        });
+
+        test(`${T.name}: a matching value with zero timeout returns timed-out`, () => {
+            const array = makeArray();
+            expect(Atomics.wait(array, 1, value, 0)).toBe("timed-out");
+            expect(Atomics.notify(array, 1)).toBe(0);
+        });
+
+        test(`${T.name}: a timed-out waiter is removed from the waiter list`, () => {
+            const array = makeArray();
+            expect(Atomics.wait(array, 1, value, 1)).toBe("timed-out");
+            expect(Atomics.notify(array, 1, 1)).toBe(0);
+            expect(Atomics.notify(array, 1)).toBe(0);
+            expect(array[1]).toBe(value);
+        });
+
+        test(`${T.name}: notify reports zero when there are no waiters`, () => {
+            const array = makeArray();
+            expect(Atomics.notify(array, 1, 0)).toBe(0);
+            expect(Atomics.notify(array, 1, 1)).toBe(0);
+            expect(Atomics.notify(array, 1, Infinity)).toBe(0);
+            expect(Atomics.notify(array, 1, undefined)).toBe(0);
+            expect(Atomics.notify(array, 1)).toBe(0);
+        });
+    });
+
+    test("BigInt64Array waits compare the high 32 bits", () => {
+        const array = new BigInt64Array(new SharedArrayBuffer(8));
+        array[0] = 0x10000002an;
+        expect(Atomics.wait(array, 0, 0x20000002an, 0)).toBe("not-equal");
+    });
+});

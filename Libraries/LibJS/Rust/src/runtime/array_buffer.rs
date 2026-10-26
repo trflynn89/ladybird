@@ -302,6 +302,23 @@ fn mint_shared_object_id() -> u64 {
     }
 }
 
+/// A location in a shared memory object, independent of the address at which an agent maps it.
+#[derive(Clone, Copy, Debug)]
+pub struct SharedMemoryLocation<'a> {
+    pub memory: BorrowedSharedMemory<'a>,
+    pub byte_length: usize,
+    pub object_id: u64,
+    pub byte_index: usize,
+}
+
+/// A host whose agents live in different processes routes their waits and notifications to one waiter registry.
+/// These callbacks run synchronously while the backing store and its descriptor stay borrowed.
+#[derive(Debug)]
+pub struct SharedMemoryOperations {
+    pub wait: fn(SharedMemoryLocation<'_>, u64, usize, Option<Duration>) -> AtomicWaitResult,
+    pub notify: fn(SharedMemoryLocation<'_>, usize) -> usize,
+}
+
 /// DataBlock::SharedBackingStore: the bytes of a fixed-length Shared Data Block in a shared memory object, which agents
 /// in other processes map too. The block keeps a descriptor of the object to hand it on, and the id that names the
 /// object in every agent, since one object that is mapped twice has two addresses.
@@ -309,6 +326,7 @@ pub struct SharedBackingStore {
     shared_memory: OwnedSharedMemory,
     object_id: u64,
     mapping: SharedMemoryMapping,
+    operations: Option<&'static SharedMemoryOperations>,
 }
 
 /// Like every other backing store, shared memory is mapped into the cage, so that an out-of-bounds access through the
@@ -348,19 +366,24 @@ fn shared_memory_object_has_at_least(shared_memory: &std::fs::File, size: usize)
 
 impl SharedBackingStore {
     /// A new zero-filled shared memory object of `size` bytes, named by a new id.
-    pub fn create(size: usize) -> Result<Self, OutOfMemory> {
+    pub fn create(size: usize, operations: Option<&'static SharedMemoryOperations>) -> Result<Self, OutOfMemory> {
         let shared_memory = create_shared_memory(size)?;
         let mapping = SharedMemoryMapping::map(shared_memory.as_shared_memory(), size)?;
         Ok(Self {
             shared_memory,
             object_id: mint_shared_object_id(),
             mapping,
+            operations,
         })
     }
 
-    /// The first `size` bytes of a shared memory object that another agent made and `object_id` names. The store keeps
-    /// a duplicate of the descriptor. Fails if `size` is 0 or the object is smaller than that.
-    pub fn adopt(shared_memory: BorrowedSharedMemory<'_>, size: usize, object_id: u64) -> Result<Self, OutOfMemory> {
+    /// Adopts a shared memory object without changing its layout or reserving synchronization metadata in it.
+    pub fn adopt(
+        shared_memory: BorrowedSharedMemory<'_>,
+        size: usize,
+        object_id: u64,
+        operations: Option<&'static SharedMemoryOperations>,
+    ) -> Result<Self, OutOfMemory> {
         let shared_memory = std::fs::File::from(shared_memory.try_clone_to_owned().map_err(|_| OutOfMemory)?);
         if !shared_memory_object_has_at_least(&shared_memory, size) {
             return Err(OutOfMemory);
@@ -370,7 +393,17 @@ impl SharedBackingStore {
             shared_memory: shared_memory.into(),
             object_id,
             mapping,
+            operations,
         })
+    }
+
+    fn location(&self, byte_index: usize) -> SharedMemoryLocation<'_> {
+        SharedMemoryLocation {
+            memory: self.shared_memory(),
+            byte_length: self.size(),
+            object_id: self.object_id,
+            byte_index,
+        }
     }
 
     pub fn shared_memory(&self) -> BorrowedSharedMemory<'_> {
@@ -998,7 +1031,7 @@ impl ArrayBuffer {
         size: usize,
         object_id: u64,
     ) -> Result<Gc<ArrayBuffer>, OutOfMemory> {
-        let store = SharedBackingStore::adopt(shared_memory, size, object_id)?;
+        let store = SharedBackingStore::adopt(shared_memory, size, object_id, vm.options().shared_memory_operations)?;
         Ok(Self::create_from_data_block(vm, realm, DataBlock::shared_memory(store)))
     }
 
@@ -1540,13 +1573,35 @@ impl ArrayBuffer {
             8 => WaitWord::Word64(data_block.atomic_at(byte_index)),
             _ => unreachable!("Atomics.wait waits on 4-byte or 8-byte elements"),
         };
+
+        if let DataBlockStorage::Shared(store) = &data_block.byte_buffer {
+            if let Some(operations) = &store.operations {
+                return (operations.wait)(store.location(byte_index), expected, size, timeout);
+            }
+            return futex::atomic_wait_at(word, expected, timeout, store.object_id, byte_index);
+        }
+
         futex::atomic_wait(word, expected, timeout)
     }
 
     /// Core::atomic_notify() on the word at `byte_index`.
     pub fn atomic_notify(&self, byte_index: usize, max_count: usize) -> usize {
         // NB: Waiters of both sizes key on the low 32-bit half of their word.
-        futex::atomic_notify(self.data_block.borrow().atomic_at::<AtomicU32>(byte_index), max_count)
+        let data_block = self.data_block.borrow();
+
+        if let DataBlockStorage::Shared(store) = &data_block.byte_buffer {
+            if let Some(operations) = &store.operations {
+                return (operations.notify)(store.location(byte_index), max_count);
+            }
+            return futex::atomic_notify_at(
+                data_block.atomic_at::<AtomicU32>(byte_index),
+                max_count,
+                store.object_id,
+                byte_index,
+            );
+        }
+
+        futex::atomic_notify(data_block.atomic_at::<AtomicU32>(byte_index), max_count)
     }
 }
 
@@ -1607,7 +1662,10 @@ fn create_shared_byte_data_block(vm: &Vm, size: usize, capacity: Option<usize>) 
             if vm.options().shared_memory_shared_array_buffers {
                 // Mint the id that will name this object for as long as it exists — in this agent and every agent it
                 // reaches.
-                return Ok(DataBlock::shared_memory(SharedBackingStore::create(size)?));
+                return Ok(DataBlock::shared_memory(SharedBackingStore::create(
+                    size,
+                    vm.options().shared_memory_operations,
+                )?));
             }
             Ok(DataBlock::new(OwnedBackingStore::create_zeroed(size)?, Shared::Yes))
         });

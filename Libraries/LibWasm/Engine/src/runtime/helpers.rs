@@ -269,9 +269,8 @@ unsafe fn wait(context: *mut ExecutionContext) -> u64 {
         ));
         return crate::abi::WAIT_CANNOT_BLOCK;
     }
-    // NB: The waits and wakes are those of Atomics.wait and Atomics.notify (LibJS's futex), whose waiter lists are
-    //     the operating system's, per address: JavaScript and WebAssembly wake each other, as the memory model's
-    //     single WaiterList per location requires.
+    // NB: JavaScript and WebAssembly use the same LibCore waiter registry, even across dynamic libraries.
+    //     Both widths at one address share a FIFO list; the platform only parks the selected waiter's thread.
     let word = unsafe {
         if size == 4 {
             WaitWord::Word32(&*(address as *const std::sync::atomic::AtomicU32))

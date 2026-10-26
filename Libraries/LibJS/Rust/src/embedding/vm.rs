@@ -54,6 +54,7 @@ impl From<JSVmOptions> for VmOptions {
         Self {
             become_process_default_heap: options.become_process_default_heap,
             shared_memory_shared_array_buffers: options.shared_memory_shared_array_buffers,
+            ..Self::default()
         }
     }
 }

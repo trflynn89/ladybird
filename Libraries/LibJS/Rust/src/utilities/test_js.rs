@@ -22,7 +22,7 @@ use ak::Utf16String;
 
 use self::test_runner::{TestRunner, TestRunnerOptions, cleanup, write_counts_for_siginfo};
 use crate::interpreter::run::set_dump_bytecode;
-use crate::interpreter::vm::Vm;
+use crate::interpreter::vm::{Vm, VmOptions};
 use crate::utilities::js::system_error_string;
 
 const TEST_ROOT_FRAGMENT: &str = "Tests/LibJS/Runtime";
@@ -572,7 +572,10 @@ fn ladybird_main(arguments: &[String]) -> c_int {
 
     set_dump_bytecode(options.dump_bytecode);
 
-    let vm = Vm::create();
+    let vm = Vm::create_with(VmOptions {
+        shared_memory_shared_array_buffers: true,
+        ..VmOptions::default()
+    });
     vm.set_dynamic_imports_allowed(true);
 
     // Configure the test VM to support additional import attributes
