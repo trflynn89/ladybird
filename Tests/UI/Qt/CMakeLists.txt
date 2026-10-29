@@ -85,43 +85,21 @@ target_sources(TestQtReports PRIVATE
 add_chrome_style_sources(TestQtReports)
 deploy_qt_offscreen_platform_plugin(TestQtReports)
 
-ladybird_test("TestScreenshotSelectionOverlay.cpp" UI/Qt
+ladybird_test("TestScreenshotSelectionOverlay.cpp;TestScreenshotViewer.cpp;TestChromeIcons.cpp" UI/Qt
+    NAME TestQtScreenshots
     CUSTOM_MAIN "$<TARGET_OBJECTS:QtTestMain>"
     LIBS LibCore LibURL Qt::Core Qt::Gui Qt::Widgets
 )
-target_sources(TestScreenshotSelectionOverlay PRIVATE
+target_sources(TestQtScreenshots PRIVATE
     "${LADYBIRD_SOURCE_DIR}/UI/Qt/ChromeStyle.cpp"
     "${LADYBIRD_SOURCE_DIR}/UI/Qt/Icon.cpp"
     "${LADYBIRD_SOURCE_DIR}/UI/Qt/Popover.cpp"
     "${LADYBIRD_SOURCE_DIR}/UI/Qt/ScreenshotSelectionOverlay.cpp"
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/StringUtils.cpp"
-)
-add_chrome_style_sources(TestScreenshotSelectionOverlay)
-deploy_qt_offscreen_platform_plugin(TestScreenshotSelectionOverlay)
-
-ladybird_test("TestChromeIcons.cpp" UI/Qt
-    CUSTOM_MAIN "$<TARGET_OBJECTS:QtTestMain>"
-    LIBS LibURL Qt::Core Qt::Gui Qt::Widgets
-)
-target_sources(TestChromeIcons PRIVATE
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/ChromeStyle.cpp"
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/Icon.cpp"
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/StringUtils.cpp"
-)
-add_chrome_style_sources(TestChromeIcons)
-deploy_qt_offscreen_platform_plugin(TestChromeIcons)
-
-ladybird_test("TestScreenshotViewer.cpp" UI/Qt
-    CUSTOM_MAIN "$<TARGET_OBJECTS:QtTestMain>"
-    LIBS LibURL Qt::Core Qt::Gui Qt::Widgets
-)
-target_sources(TestScreenshotViewer PRIVATE
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/ChromeStyle.cpp"
     "${LADYBIRD_SOURCE_DIR}/UI/Qt/ScreenshotViewer.cpp"
     "${LADYBIRD_SOURCE_DIR}/UI/Qt/StringUtils.cpp"
 )
-add_chrome_style_sources(TestScreenshotViewer)
-deploy_qt_offscreen_platform_plugin(TestScreenshotViewer)
+add_chrome_style_sources(TestQtScreenshots)
+deploy_qt_offscreen_platform_plugin(TestQtScreenshots)
 
 ladybird_test("TestHiddenPageSizing.cpp" UI/Qt
     CUSTOM_MAIN "$<TARGET_OBJECTS:QtTestMain>"
