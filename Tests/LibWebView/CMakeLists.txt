@@ -21,6 +21,15 @@ if (BUILD_TESTING AND NOT WIN32)
             set_tests_properties(Test${helper}CrashReport PROPERTIES TIMEOUT 120)
         endforeach()
 
+set(TestSessionHistory_SOURCES
+    TestSessionHistory.cpp
+    TestSessionHistorySnapshotStorage.cpp
+    TestSessionHistoryTraversalQueue.cpp
+    TestSessionStore.cpp
+)
+ladybird_test("${TestSessionHistory_SOURCES}" LibWebView NAME TestSessionHistory LIBS LibDatabase LibWebView LibURL)
+
+
 set(TestAutocompleteSuggestions_SOURCES
     TestAutocompleteMuxer.cpp
     TestAutocompleteRanker.cpp
@@ -164,10 +173,6 @@ set(TEST_SOURCES
     TestNavigationLoader.cpp
     TestPictureInPictureWindow.cpp
     TestProfile.cpp
-    TestSessionHistory.cpp
-    TestSessionHistorySnapshotStorage.cpp
-    TestSessionHistoryTraversalQueue.cpp
-    TestSessionStore.cpp
     TestSiteCompatibilityDataLoading.cpp
     TestStartupSettings.cpp
     TestStorageAreaRegistry.cpp
