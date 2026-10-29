@@ -20,6 +20,15 @@ if (BUILD_TESTING AND NOT WIN32)
             )
             set_tests_properties(Test${helper}CrashReport PROPERTIES TIMEOUT 120)
         endforeach()
+
+set(TestAutocompleteSuggestions_SOURCES
+    TestAutocompleteMuxer.cpp
+    TestAutocompleteRanker.cpp
+    TestOmnibox.cpp
+    TestWebViewURL.cpp
+)
+ladybird_test("${TestAutocompleteSuggestions_SOURCES}" LibWebView NAME TestAutocompleteSuggestions LIBS LibDatabase LibWebView LibURL)
+
         add_test(
             NAME TestWebDriverWorkerTerminatedWhileStarting
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-worker-terminated-while-starting.py $<TARGET_FILE:WebDriver>
@@ -142,8 +151,6 @@ set(TEST_SOURCES
     TestAudibilityHold.cpp
     TestAudioServerAudibility.cpp
     TestBackgroundNetworking.cpp
-    TestAutocompleteMuxer.cpp
-    TestAutocompleteRanker.cpp
     TestCanonicalBrowsingContextGroup.cpp
     TestCookieJar.cpp
     TestCrashReportDiagnostics.cpp
@@ -155,7 +162,6 @@ set(TEST_SOURCES
     TestHelperProcessEnvironment.cpp
     TestHSTSStore.cpp
     TestNavigationLoader.cpp
-    TestOmnibox.cpp
     TestPictureInPictureWindow.cpp
     TestProfile.cpp
     TestSessionHistory.cpp
@@ -168,7 +174,6 @@ set(TEST_SOURCES
     TestStorageJar.cpp
     TestTabPerformanceStats.cpp
     TestWebDriverBiDiNetwork.cpp
-    TestWebViewURL.cpp
 )
 
 if (APPLE OR LINUX)
