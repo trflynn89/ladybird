@@ -26,10 +26,6 @@ set(TEST_SOURCES
     TestDump.cpp
     TestEventLoop.cpp
     TestFaviconDecoding.cpp
-    TestFetchAlgorithms.cpp
-    TestFetchBodyStream.cpp
-    TestFetchResponse.cpp
-    TestFetchURL.cpp
     TestHTMLTokenizer.cpp
     TestHighResolutionTime.cpp
     TestImageData.cpp
@@ -71,6 +67,15 @@ foreach(source IN LISTS TEST_SOURCES)
     ladybird_test("${source}" LibWeb LIBS ${test_libraries})
 endforeach()
 
+set(TestFetch_SOURCES
+    TestFetchAlgorithms.cpp
+    TestFetchBodyStream.cpp
+    TestFetchResponse.cpp
+    TestFetchURL.cpp
+)
+ladybird_test("${TestFetch_SOURCES}" LibWeb NAME TestFetch LIBS LibCompositing LibWeb LibGC LibJS LibURL LibHTTP LibRequests)
+
+
 set(TestFetchTransport_SOURCES
     TestFetchBodyDeliveryGate.cpp
     TestFetchByteChannel.cpp
@@ -101,10 +106,6 @@ if (NOT WIN32)
 endif()
 target_link_libraries(TestDownloadReader PRIVATE LibGC LibJS LibURL)
 target_link_libraries(TestFaviconDecoding PRIVATE LibCore LibGC LibGfx LibJS)
-target_link_libraries(TestFetchAlgorithms PRIVATE LibCore LibGC LibJS LibURL)
-target_link_libraries(TestFetchBodyStream PRIVATE LibCore LibGC LibJS)
-target_link_libraries(TestFetchResponse PRIVATE LibGC LibHTTP LibJS LibRequests LibURL)
-target_link_libraries(TestFetchURL PRIVATE LibURL)
 target_link_libraries(TestImageData PRIVATE LibGC LibJS)
 target_link_libraries(TestWebIDLBuffers PRIVATE LibGC LibJS)
 target_link_libraries(TestSecureContexts PRIVATE LibURL)

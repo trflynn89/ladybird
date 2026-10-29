@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "FetchTestDocument.h"
+#include <LibCore/EventLoop.h>
 #include <LibHTTP/HeaderList.h>
-#include <LibJS/Runtime/GlobalObject.h>
-#include <LibJS/Runtime/VM.h>
 #include <LibTest/TestCase.h>
 #include <LibURL/Parser.h>
 #include <LibWeb/Fetch/Fetching/Fetching.h>
@@ -14,6 +14,7 @@
 #include <LibWeb/Fetch/Infrastructure/FetchTimingInfo.h>
 #include <LibWeb/Fetch/Infrastructure/HTTP/Requests.h>
 #include <LibWeb/Fetch/Infrastructure/HTTP/Responses.h>
+#include <LibWeb/HTML/Scripting/Environments.h>
 #include <LibWeb/Loader/LoaderConfig.h>
 
 namespace {
@@ -57,9 +58,10 @@ TEST_CASE(javascript_bytecode_cache_memory_cache_request_headers_are_cloned)
 
 TEST_CASE(http_redirect_fetch_releases_intermediate_response_transfer_lease)
 {
-    auto vm = JS::VM::create();
-    auto root_execution_context = JS::create_simple_execution_context<JS::GlobalObject>(*vm);
-    auto& realm = *root_execution_context->realm;
+    Core::EventLoop event_loop;
+    install_font_plugin();
+    auto document = create_test_document();
+    auto& realm = document->relevant_settings_object().realm();
 
     auto request_url = URL::Parser::basic_parse("https://example.test/start"sv);
     VERIFY(request_url.has_value());
