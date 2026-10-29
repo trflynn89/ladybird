@@ -21,6 +21,18 @@ if (BUILD_TESTING AND NOT WIN32)
             set_tests_properties(Test${helper}CrashReport PROPERTIES TIMEOUT 120)
         endforeach()
 
+set(TestWebViewStorage_SOURCES
+    TestCookieJar.cpp
+    TestDownloadStore.cpp
+    TestFaviconStore.cpp
+    TestHistoryStore.cpp
+    TestHSTSStore.cpp
+    TestStorageJar.cpp
+    TestStorageAreaRegistry.cpp
+)
+ladybird_test("${TestWebViewStorage_SOURCES}" LibWebView NAME TestWebViewStorage LIBS LibDatabase LibWebView LibURL)
+
+
 set(TestSessionHistory_SOURCES
     TestSessionHistory.cpp
     TestSessionHistorySnapshotStorage.cpp
@@ -161,22 +173,15 @@ set(TEST_SOURCES
     TestAudioServerAudibility.cpp
     TestBackgroundNetworking.cpp
     TestCanonicalBrowsingContextGroup.cpp
-    TestCookieJar.cpp
     TestCrashReportDiagnostics.cpp
     TestDownloadSegmentation.cpp
-    TestDownloadStore.cpp
     TestExternalURLHandler.cpp
-    TestFaviconStore.cpp
-    TestHistoryStore.cpp
     TestHelperProcessEnvironment.cpp
-    TestHSTSStore.cpp
     TestNavigationLoader.cpp
     TestPictureInPictureWindow.cpp
     TestProfile.cpp
     TestSiteCompatibilityDataLoading.cpp
     TestStartupSettings.cpp
-    TestStorageAreaRegistry.cpp
-    TestStorageJar.cpp
     TestTabPerformanceStats.cpp
     TestWebDriverBiDiNetwork.cpp
 )
