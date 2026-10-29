@@ -27,11 +27,7 @@ set(TEST_SOURCES
     TestEventLoop.cpp
     TestFaviconDecoding.cpp
     TestFetchAlgorithms.cpp
-    TestFetchBodyDeliveryGate.cpp
     TestFetchBodyStream.cpp
-    TestFetchByteChannel.cpp
-    TestFetchEngineMessages.cpp
-    TestFetchExecutor.cpp
     TestFetchResponse.cpp
     TestFetchURL.cpp
     TestHTMLTokenizer.cpp
@@ -75,6 +71,15 @@ foreach(source IN LISTS TEST_SOURCES)
     ladybird_test("${source}" LibWeb LIBS ${test_libraries})
 endforeach()
 
+set(TestFetchTransport_SOURCES
+    TestFetchBodyDeliveryGate.cpp
+    TestFetchByteChannel.cpp
+    TestFetchEngineMessages.cpp
+    TestFetchExecutor.cpp
+)
+ladybird_test("${TestFetchTransport_SOURCES}" LibWeb NAME TestFetchTransport LIBS LibCompositing LibWeb LibIPC LibRequests LibThreading)
+
+
 set(TestStructuredSerialize_SOURCES
     TestStructuredSerializeCorpus.cpp
     TestStructuredSerializeDurability.cpp
@@ -91,17 +96,13 @@ target_link_libraries(TestAudioWorkletPipe PRIVATE LibCore LibThreading)
 target_link_libraries(TestBlobBytes PRIVATE LibCore LibGC LibJS)
 target_link_libraries(TestContentBlocker PRIVATE LibURL)
 target_link_libraries(TestStorageAreaMirror PRIVATE LibURL LibWebCommon)
-target_link_libraries(TestFetchEngineMessages PRIVATE LibCore LibIPC LibRequests)
-target_link_libraries(TestFetchExecutor PRIVATE LibCore LibIPC LibThreading)
 if (NOT WIN32)
     target_link_libraries(TestCSSSyntaxParser PRIVATE LibThreading)
 endif()
 target_link_libraries(TestDownloadReader PRIVATE LibGC LibJS LibURL)
 target_link_libraries(TestFaviconDecoding PRIVATE LibCore LibGC LibGfx LibJS)
 target_link_libraries(TestFetchAlgorithms PRIVATE LibCore LibGC LibJS LibURL)
-target_link_libraries(TestFetchBodyDeliveryGate PRIVATE LibCore LibThreading)
 target_link_libraries(TestFetchBodyStream PRIVATE LibCore LibGC LibJS)
-target_link_libraries(TestFetchByteChannel PRIVATE LibThreading)
 target_link_libraries(TestFetchResponse PRIVATE LibGC LibHTTP LibJS LibRequests LibURL)
 target_link_libraries(TestFetchURL PRIVATE LibURL)
 target_link_libraries(TestImageData PRIVATE LibGC LibJS)
