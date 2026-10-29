@@ -13,6 +13,4 @@ set(TEST_SOURCES
     TestWheelGestureIdentity.cpp
 )
 
-foreach(source IN LISTS TEST_SOURCES)
-    ladybird_test("${source}" LibCompositing LIBS LibCompositing LibGfx LibIPC)
-endforeach()
+ladybird_test("${TEST_SOURCES}" LibCompositing NAME TestLibCompositing LIBS LibCompositing LibGfx LibIPC)

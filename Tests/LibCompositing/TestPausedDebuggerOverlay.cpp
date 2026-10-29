@@ -18,7 +18,7 @@ TEST_CASE(buttons_are_centered_with_the_toolbar)
     EXPECT_EQ(geometry.continue_button, (Gfx::IntRect { 335, 30, 40, 38 }));
 }
 
-TEST_CASE(geometry_scales_with_device_pixel_ratio)
+TEST_CASE(paused_debugger_geometry_scales_with_device_pixel_ratio)
 {
     auto geometry = paused_debugger_overlay_geometry({ 1000, 600 }, 2.0);
 

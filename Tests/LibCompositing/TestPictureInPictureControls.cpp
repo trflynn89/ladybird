@@ -17,7 +17,7 @@ TEST_CASE(buttons_sit_in_the_top_corners)
     EXPECT_EQ(geometry.close_button, (Gfx::IntRect { 10, 10, 28, 28 }));
 }
 
-TEST_CASE(geometry_scales_with_device_pixel_ratio)
+TEST_CASE(picture_in_picture_geometry_scales_with_device_pixel_ratio)
 {
     auto geometry = picture_in_picture_controls_geometry({ 1600, 1200 }, 2.0);
 
