@@ -101,49 +101,37 @@ target_sources(TestQtScreenshots PRIVATE
 add_chrome_style_sources(TestQtScreenshots)
 deploy_qt_offscreen_platform_plugin(TestQtScreenshots)
 
-ladybird_test("TestHiddenPageSizing.cpp" UI/Qt
+ladybird_test("TestHiddenPageSizing.cpp;TestSelectDropdown.cpp;TestProcessManagerWindow.cpp;TestNativeTextEditingLineEdit.cpp" UI/Qt
+    NAME TestQtWidgets
     CUSTOM_MAIN "$<TARGET_OBJECTS:QtTestMain>"
-    LIBS Qt::Core Qt::Gui Qt::Widgets
+    LIBS LibCore LibWeb LibWebView LibGfx LibIPC LibURL Qt::Core Qt::Gui Qt::Widgets
 )
-target_sources(TestHiddenPageSizing PRIVATE "${LADYBIRD_SOURCE_DIR}/UI/Qt/HiddenPageSizing.cpp")
-deploy_qt_offscreen_platform_plugin(TestHiddenPageSizing)
-
-ladybird_test("TestSelectDropdown.cpp" UI/Qt
-    CUSTOM_MAIN "$<TARGET_OBJECTS:QtTestMain>"
-    LIBS LibWeb LibGfx LibIPC LibURL Qt::Core Qt::Gui Qt::Widgets
-)
-target_sources(TestSelectDropdown PRIVATE
+target_sources(TestQtWidgets PRIVATE
+    "${LADYBIRD_SOURCE_DIR}/Libraries/LibWebView/ProcessMonitor.cpp"
+    "${LADYBIRD_SOURCE_DIR}/UI/Qt/ChromeStyle.cpp"
+    "${LADYBIRD_SOURCE_DIR}/UI/Qt/HiddenPageSizing.cpp"
+    "${LADYBIRD_SOURCE_DIR}/UI/Qt/Icon.cpp"
+    "${LADYBIRD_SOURCE_DIR}/UI/Qt/NativeTextEditingLineEdit.cpp"
+    "${LADYBIRD_SOURCE_DIR}/UI/Qt/ProcessManagerWindow.cpp"
     "${LADYBIRD_SOURCE_DIR}/UI/Qt/SelectDropdown.cpp"
     "${LADYBIRD_SOURCE_DIR}/UI/Qt/StringUtils.cpp"
 )
-deploy_qt_offscreen_platform_plugin(TestSelectDropdown)
-
-ladybird_test("TestProcessManagerWindow.cpp" UI/Qt
-    CUSTOM_MAIN "$<TARGET_OBJECTS:QtTestMain>"
-    LIBS LibWebView LibURL Qt::Core Qt::Gui Qt::Widgets
-)
-target_sources(TestProcessManagerWindow PRIVATE
-    "${LADYBIRD_SOURCE_DIR}/Libraries/LibWebView/ProcessMonitor.cpp"
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/Icon.cpp"
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/ChromeStyle.cpp"
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/ProcessManagerWindow.cpp"
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/StringUtils.cpp"
-)
-add_chrome_style_sources(TestProcessManagerWindow)
-target_compile_definitions(TestProcessManagerWindow PRIVATE TEST_RESOURCE_ROOT="${LADYBIRD_SOURCE_DIR}/Base/res")
-deploy_qt_offscreen_platform_plugin(TestProcessManagerWindow)
-
-
-ladybird_test("TestNativeTextEditingLineEdit.cpp" UI/Qt
-    CUSTOM_MAIN "$<TARGET_OBJECTS:QtTestMain>"
-    LIBS Qt::Core Qt::Gui Qt::Widgets
-)
-target_sources(TestNativeTextEditingLineEdit PRIVATE "${LADYBIRD_SOURCE_DIR}/UI/Qt/NativeTextEditingLineEdit.cpp")
 if (APPLE)
-    target_sources(TestNativeTextEditingLineEdit PRIVATE "${LADYBIRD_SOURCE_DIR}/UI/Qt/NativeTextEditingBindings.mm" "${LADYBIRD_SOURCE_DIR}/UI/Qt/MacWindowFocus.mm")
-    target_link_libraries(TestNativeTextEditingLineEdit PRIVATE "-framework AppKit")
+    target_sources(TestQtWidgets PRIVATE
+        "${LADYBIRD_SOURCE_DIR}/UI/Qt/NativeTextEditingBindings.mm"
+        "${LADYBIRD_SOURCE_DIR}/UI/Qt/MacWindowFocus.mm"
+    )
+    target_link_libraries(TestQtWidgets PRIVATE "-framework AppKit")
 endif()
-deploy_qt_offscreen_platform_plugin(TestNativeTextEditingLineEdit)
+if (LINUX)
+    target_sources(TestQtWidgets PRIVATE TestJavaScriptDialog.cpp
+        "${LADYBIRD_SOURCE_DIR}/UI/Qt/JavaScriptDialog.cpp"
+        "${LADYBIRD_SOURCE_DIR}/UI/Qt/Popover.cpp"
+    )
+endif()
+add_chrome_style_sources(TestQtWidgets)
+target_compile_definitions(TestQtWidgets PRIVATE TEST_RESOURCE_ROOT="${LADYBIRD_SOURCE_DIR}/Base/res")
+deploy_qt_offscreen_platform_plugin(TestQtWidgets)
 
 ladybird_test("TestWebContentViewInputMethod.cpp" UI/Qt LIBS LibWebView LibWeb LibGfx LibIPC LibURL Qt::Core Qt::Gui Qt::Widgets)
 target_sources(TestWebContentViewInputMethod PRIVATE "${LADYBIRD_SOURCE_DIR}/UI/Qt/InputMethodUtils.cpp" "${LADYBIRD_SOURCE_DIR}/UI/Qt/StringUtils.cpp")
@@ -155,21 +143,6 @@ endif()
 ladybird_test("TestNativeWindowContainerFocus.cpp" UI/Qt LIBS Qt::Core Qt::Gui Qt::Widgets)
 target_sources(TestNativeWindowContainerFocus PRIVATE "${LADYBIRD_SOURCE_DIR}/UI/Qt/NativeWindowContainer.cpp")
 deploy_qt_offscreen_platform_plugin(TestNativeWindowContainerFocus)
-
-ladybird_test("TestJavaScriptDialog.cpp" UI/Qt
-    CUSTOM_MAIN "$<TARGET_OBJECTS:QtTestMain>"
-    LIBS LibCore LibURL Qt::Core Qt::Gui Qt::Widgets
-)
-target_sources(TestJavaScriptDialog PRIVATE
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/ChromeStyle.cpp"
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/Icon.cpp"
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/JavaScriptDialog.cpp"
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/NativeTextEditingLineEdit.cpp"
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/Popover.cpp"
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/StringUtils.cpp"
-)
-add_chrome_style_sources(TestJavaScriptDialog)
-deploy_qt_offscreen_platform_plugin(TestJavaScriptDialog)
 
 ladybird_test("TestWindowCloseCoordinator.cpp" UI/Qt LIBS Qt::Core)
 target_sources(TestWindowCloseCoordinator PRIVATE "${LADYBIRD_SOURCE_DIR}/UI/Qt/WindowCloseCoordinator.cpp")
