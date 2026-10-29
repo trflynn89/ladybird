@@ -109,28 +109,10 @@ ladybird_test("${TestAutocompleteSuggestions_SOURCES}" LibWebView NAME TestAutoc
     set_tests_properties(TestWebDriverSession PROPERTIES TIMEOUT 120)
 
     add_test(
-        NAME TestWebDriverContentBlockers
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-content-blockers.py $<TARGET_FILE:WebDriver>
+        NAME TestWebDriverSettings
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-settings.py $<TARGET_FILE:WebDriver>
     )
-    set_tests_properties(TestWebDriverContentBlockers PROPERTIES TIMEOUT 180)
-
-    add_test(
-        NAME TestWebDriverSearchEngineSettings
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-search-engine-settings.py $<TARGET_FILE:WebDriver>
-    )
-    set_tests_properties(TestWebDriverSearchEngineSettings PROPERTIES TIMEOUT 120)
-
-    add_test(
-        NAME TestWebDriverSettingsChanges
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-settings-changes.py $<TARGET_FILE:WebDriver>
-    )
-    set_tests_properties(TestWebDriverSettingsChanges PROPERTIES TIMEOUT 120)
-
-    add_test(
-        NAME TestWebDriverWebUIPagesShareAProcess
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-web-ui-pages-share-a-process.py $<TARGET_FILE:WebDriver>
-    )
-    set_tests_properties(TestWebDriverWebUIPagesShareAProcess PROPERTIES TIMEOUT 120)
+    set_tests_properties(TestWebDriverSettings PROPERTIES TIMEOUT 300)
 
     add_test(
         NAME TestWebDriverSessionHistory
