@@ -8,6 +8,7 @@
 #include <AK/LexicalPath.h>
 #include <AK/ScopeGuard.h>
 #include <LibCore/Directory.h>
+#include <LibCore/Environment.h>
 #include <LibCore/File.h>
 #include <LibCore/StandardPaths.h>
 #include <LibFileSystem/FileSystem.h>
@@ -71,7 +72,15 @@ TEST_CASE(opening_a_report_shows_what_crashed)
     ScopeGuard guard = cleanup;
 
     // The crash time is shown in local time, here two hours ahead of UTC.
-    VERIFY(setenv("TZ", "XYZ-2", 1) == 0);
+    auto original_timezone = Core::Environment::get("TZ"sv).map([](auto value) { return ByteString { value }; });
+    ScopeGuard restore_timezone = [&] {
+        if (original_timezone.has_value())
+            MUST(Core::Environment::set("TZ"sv, original_timezone.value(), Core::Environment::Overwrite::Yes));
+        else
+            MUST(Core::Environment::unset("TZ"sv));
+        tzset();
+    };
+    MUST(Core::Environment::set("TZ"sv, "XYZ-2"sv, Core::Environment::Overwrite::Yes));
     tzset();
 
     auto name = write_report("2026-10-01T12-34-56Z"sv);
@@ -118,7 +127,15 @@ TEST_CASE(the_crash_date_is_read_from_the_report_and_not_from_its_name)
     cleanup();
     ScopeGuard guard = cleanup;
 
-    VERIFY(setenv("TZ", "XYZ-2", 1) == 0);
+    auto original_timezone = Core::Environment::get("TZ"sv).map([](auto value) { return ByteString { value }; });
+    ScopeGuard restore_timezone = [&] {
+        if (original_timezone.has_value())
+            MUST(Core::Environment::set("TZ"sv, original_timezone.value(), Core::Environment::Overwrite::Yes));
+        else
+            MUST(Core::Environment::unset("TZ"sv));
+        tzset();
+    };
+    MUST(Core::Environment::set("TZ"sv, "XYZ-2"sv, Core::Environment::Overwrite::Yes));
     tzset();
 
     // Reports saved before names carried the time of the crash have no time to take from their names.

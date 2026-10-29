@@ -173,7 +173,6 @@ set(TEST_SOURCES
     TestAudioServerAudibility.cpp
     TestBackgroundNetworking.cpp
     TestCanonicalBrowsingContextGroup.cpp
-    TestCrashReportDiagnostics.cpp
     TestDownloadSegmentation.cpp
     TestExternalURLHandler.cpp
     TestHelperProcessEnvironment.cpp
@@ -187,7 +186,7 @@ set(TEST_SOURCES
 )
 
 if (APPLE OR LINUX)
-    list(APPEND TEST_SOURCES TestCrashReport.cpp TestCrashReportReview.cpp TestCrashReportStore.cpp TestFontService.cpp TestRendererFontService.cpp)
+    list(APPEND TEST_SOURCES TestCrashReport.cpp TestFontService.cpp TestRendererFontService.cpp)
 endif()
 
 if (APPLE)
@@ -519,3 +518,9 @@ if (BUILD_TESTING AND NOT WIN32)
     add_test(NAME TestTabPerformanceMonitor COMMAND $<TARGET_FILE:TestTabPerformanceMonitor>)
     set_tests_properties(TestTabPerformanceMonitor PROPERTIES TIMEOUT 60 ENVIRONMENT LADYBIRD_SOURCE_DIR=${LADYBIRD_SOURCE_DIR})
 endif()
+
+set(crash_report_storage_sources TestCrashReportDiagnostics.cpp)
+if (APPLE OR LINUX)
+    list(APPEND crash_report_storage_sources TestCrashReportReview.cpp TestCrashReportStore.cpp)
+endif()
+ladybird_test("${crash_report_storage_sources}" LibWebView NAME TestCrashReportStorage LIBS LibDatabase LibWebView LibURL)
