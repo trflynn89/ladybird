@@ -114,7 +114,7 @@ TEST_CASE(page_dumps_can_be_included_once_they_have_arrived)
     EXPECT(!include_page_dumps.isChecked());
 }
 
-TEST_CASE(the_full_report_is_shown_in_place_of_the_review)
+TEST_CASE(web_compat_report_the_full_report_is_shown_in_place_of_the_review)
 {
     WebCompatReportReview review { test_page(), {}, nullptr };
     Vector<bool> text_visibility;
@@ -182,7 +182,7 @@ TEST_CASE(leaving_the_review_closes_its_tab)
     EXPECT_EQ(closes, 1);
 }
 
-TEST_CASE(sending_can_be_canceled_until_the_report_is_sent)
+TEST_CASE(web_compat_report_sending_can_be_canceled_until_the_report_is_sent)
 {
     WebCompatReportReview review { test_page(), {}, nullptr };
     review.show();

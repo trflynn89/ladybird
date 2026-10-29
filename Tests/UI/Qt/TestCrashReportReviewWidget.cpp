@@ -130,7 +130,7 @@ TEST_CASE(the_review_offers_to_exit_before_and_after_answering)
     EXPECT(!exit_button.isVisible());
 }
 
-TEST_CASE(sending_can_be_canceled_until_the_report_is_sent)
+TEST_CASE(crash_report_sending_can_be_canceled_until_the_report_is_sent)
 {
     cleanup();
     ScopeGuard guard = cleanup;
@@ -251,7 +251,7 @@ TEST_CASE(sending_shows_its_progress_and_outcome)
     EXPECT_EQ(message.text(), "Thank you for helping Ladybird.");
 }
 
-TEST_CASE(the_full_report_is_shown_in_place_of_the_review)
+TEST_CASE(crash_report_the_full_report_is_shown_in_place_of_the_review)
 {
     cleanup();
     ScopeGuard guard = cleanup;

@@ -65,20 +65,25 @@ function(deploy_qt_offscreen_platform_plugin target)
 endfunction()
 
 # Crash reports are only saved on macOS and Linux.
+
+set(report_test_sources TestWebCompatReportReview.cpp)
 if (APPLE OR LINUX)
-    ladybird_test("TestCrashReportReviewWidget.cpp" UI/Qt
-        CUSTOM_MAIN "$<TARGET_OBJECTS:QtTestMain>"
-        LIBS LibFileSystem LibURL LibWebView Qt::Core Qt::Gui Qt::Widgets
-    )
-    target_sources(TestCrashReportReviewWidget PRIVATE
-        "${LADYBIRD_SOURCE_DIR}/UI/Qt/ChromeStyle.cpp"
-        "${LADYBIRD_SOURCE_DIR}/UI/Qt/CrashReportReviewWidget.cpp"
-        "${LADYBIRD_SOURCE_DIR}/UI/Qt/ReportReview.cpp"
-        "${LADYBIRD_SOURCE_DIR}/UI/Qt/StringUtils.cpp"
-    )
-    add_chrome_style_sources(TestCrashReportReviewWidget)
-    deploy_qt_offscreen_platform_plugin(TestCrashReportReviewWidget)
+    list(APPEND report_test_sources TestCrashReportReviewWidget.cpp
+        "${LADYBIRD_SOURCE_DIR}/UI/Qt/CrashReportReviewWidget.cpp")
 endif()
+ladybird_test("${report_test_sources}" UI/Qt NAME TestQtReports
+    CUSTOM_MAIN "$<TARGET_OBJECTS:QtTestMain>"
+    LIBS LibFileSystem LibURL LibWebView Qt::Core Qt::Gui Qt::Widgets
+)
+target_sources(TestQtReports PRIVATE
+    "${LADYBIRD_SOURCE_DIR}/UI/Qt/ChromeStyle.cpp"
+    "${LADYBIRD_SOURCE_DIR}/UI/Qt/Icon.cpp"
+    "${LADYBIRD_SOURCE_DIR}/UI/Qt/ReportReview.cpp"
+    "${LADYBIRD_SOURCE_DIR}/UI/Qt/StringUtils.cpp"
+    "${LADYBIRD_SOURCE_DIR}/UI/Qt/WebCompatReportReview.cpp"
+)
+add_chrome_style_sources(TestQtReports)
+deploy_qt_offscreen_platform_plugin(TestQtReports)
 
 ladybird_test("TestScreenshotSelectionOverlay.cpp" UI/Qt
     CUSTOM_MAIN "$<TARGET_OBJECTS:QtTestMain>"
@@ -117,20 +122,6 @@ target_sources(TestScreenshotViewer PRIVATE
 )
 add_chrome_style_sources(TestScreenshotViewer)
 deploy_qt_offscreen_platform_plugin(TestScreenshotViewer)
-
-ladybird_test("TestWebCompatReportReview.cpp" UI/Qt
-    CUSTOM_MAIN "$<TARGET_OBJECTS:QtTestMain>"
-    LIBS LibURL LibWebView Qt::Core Qt::Gui Qt::Widgets
-)
-target_sources(TestWebCompatReportReview PRIVATE
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/ChromeStyle.cpp"
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/Icon.cpp"
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/ReportReview.cpp"
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/StringUtils.cpp"
-    "${LADYBIRD_SOURCE_DIR}/UI/Qt/WebCompatReportReview.cpp"
-)
-add_chrome_style_sources(TestWebCompatReportReview)
-deploy_qt_offscreen_platform_plugin(TestWebCompatReportReview)
 
 ladybird_test("TestHiddenPageSizing.cpp" UI/Qt
     CUSTOM_MAIN "$<TARGET_OBJECTS:QtTestMain>"
