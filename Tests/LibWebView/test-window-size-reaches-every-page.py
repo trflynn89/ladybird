@@ -7,16 +7,14 @@
 import argparse
 import http.server
 import json
-import runpy
 import tempfile
 import threading
 
 from pathlib import Path
 
-devtools = runpy.run_path(str(Path(__file__).with_name("test-devtools-client-follows-the-tab.py")))
-launch = devtools["launch"]
-stop = devtools["stop"]
-wait_for_page = devtools["wait_for_page"]
+from devtools_test import launch
+from devtools_test import stop
+from devtools_test import wait_for_page
 
 
 class Handler(http.server.BaseHTTPRequestHandler):

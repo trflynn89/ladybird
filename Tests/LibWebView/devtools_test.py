@@ -4,48 +4,18 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
-import argparse
-import http.server
 import json
 import socket
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 
-from pathlib import Path
-
 import webdriver_test as helpers
 
+from webdriver_test import stop
+
 TIMEOUT_SECONDS = helpers.EVENT_TIMEOUT_SECONDS
-
-
-loads_lock = threading.Lock()
-loads = {}
-
-
-def load_count(path):
-    with loads_lock:
-        return loads.get(path, 0)
-
-
-class Handler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == "/favicon.ico":
-            self.send_error(404)
-            return
-        with loads_lock:
-            load = loads.get(self.path, 0) + 1
-            loads[self.path] = load
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html")
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(f"<!doctype html><title>{self.path}</title><script>window.load = {load};</script>".encode())
-
-    def log_message(self, format, *args):
-        pass
 
 
 class ConnectionClosed(Exception):
@@ -177,7 +147,7 @@ def wait_for_page(client, url, path):
     wait_until(f"the tab shows {url}", tab_shows_page)
 
 
-def launch(ladybird_binary, profile, url):
+def launch(ladybird_binary, profile, url, *, arguments=()):
     # Launches the browser with DevTools on a free port and connects the first client, whose connection doubles as the
     # check that the server is up: a throwaway probe would hold the server's one connection slot until it noticed the
     # probe had gone, and turn the client away meanwhile.
@@ -195,6 +165,7 @@ def launch(ladybird_binary, profile, url):
                 f"--profile-path={profile}",
                 f"--devtools={devtools_port}",
                 "--expose-internals-object",
+                *arguments,
                 url,
             ],
             stderr=subprocess.PIPE,
@@ -219,91 +190,3 @@ def launch(ladybird_binary, profile, url):
                 pass
         stop(process)
     raise AssertionError("The DevTools server didn't start")
-
-
-def stop(process):
-    process.terminate()
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
-
-
-def assert_page_survives_disconnects(devtools_port, path, load):
-    # The closed client disconnected DevTools from the page that displays the tab, so that page must still hold the
-    # document it loaded: The tab would have reloaded into another page had it crashed.
-    client = DevToolsClient(devtools_port)
-    try:
-        client.watch_frame_targets()
-        assert client.evaluate("window.load") == load
-    finally:
-        client.close()
-    assert load_count(path) == load, f"{path} was loaded {load_count(path)} times"
-
-
-def test_cross_site_navigation(ladybird_binary, profile, server):
-    source_url = f"http://127.0.0.1:{server.server_port}/source"
-    target_url = f"http://localhost:{server.server_port}/target"
-    process, devtools_port, client = launch(ladybird_binary, profile, source_url)
-    try:
-        try:
-            wait_for_page(client, source_url, "/source")
-            client.watch_frame_targets()
-
-            # A cross-site navigation moves the tab into a page of another process.
-            client.evaluate(f"setTimeout(() => location.href = {json.dumps(target_url)}, 0)")
-            wait_for_page(client, target_url, "/target")
-        finally:
-            client.close()
-
-        assert_page_survives_disconnects(devtools_port, "/target", 1)
-        assert process.poll() is None, "The browser exited"
-        print("PASS: A DevTools client follows the tab into a cross-site navigation's page")
-    finally:
-        stop(process)
-
-
-def test_crash_recovery(ladybird_binary, profile, server):
-    url = f"http://127.0.0.1:{server.server_port}/crash"
-    process, devtools_port, client = launch(ladybird_binary, profile, url)
-    try:
-        try:
-            wait_for_page(client, url, "/crash")
-            client.watch_frame_targets()
-            assert client.evaluate("window.load") == 1
-
-            # The headless browser restores the crashed tab into a page of a new process, and the client inspects
-            # that page's document once it's active.
-            panic = "internals.panicRenderStateForTesting()"
-            client.send({"to": client.console, "type": "evaluateJSAsync", "text": panic})
-            client.follow_frame_target()
-            assert client.evaluate("window.load") == 2
-        finally:
-            client.close()
-
-        assert_page_survives_disconnects(devtools_port, "/crash", 2)
-        assert process.poll() is None, "The browser exited"
-        print("PASS: A DevTools client follows the tab into the page that replaces a crashed one")
-    finally:
-        stop(process)
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("ladybird_binary")
-    ladybird_binary = parser.parse_args().ladybird_binary
-
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
-        with tempfile.TemporaryDirectory(prefix="ladybird-devtools-") as directory:
-            test_cross_site_navigation(ladybird_binary, Path(directory) / "navigation", server)
-            test_crash_recovery(ladybird_binary, Path(directory) / "crash", server)
-    finally:
-        server.shutdown()
-        server.server_close()
-
-
-if __name__ == "__main__":
-    main()

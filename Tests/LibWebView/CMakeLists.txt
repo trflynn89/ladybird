@@ -61,20 +61,10 @@ ladybird_test("${TestAutocompleteSuggestions_SOURCES}" LibWebView NAME TestAutoc
         )
         set_tests_properties(TestWebDriverCompositorReconnect PROPERTIES TIMEOUT 120)
         add_test(
-            NAME TestDevToolsClientFollowsTheTab
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-devtools-client-follows-the-tab.py $<TARGET_FILE:ladybird>
+            NAME TestDevTools
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-devtools.py $<TARGET_FILE:ladybird>
         )
-        set_tests_properties(TestDevToolsClientFollowsTheTab PROPERTIES TIMEOUT 120)
-        add_test(
-            NAME TestDevToolsCatchUpLayout
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-devtools-catch-up-layout.py $<TARGET_FILE:ladybird>
-        )
-        set_tests_properties(TestDevToolsCatchUpLayout PROPERTIES TIMEOUT 120)
-        add_test(
-            NAME TestWorkerErrorConsole
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-worker-error-console.py $<TARGET_FILE:ladybird>
-        )
-        set_tests_properties(TestWorkerErrorConsole PROPERTIES TIMEOUT 120)
+        set_tests_properties(TestDevTools PROPERTIES TIMEOUT 240)
         add_test(
             NAME TestWindowSizeReachesEveryPage
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-window-size-reaches-every-page.py $<TARGET_FILE:ladybird>
