@@ -95,7 +95,7 @@ TEST_CASE(response_header_restricts_the_document)
     EXPECT(is_enabled(policy, PolicyControlledFeature::Gamepad, origin));
 }
 
-TEST_CASE(policies_survive_ipc)
+TEST_CASE(permissions_policies_survive_ipc)
 {
     auto parent_origin = origin_of("https://top.example/"sv);
     auto parent_policy = create_a_permissions_policy_for_a_navigable({}, parent_origin);

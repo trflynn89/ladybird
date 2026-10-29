@@ -24,7 +24,7 @@ static ErrorOr<InsecureRequestsPolicy> decode_policy_from(T const& value)
     return decoder.decode<InsecureRequestsPolicy>();
 }
 
-TEST_CASE(policies_survive_ipc)
+TEST_CASE(insecure_requests_policies_survive_ipc)
 {
     for (auto policy : { InsecureRequestsPolicy::DoNotUpgrade, InsecureRequestsPolicy::Upgrade })
         EXPECT_EQ(MUST(decode_policy_from(policy)), policy);
