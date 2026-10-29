@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessTestApplication.h"
+#include "HeadlessWebViewTest.h"
 #include <AK/LexicalPath.h>
 #include <AK/Random.h>
 #include <AK/ScopeGuard.h>
@@ -14,32 +16,16 @@
 #include <LibCore/StandardPaths.h>
 #include <LibFileSystem/FileSystem.h>
 #include <LibGfx/SystemTheme.h>
-#include <LibMain/Main.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/HeadlessWebView.h>
 #include <LibWebView/Utilities.h>
 #include <stdlib.h>
 
+namespace HeadlessTests::InputMethodState {
+
 namespace {
 
-class TestApplication : public WebView::Application {
-    WEB_VIEW_APPLICATION(TestApplication)
-
-public:
-    explicit TestApplication(Optional<ByteString> ladybird_binary_path)
-        : WebView::Application(move(ladybird_binary_path))
-    {
-    }
-
-    virtual void create_platform_options(WebView::BrowserOptions& browser_options, WebView::RequestServerOptions&, WebView::WebContentOptions& web_content_options) override
-    {
-        browser_options.headless_mode = WebView::HeadlessMode::Test;
-        browser_options.disable_sql_database = WebView::DisableSQLDatabase::Yes;
-        web_content_options.is_test_mode = WebView::IsTestMode::Yes;
-    }
-
-    virtual bool should_coordinate_browser_process() const override { return false; }
-};
+using TestApplication = HeadlessTestApplication;
 
 }
 
@@ -50,7 +36,7 @@ public:
 // 1st-keystroke state and drops everything after the first committed character. See #9712: on_input_method_state_change
 // must fire for each state push, after the new state is already readable through input_method_state().
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_config_directory = ByteString::formatted("{}/Ladybird-TestInputMethodState-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_config_directory, Core::Directory::CreateDirectories::Yes));
@@ -200,4 +186,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
 
     outln("PASS: every input-method state change notified the view");
     return 0;
+}
+
 }

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessTestApplication.h"
+#include "HeadlessWebViewTest.h"
 #include <AK/LexicalPath.h>
 #include <AK/Random.h>
 #include <AK/ScopeGuard.h>
@@ -15,33 +17,17 @@
 #include <LibCore/StandardPaths.h>
 #include <LibFileSystem/FileSystem.h>
 #include <LibGfx/SystemTheme.h>
-#include <LibMain/Main.h>
 #include <LibWebCommon/HTML/VisibilityState.h>
 #include <LibWebCommon/Page/InputEvent.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/HeadlessWebView.h>
 #include <LibWebView/Utilities.h>
 
+namespace HeadlessTests::LinkHoverStatus {
+
 namespace {
 
-class TestApplication : public WebView::Application {
-    WEB_VIEW_APPLICATION(TestApplication)
-
-public:
-    explicit TestApplication(Optional<ByteString> ladybird_binary_path)
-        : WebView::Application(move(ladybird_binary_path))
-    {
-    }
-
-    virtual void create_platform_options(WebView::BrowserOptions& browser_options, WebView::RequestServerOptions&, WebView::WebContentOptions& web_content_options) override
-    {
-        browser_options.headless_mode = WebView::HeadlessMode::Test;
-        browser_options.disable_sql_database = WebView::DisableSQLDatabase::Yes;
-        web_content_options.is_test_mode = WebView::IsTestMode::Yes;
-    }
-
-    virtual bool should_coordinate_browser_process() const override { return false; }
-};
+using TestApplication = HeadlessTestApplication;
 
 void move_mouse_to(WebView::ViewImplementation& view, Web::DevicePixelPoint position)
 {
@@ -73,7 +59,7 @@ void leave_view(WebView::ViewImplementation& view)
 // outgoing document, and a keyboard navigation moves no pointer. But only the handler that reported the hover ends it
 // that way: an iframe navigating underneath a hover in its parent document leaves the parent's link reported.
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_config_directory = ByteString::formatted("{}/Ladybird-TestLinkHoverStatus-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_config_directory, Core::Directory::CreateDirectories::Yes));
@@ -226,4 +212,6 @@ function navigate_frame() { frame.srcdoc = frame.getAttribute("srcdoc") + "<!-- 
 
     outln("PASS: a MouseLeave or a document replacement ends the link hover, and the next move over the link reports it again");
     return 0;
+}
+
 }

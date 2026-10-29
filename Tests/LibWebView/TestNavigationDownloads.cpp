@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessTestApplication.h"
+#include "HeadlessWebViewTest.h"
 #include <AK/Array.h>
 #include <AK/Atomic.h>
 #include <AK/LexicalPath.h>
@@ -18,7 +20,6 @@
 #include <LibCore/Timer.h>
 #include <LibFileSystem/FileSystem.h>
 #include <LibGfx/SystemTheme.h>
-#include <LibMain/Main.h>
 #include <LibThreading/Thread.h>
 #include <LibURL/Parser.h>
 #include <LibWebView/Application.h>
@@ -30,26 +31,11 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 
+namespace HeadlessTests::NavigationDownloads {
+
 namespace {
 
-class TestApplication : public WebView::Application {
-    WEB_VIEW_APPLICATION(TestApplication)
-
-public:
-    explicit TestApplication(Optional<ByteString> ladybird_binary_path)
-        : WebView::Application(move(ladybird_binary_path))
-    {
-    }
-
-    virtual void create_platform_options(WebView::BrowserOptions& browser_options, WebView::RequestServerOptions&, WebView::WebContentOptions& web_content_options) override
-    {
-        browser_options.headless_mode = WebView::HeadlessMode::Test;
-        browser_options.disable_sql_database = WebView::DisableSQLDatabase::Yes;
-        web_content_options.is_test_mode = WebView::IsTestMode::Yes;
-    }
-
-    virtual bool should_coordinate_browser_process() const override { return false; }
-};
+using TestApplication = HeadlessTestApplication;
 
 // Answers a request for its page with a small document, and every other request with the same response, pausing
 // after the first pause_after bytes of its body when given.
@@ -280,7 +266,7 @@ void expect_navigation_downloads_cached_body(Core::AnonymousBuffer const& theme,
 
 }
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_directory = ByteString::formatted("{}/Ladybird-TestNavigationDownloads-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_directory, Core::Directory::CreateDirectories::Yes));
@@ -311,4 +297,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
 
     outln("PASS: navigation responses download byte for byte");
     return 0;
+}
+
 }

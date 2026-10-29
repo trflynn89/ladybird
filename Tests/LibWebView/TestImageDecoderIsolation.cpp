@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessWebViewTest.h"
 #include <AK/HashTable.h>
 #include <AK/LexicalPath.h>
 #include <AK/Random.h>
@@ -15,12 +16,13 @@
 #include <LibCore/System.h>
 #include <LibFileSystem/FileSystem.h>
 #include <LibGfx/SystemTheme.h>
-#include <LibMain/Main.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/HeadlessWebView.h>
 #include <LibWebView/ProcessManager.h>
 #include <LibWebView/Utilities.h>
 #include <signal.h>
+
+namespace HeadlessTests::ImageDecoderIsolation {
 
 namespace {
 
@@ -57,7 +59,7 @@ HashTable<pid_t> processes_of_type(WebView::ProcessType type)
 // An ImageDecoder parses untrusted images, so each renderer has one of its own, and never sees another's images. A
 // decoder that crashes is replaced for its renderer alone.
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_config_directory = ByteString::formatted("{}/Ladybird-TestImageDecoderIsolation-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_config_directory, Core::Directory::CreateDirectories::Yes));
@@ -101,4 +103,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
 
     outln("PASS: each renderer has an image decoder of its own, which is replaced alone when it crashes");
     return 0;
+}
+
 }

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessWebViewTest.h"
 #include <AK/LexicalPath.h>
 #include <AK/Random.h>
 #include <AK/ScopeGuard.h>
@@ -16,7 +17,6 @@
 #include <LibCore/System.h>
 #include <LibFileSystem/FileSystem.h>
 #include <LibGfx/SystemTheme.h>
-#include <LibMain/Main.h>
 #include <LibWebCommon/Page/InputEvent.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/HeadlessWebView.h>
@@ -24,6 +24,8 @@
 #include <LibWebView/ProcessManager.h>
 #include <LibWebView/Utilities.h>
 #include <signal.h>
+
+namespace HeadlessTests::PictureInPictureUserActivation {
 
 namespace {
 
@@ -141,7 +143,7 @@ constexpr auto video_url = "data:video/webm;base64,"
 // it may replace with one for another of its videos. The window is gone as soon as the user closes it, whatever its
 // renderer does, and the document needs that activation again, even before its page has heard that the window closed.
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_config_directory = ByteString::formatted("{}/Ladybird-TestPictureInPictureUserActivation-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_config_directory, Core::Directory::CreateDirectories::Yes));
@@ -219,4 +221,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
     outln("a document needs a click again once the user closes its window");
 
     return 0;
+}
+
 }

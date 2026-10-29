@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessWebViewTest.h"
 #include <AK/LexicalPath.h>
 #include <AK/Random.h>
 #include <AK/ScopeGuard.h>
@@ -15,7 +16,6 @@
 #include <LibGfx/SystemTheme.h>
 #include <LibHTTP/Cookie/Cookie.h>
 #include <LibHTTP/Cookie/ParsedCookie.h>
-#include <LibMain/Main.h>
 #include <LibURL/Parser.h>
 #include <LibURL/Site.h>
 #include <LibWebCommon/FileAPI/SerializedBlobURLEntry.h>
@@ -31,6 +31,8 @@
 #include <LibWebView/Utilities.h>
 #include <LibWebView/WebContentClient.h>
 #include <LibWebView/WebContentPage.h>
+
+namespace HeadlessTests::RendererCookieAccess {
 
 namespace {
 
@@ -60,7 +62,7 @@ public:
 // replace the HttpOnly cookies of every site. RequestServer handles the cookies of HTTP traffic itself, so the UI process
 // treats such a request from a renderer as misbehavior and terminates it, and the cookie jar stays untouched.
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_config_directory = ByteString::formatted("{}/Ladybird-TestRendererCookieAccess-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_config_directory, Core::Directory::CreateDirectories::Yes));
@@ -200,4 +202,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
 
     outln("PASS: renderers cannot read, store or update cookies the way HTTP responses and WebDriver do, nor reach another origin's cookies or blob URL entries");
     return 0;
+}
+
 }

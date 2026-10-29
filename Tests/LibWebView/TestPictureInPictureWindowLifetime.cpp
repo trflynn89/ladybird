@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessWebViewTest.h"
 #include <AK/LexicalPath.h>
 #include <AK/Random.h>
 #include <AK/ScopeGuard.h>
@@ -17,7 +18,6 @@
 #include <LibCore/Timer.h>
 #include <LibFileSystem/FileSystem.h>
 #include <LibGfx/SystemTheme.h>
-#include <LibMain/Main.h>
 #include <LibWebCommon/Page/InputEvent.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/HeadlessWebView.h>
@@ -26,6 +26,8 @@
 #include <LibWebView/Utilities.h>
 #include <LibWebView/WebContentClient.h>
 #include <signal.h>
+
+namespace HeadlessTests::PictureInPictureWindowLifetime {
 
 namespace {
 
@@ -155,7 +157,7 @@ void close_tab_as_a_browser_window_does(NonnullOwnPtr<WebView::HeadlessWebView> 
 
 // A Picture-in-Picture window's page lives in the process of the tab that opened it, so it must not outlive that tab.
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_config_directory = ByteString::formatted("{}/Ladybird-TestPictureInPictureWindowLifetime-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_config_directory, Core::Directory::CreateDirectories::Yes));
@@ -205,4 +207,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
     }
 
     return 0;
+}
+
 }

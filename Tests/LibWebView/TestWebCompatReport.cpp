@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessWebViewTest.h"
 #include "ReportServer.h"
 #include <AK/JsonArray.h>
 #include <AK/JsonObject.h>
@@ -17,9 +18,10 @@
 #include <LibCore/StandardPaths.h>
 #include <LibCore/Timer.h>
 #include <LibFileSystem/FileSystem.h>
-#include <LibMain/Main.h>
 #include <LibURL/Parser.h>
 #include <LibWebView/WebCompatReport.h>
+
+namespace HeadlessTests::WebCompatReport {
 
 using namespace ReportServerTest;
 using WebView::ReportSubmission;
@@ -110,7 +112,7 @@ void verify_diagnostics()
 
 }
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_directory = ByteString::formatted("{}/Ladybird-TestWebCompatReport-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_directory, Core::Directory::CreateDirectories::Yes));
@@ -228,4 +230,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
 
     outln("PASS: Web compatibility reports reach the report server in the format it expects");
     return 0;
+}
+
 }

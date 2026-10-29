@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessWebViewTest.h"
 #include <AK/LexicalPath.h>
 #include <AK/Random.h>
 #include <AK/ScopeGuard.h>
@@ -12,7 +13,6 @@
 #include <LibCore/StandardPaths.h>
 #include <LibFileSystem/FileSystem.h>
 #include <LibGfx/SystemTheme.h>
-#include <LibMain/Main.h>
 #include <LibURL/Parser.h>
 #include <LibWebCommon/HTML/NavigationPopulationRequest.h>
 #include <LibWebCommon/Page/NavigationTarget.h>
@@ -22,6 +22,8 @@
 #include <LibWebView/Utilities.h>
 #include <LibWebView/WebContentClient.h>
 #include <LibWebView/WebContentPage.h>
+
+namespace HeadlessTests::RendererOriginClaims {
 
 namespace {
 
@@ -51,7 +53,7 @@ public:
 // The UI process holds every document's origin, so a renderer claiming another origin for a navigation it starts has
 // the navigation refused.
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_config_directory = ByteString::formatted("{}/Ladybird-TestRendererOriginClaims-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_config_directory, Core::Directory::CreateDirectories::Yes));
@@ -115,4 +117,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
 
     outln("PASS: renderers cannot start a navigation as another origin");
     return 0;
+}
+
 }

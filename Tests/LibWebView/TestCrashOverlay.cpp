@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessWebViewTest.h"
 #include <AK/LexicalPath.h>
 #include <AK/Random.h>
 #include <AK/ScopeGuard.h>
@@ -14,13 +15,14 @@
 #include <LibCore/StandardPaths.h>
 #include <LibFileSystem/FileSystem.h>
 #include <LibGfx/SystemTheme.h>
-#include <LibMain/Main.h>
 #include <LibURL/Parser.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/CanonicalDocument.h>
 #include <LibWebView/HeadlessWebView.h>
 #include <LibWebView/Utilities.h>
 #include <stdlib.h>
+
+namespace HeadlessTests::CrashOverlay {
 
 namespace {
 
@@ -54,7 +56,7 @@ private:
 
 }
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_directory = ByteString::formatted("{}/Ladybird-TestCrashOverlay-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_directory, Core::Directory::CreateDirectories::Yes));
@@ -185,4 +187,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
     VERIFY(session_history.used_step_count() == 5);
     outln("PASS: native crash overlay state, reload and history");
     return 0;
+}
+
 }

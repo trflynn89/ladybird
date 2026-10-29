@@ -48,6 +48,26 @@ CTEST_OUTPUT_ON_FAILURE=1 ninja test
 ctest --output-on-failure
 ```
 
+### C++ tests
+
+Related C++ test sources share an executable. LibTest executables accept `--list` to list their cases
+and an optional pattern to select cases:
+
+```sh
+Build/release/bin/TestStructuredSerialize --list
+Build/release/bin/TestStructuredSerialize '*storage_reader*'
+```
+
+The headless browser integration scenarios share `TestHeadlessWebView`. Select one scenario per invocation
+to give it a fresh browser process:
+
+```sh
+Build/release/bin/TestHeadlessWebView --list
+Build/release/bin/TestHeadlessWebView TestInputMethodState
+```
+
+CTest retains a separate entry for each headless scenario, including its timeout and environment settings.
+
 ### JavaScript tests
 
 Build `test-js` to build the runtime runner and `js`, and prepare the shared

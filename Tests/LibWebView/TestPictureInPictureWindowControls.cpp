@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessWebViewTest.h"
 #include <AK/LexicalPath.h>
 #include <AK/Random.h>
 #include <AK/ScopeGuard.h>
@@ -19,7 +20,6 @@
 #include <LibFileSystem/FileSystem.h>
 #include <LibGfx/Cursor.h>
 #include <LibGfx/SystemTheme.h>
-#include <LibMain/Main.h>
 #include <LibWebCommon/Page/InputEvent.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/HeadlessWebView.h>
@@ -27,6 +27,8 @@
 #include <LibWebView/ProcessManager.h>
 #include <LibWebView/Utilities.h>
 #include <signal.h>
+
+namespace HeadlessTests::PictureInPictureWindowControls {
 
 namespace {
 
@@ -134,7 +136,7 @@ bool is_cursor(Gfx::Cursor const& cursor, Gfx::StandardCursor standard_cursor)
 // and show their own cursor and tooltip in place of the page's while hovered. They work while the page's renderer is
 // stopped.
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_config_directory = ByteString::formatted("{}/Ladybird-TestPictureInPictureWindowControls-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_config_directory, Core::Directory::CreateDirectories::Yes));
@@ -347,4 +349,6 @@ addEventListener("pointermove", event => { if (event.buttons) log("drag", event)
     outln("a control follows the frame at the new pixel ratio once it is displayed");
 
     return 0;
+}
+
 }

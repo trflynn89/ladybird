@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessWebViewTest.h"
 #include <AK/Random.h>
 #include <AK/ScopeGuard.h>
 #include <AK/String.h>
@@ -11,12 +12,13 @@
 #include <LibCore/EventLoop.h>
 #include <LibCore/StandardPaths.h>
 #include <LibFileSystem/FileSystem.h>
-#include <LibMain/Main.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/Autocomplete.h>
 #include <LibWebView/AutocompleteService.h>
 #include <LibWebView/Settings.h>
 #include <stdlib.h>
+
+namespace HeadlessTests::Autocomplete {
 
 namespace {
 
@@ -88,7 +90,7 @@ private:
 // That cancel runs while the request's completion callback is still on the stack — so, tearing the request down freed a
 // callback mid-call, and tripped an assert. Regression test for #10278.
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_config_directory = ByteString::formatted("{}/Ladybird-TestAutocomplete-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_config_directory, Core::Directory::CreateDirectories::Yes));
@@ -463,4 +465,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
 
     outln("PASS: cancel_pending_query during query completion did not crash");
     return 0;
+}
+
 }

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessTestApplication.h"
+#include "HeadlessWebViewTest.h"
 #include <AK/LexicalPath.h>
 #include <AK/Random.h>
 #include <AK/ScopeGuard.h>
@@ -14,7 +16,6 @@
 #include <LibCore/StandardPaths.h>
 #include <LibFileSystem/FileSystem.h>
 #include <LibGfx/SystemTheme.h>
-#include <LibMain/Main.h>
 #include <LibURL/Parser.h>
 #include <LibWebCommon/HTML/VisibilityState.h>
 #include <LibWebCommon/Page/InputEvent.h>
@@ -22,26 +23,11 @@
 #include <LibWebView/HeadlessWebView.h>
 #include <LibWebView/Utilities.h>
 
+namespace HeadlessTests::ShadowTreeTooltipsAndLinks {
+
 namespace {
 
-class TestApplication : public WebView::Application {
-    WEB_VIEW_APPLICATION(TestApplication)
-
-public:
-    explicit TestApplication(Optional<ByteString> ladybird_binary_path)
-        : WebView::Application(move(ladybird_binary_path))
-    {
-    }
-
-    virtual void create_platform_options(WebView::BrowserOptions& browser_options, WebView::RequestServerOptions&, WebView::WebContentOptions& web_content_options) override
-    {
-        browser_options.headless_mode = WebView::HeadlessMode::Test;
-        browser_options.disable_sql_database = WebView::DisableSQLDatabase::Yes;
-        web_content_options.is_test_mode = WebView::IsTestMode::Yes;
-    }
-
-    virtual bool should_coordinate_browser_process() const override { return false; }
-};
+using TestApplication = HeadlessTestApplication;
 
 // A view that records the URL each tab it opens is loaded with.
 class TestWebView final : public WebView::HeadlessWebView {
@@ -111,7 +97,7 @@ void middle_click_at(WebView::ViewImplementation& view, Web::DevicePixelPoint po
 // Middle-clicking opens the link the walk finds in a new tab. And an empty title is no advisory information at all,
 // while carriage returns in a title become line feeds.
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_config_directory = ByteString::formatted("{}/Ladybird-TestShadowTreeTooltipsAndLinks-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_config_directory, Core::Directory::CreateDirectories::Yes));
@@ -259,4 +245,6 @@ document.getElementById("carriage-returns").setAttribute("title", "One\r\nTwo\rT
 
     outln("PASS: titles and links apply across shadow trees and slots, and an empty title is no advisory information");
     return 0;
+}
+
 }

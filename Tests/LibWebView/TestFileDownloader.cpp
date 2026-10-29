@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessTestApplication.h"
+#include "HeadlessWebViewTest.h"
 #include <AK/ByteString.h>
 #include <AK/Mutex.h>
 #include <AK/Random.h>
@@ -17,7 +19,6 @@
 #include <LibCore/System.h>
 #include <LibCore/Timer.h>
 #include <LibFileSystem/FileSystem.h>
-#include <LibMain/Main.h>
 #include <LibRequests/Request.h>
 #include <LibRequests/RequestClient.h>
 #include <LibThreading/Thread.h>
@@ -28,26 +29,11 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 
+namespace HeadlessTests::FileDownloader {
+
 namespace {
 
-class TestApplication : public WebView::Application {
-    WEB_VIEW_APPLICATION(TestApplication)
-
-public:
-    explicit TestApplication(Optional<ByteString> ladybird_binary_path)
-        : WebView::Application(move(ladybird_binary_path))
-    {
-    }
-
-    virtual void create_platform_options(WebView::BrowserOptions& browser_options, WebView::RequestServerOptions&, WebView::WebContentOptions& web_content_options) override
-    {
-        browser_options.headless_mode = WebView::HeadlessMode::Test;
-        browser_options.disable_sql_database = WebView::DisableSQLDatabase::Yes;
-        web_content_options.is_test_mode = WebView::IsTestMode::Yes;
-    }
-
-    virtual bool should_coordinate_browser_process() const override { return false; }
-};
+using TestApplication = HeadlessTestApplication;
 
 enum class RangeSupport {
     Yes,
@@ -549,7 +535,7 @@ void expect_leased_request_is_torn_down_when_transferred_after_finishing(TestHtt
 
 }
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_directory = ByteString::formatted("{}/Ladybird-TestFileDownloader-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_directory, Core::Directory::CreateDirectories::Yes));
@@ -787,4 +773,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
 
     outln("PASS");
     return 0;
+}
+
 }

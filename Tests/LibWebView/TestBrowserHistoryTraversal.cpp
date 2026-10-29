@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessWebViewTest.h"
 #include <AK/LexicalPath.h>
 #include <AK/Random.h>
 #include <AK/ScopeGuard.h>
@@ -17,7 +18,6 @@
 #include <LibGfx/SystemTheme.h>
 #include <LibHTTP/Cookie/ParsedCookie.h>
 #include <LibIPC/Transport.h>
-#include <LibMain/Main.h>
 #include <LibURL/Parser.h>
 #include <LibWebCommon/Page/InputEvent.h>
 #include <LibWebCommon/UIEvents/KeyCode.h>
@@ -29,6 +29,8 @@
 #include <LibWebView/Utilities.h>
 #include <LibWebView/WebContentClient.h>
 #include <stdlib.h>
+
+namespace HeadlessTests::BrowserHistoryTraversal {
 
 namespace {
 
@@ -103,7 +105,7 @@ void press_history_traversal_button(WebView::ViewImplementation& view, Web::UIEv
 // The browser's back and forward keys are matched in the UI process once WebContent reports them unhandled, so a
 // page's keydown handler must be able to consume them, and an unconsumed press must traverse the session history.
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_config_directory = ByteString::formatted("{}/Ladybird-TestBrowserHistoryTraversal-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_config_directory, Core::Directory::CreateDirectories::Yes));
@@ -440,4 +442,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
 
     outln("PASS: browser history traversal");
     return 0;
+}
+
 }

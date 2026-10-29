@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessWebViewTest.h"
 #include <AK/LexicalPath.h>
 #include <AK/Random.h>
 #include <AK/ScopeGuard.h>
@@ -14,11 +15,12 @@
 #include <LibCore/StandardPaths.h>
 #include <LibFileSystem/FileSystem.h>
 #include <LibGfx/SystemTheme.h>
-#include <LibMain/Main.h>
 #include <LibWebCommon/Page/InputEvent.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/HeadlessWebView.h>
 #include <LibWebView/Utilities.h>
+
+namespace HeadlessTests::UserActivation {
 
 namespace {
 
@@ -79,7 +81,7 @@ void click(WebView::ViewImplementation& view, Web::DevicePixelPoint position, We
 // presses queue up before the page handles the first. Consuming the activation of the press the page is handling leaves
 // the presses queued behind it theirs, and a click that opens a popup still opens its link in a new tab.
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_config_directory = ByteString::formatted("{}/Ladybird-TestUserActivation-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_config_directory, Core::Directory::CreateDirectories::Yes));
@@ -134,4 +136,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
 
     VERIFY(popups_opened == 4);
     return 0;
+}
+
 }

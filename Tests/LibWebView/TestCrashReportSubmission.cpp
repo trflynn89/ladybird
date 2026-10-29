@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessWebViewTest.h"
 #include "ReportServer.h"
 #include <AK/JsonArray.h>
 #include <AK/JsonObject.h>
@@ -17,8 +18,9 @@
 #include <LibCore/File.h>
 #include <LibCore/StandardPaths.h>
 #include <LibFileSystem/FileSystem.h>
-#include <LibMain/Main.h>
 #include <LibWebView/CrashReportReview.h>
+
+namespace HeadlessTests::CrashReportSubmission {
 
 using namespace ReportServerTest;
 
@@ -68,7 +70,7 @@ ByteString write_report(ByteString const& directory, StringView name)
 
 }
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_directory = ByteString::formatted("{}/Ladybird-TestCrashReportSubmission-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_directory, Core::Directory::CreateDirectories::Yes));
@@ -220,4 +222,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
 
     outln("PASS: Crash reports reach the report server in the format it expects");
     return 0;
+}
+
 }

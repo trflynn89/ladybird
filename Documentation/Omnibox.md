@@ -299,8 +299,8 @@ The implementation has three main deterministic test layers:
 
 These sources and `TestWebViewURL.cpp` build the `TestAutocompleteSuggestions` executable.
 
-`TestAutocomplete` exercises the asynchronous integration with the application, service worker,
-bookmark updates, private-profile reads, and remote failure handling. History-store tests cover
-persisted ranking state, migrations, and deletion behavior.
+The `TestAutocomplete` scenario in `TestHeadlessWebView` exercises the asynchronous integration with
+the application, service worker, bookmark updates, private-profile reads, and remote failure handling.
+History-store tests cover persisted ranking state, migrations, and deletion behavior.
 
 Tests control result delivery or inject a clock rather than depending on wall-clock timing.

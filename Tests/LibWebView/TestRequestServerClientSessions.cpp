@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "HeadlessWebViewTest.h"
 #include <AK/LexicalPath.h>
 #include <AK/Random.h>
 #include <AK/ScopeGuard.h>
@@ -14,7 +15,6 @@
 #include <LibCore/System.h>
 #include <LibFileSystem/FileSystem.h>
 #include <LibGfx/SystemTheme.h>
-#include <LibMain/Main.h>
 #include <LibRequests/RequestClient.h>
 #include <LibRequests/RequestControlClient.h>
 #include <LibWebView/Application.h>
@@ -23,6 +23,8 @@
 #include <LibWebView/HelperProcess.h>
 #include <LibWebView/ProcessManager.h>
 #include <LibWebView/Utilities.h>
+
+namespace HeadlessTests::RequestServerClientSessions {
 
 namespace {
 
@@ -69,7 +71,7 @@ int connect_request_server_client(WebView::BrowsingSession& session)
 // uses the browsing session that it created the client for, so a client of a private session that has since been
 // restarted never gets the new session's cookies.
 
-ErrorOr<int> ladybird_main(Main::Arguments arguments)
+ErrorOr<int> run(Main::Arguments arguments)
 {
     auto test_config_directory = ByteString::formatted("{}/Ladybird-TestRequestServerClientSessions-{}", Core::StandardPaths::tempfile_directory(), generate_random_uuid());
     TRY(Core::Directory::create(test_config_directory, Core::Directory::CreateDirectories::Yes));
@@ -151,4 +153,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
     Core::EventLoop::current().spin_until([&] { return !app->session_for_request_server_client(disconnecting_client); });
     outln("PASS: RequestServer clients use the cookies of the browsing session they were created for");
     return 0;
+}
+
 }
