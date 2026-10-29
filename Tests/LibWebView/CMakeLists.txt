@@ -121,16 +121,10 @@ ladybird_test("${TestAutocompleteSuggestions_SOURCES}" LibWebView NAME TestAutoc
     set_tests_properties(TestWebDriverSessionHistory PROPERTIES TIMEOUT 120 ENVIRONMENT "XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/session-history-data")
 
     add_test(
-        NAME TestWebDriverSiteZoom
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-site-zoom.py $<TARGET_FILE:WebDriver>
+        NAME TestWebDriverNavigationPreferences
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-navigation-preferences.py $<TARGET_FILE:WebDriver>
     )
-    set_tests_properties(TestWebDriverSiteZoom PROPERTIES TIMEOUT 120)
-
-    add_test(
-        NAME TestWebDriverForceDark
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-force-dark.py $<TARGET_FILE:WebDriver>
-    )
-    set_tests_properties(TestWebDriverForceDark PROPERTIES TIMEOUT 120)
+    set_tests_properties(TestWebDriverNavigationPreferences PROPERTIES TIMEOUT 240)
 
     add_test(
         NAME TestWebDriverBiDi
