@@ -9,7 +9,6 @@ import base64
 import hashlib
 import http.client
 import http.server
-import importlib
 import json
 import os
 import socket
@@ -21,7 +20,7 @@ import threading
 import time
 import urllib.parse
 
-helpers = importlib.import_module("test-webdriver-error-keep-alive")
+import webdriver_test as helpers
 
 
 class BiDiConnection:
@@ -1884,39 +1883,17 @@ def check_viewport_changes(bidi, connection, session_id, first, second):
 
 
 def cleanup_resources(server, webdriver, connection, bidi, session_id, *, primary_error=None):
-    errors = []
-
-    def attempt(action):
-        try:
-            action()
-        except BaseException as error:
-            errors.append(error)
-
-    def stop_driver():
-        if webdriver is None:
-            return
-        attempt(webdriver.terminate)
-        try:
-            webdriver.wait(timeout=5)
-        except BaseException as error:
-            if not isinstance(error, subprocess.TimeoutExpired):
-                errors.append(error)
-            attempt(webdriver.kill)
-            attempt(lambda: webdriver.wait(timeout=5))
-
-    attempt(server.release_response.set)
-    attempt(server.release_interception.set)
+    actions = [server.release_response.set, server.release_interception.set]
     if session_id and connection:
-        attempt(lambda: helpers.request(connection, "DELETE", f"/session/{session_id}"))
+        actions.append(lambda: helpers.request(connection, "DELETE", f"/session/{session_id}"))
     if bidi:
-        attempt(bidi.close)
+        actions.append(bidi.close)
     if connection:
-        attempt(connection.close)
-    attempt(stop_driver)
-    attempt(server.shutdown)
-    attempt(server.server_close)
-    if errors and primary_error is None:
-        raise errors[0]
+        actions.append(connection.close)
+    if webdriver is not None:
+        actions.append(lambda: helpers.stop(webdriver))
+    actions.extend([server.shutdown, server.server_close])
+    helpers.cleanup(actions, primary_error=primary_error)
 
 
 def run_test(

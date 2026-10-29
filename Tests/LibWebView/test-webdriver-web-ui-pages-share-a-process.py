@@ -5,30 +5,27 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
-import runpy
 import subprocess
 import tempfile
 
-from pathlib import Path
-
-helpers = runpy.run_path(str(Path(__file__).with_name("test-webdriver-delete-session.py")))
+import webdriver_test as helpers
 
 
 # A tab opened from a WebUI page starts in that page's process, so a second page of the same WebUI there must not take
 # the first page's channel to the UI process.
 def run_test(webdriver_binary):
     with tempfile.TemporaryDirectory() as directory:
-        port = helpers["unused_port"]()
+        port = helpers.unused_port()
         process = subprocess.Popen(
             [webdriver_binary, "--headless", "-l", "127.0.0.1", "-p", str(port), "--profile-path", directory]
         )
         session = None
         try:
-            helpers["wait_for_port"](port)
-            session = helpers["create_session"](port)
+            helpers.wait_for_port(port)
+            session = helpers.create_session(port)
 
             def command(path, body):
-                status, payload, raw = helpers["request"](port, "POST", f"/session/{session}/{path}", body)
+                status, payload, raw = helpers.request(port, "POST", f"/session/{session}/{path}", body)
                 assert status == 200, raw
                 return payload["value"]
 
@@ -52,7 +49,7 @@ def run_test(webdriver_binary):
             command("timeouts", {"script": 5000})
             command("url", {"url": "about:settings"})
             assert round_trip()
-            status, payload, raw = helpers["request"](port, "GET", f"/session/{session}/window")
+            status, payload, raw = helpers.request(port, "GET", f"/session/{session}/window")
             assert status == 200, raw
             first_window = payload["value"]
 
@@ -67,7 +64,7 @@ def run_test(webdriver_binary):
         finally:
             try:
                 if session is not None:
-                    helpers["request"](port, "DELETE", f"/session/{session}")
+                    helpers.request(port, "DELETE", f"/session/{session}")
             finally:
                 process.terminate()
                 try:

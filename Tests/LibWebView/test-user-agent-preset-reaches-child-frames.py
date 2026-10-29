@@ -21,7 +21,7 @@ DevToolsClient = devtools["DevToolsClient"]
 helpers = devtools["helpers"]
 stop = devtools["stop"]
 wait_until = devtools["wait_until"]
-TIMEOUT_SECONDS = helpers["EVENT_TIMEOUT_SECONDS"]
+TIMEOUT_SECONDS = helpers.EVENT_TIMEOUT_SECONDS
 
 USER_AGENT_PRESET = "Safari macOS Desktop"
 
@@ -60,7 +60,7 @@ def launch(ladybird_binary, profile, url):
     for _ in range(5):
         if time.monotonic() >= deadline:
             break
-        devtools_port = helpers["unused_port"]()
+        devtools_port = helpers.unused_port()
         process = subprocess.Popen(
             [
                 ladybird_binary,

@@ -6,7 +6,6 @@
 
 import http.server
 import json
-import runpy
 import subprocess
 import sys
 import tempfile
@@ -15,7 +14,8 @@ import time
 
 from pathlib import Path
 
-helpers = runpy.run_path(str(Path(__file__).with_name("test-webdriver-delete-session.py")))
+import webdriver_test as helpers
+
 requested = threading.Event()
 release_response = threading.Event()
 
@@ -46,17 +46,17 @@ with tempfile.TemporaryDirectory() as directory:
     (config / "Settings.json").write_text(json.dumps({"content": {"zoomPerHost": {"127.0.0.1": 1.8}}}))
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    port = helpers["unused_port"]()
+    port = helpers.unused_port()
     process = subprocess.Popen(
         [sys.argv[1], "--headless", "-l", "127.0.0.1", "-p", str(port), "--profile-path", directory]
     )
     session = None
     try:
-        helpers["wait_for_port"](port)
-        session = helpers["create_session"](port)
+        helpers.wait_for_port(port)
+        session = helpers.create_session(port)
 
         def command(path, body):
-            status, payload, raw = helpers["request"](port, "POST", f"/session/{session}/{path}", body)
+            status, payload, raw = helpers.request(port, "POST", f"/session/{session}/{path}", body)
             assert status == 200, raw
             return payload["value"]
 
@@ -67,7 +67,7 @@ with tempfile.TemporaryDirectory() as directory:
             deadline = time.monotonic() + 30
             state = None
             while time.monotonic() < deadline:
-                status, payload, raw = helpers["request"](
+                status, payload, raw = helpers.request(
                     port,
                     "POST",
                     f"/session/{session}/execute/sync",
@@ -120,7 +120,7 @@ with tempfile.TemporaryDirectory() as directory:
     finally:
         release_response.set()
         if session is not None:
-            helpers["request"](port, "DELETE", f"/session/{session}")
+            helpers.request(port, "DELETE", f"/session/{session}")
         process.terminate()
         try:
             process.wait(timeout=5)

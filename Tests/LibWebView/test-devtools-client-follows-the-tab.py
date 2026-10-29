@@ -7,7 +7,6 @@
 import argparse
 import http.server
 import json
-import runpy
 import socket
 import subprocess
 import sys
@@ -17,8 +16,9 @@ import time
 
 from pathlib import Path
 
-helpers = runpy.run_path(str(Path(__file__).with_name("test-webdriver-delete-session.py")))
-TIMEOUT_SECONDS = helpers["EVENT_TIMEOUT_SECONDS"]
+import webdriver_test as helpers
+
+TIMEOUT_SECONDS = helpers.EVENT_TIMEOUT_SECONDS
 
 
 loads_lock = threading.Lock()
@@ -187,7 +187,7 @@ def launch(ladybird_binary, profile, url):
     for _ in range(5):
         if time.monotonic() >= deadline:
             break
-        devtools_port = helpers["unused_port"]()
+        devtools_port = helpers.unused_port()
         process = subprocess.Popen(
             [
                 ladybird_binary,

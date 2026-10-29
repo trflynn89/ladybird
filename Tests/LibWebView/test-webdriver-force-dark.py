@@ -7,7 +7,6 @@
 import base64
 import http.server
 import json
-import runpy
 import struct
 import subprocess
 import sys
@@ -18,7 +17,7 @@ import zlib
 
 from pathlib import Path
 
-helpers = runpy.run_path(str(Path(__file__).with_name("test-webdriver-delete-session.py")))
+import webdriver_test as helpers
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -79,17 +78,17 @@ with tempfile.TemporaryDirectory() as directory:
     (config / "Settings.json").write_text(json.dumps({"content": {"enableForceDark": True}}))
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    port = helpers["unused_port"]()
+    port = helpers.unused_port()
     process = subprocess.Popen(
         [sys.argv[1], "--headless", "-l", "127.0.0.1", "-p", str(port), "--profile-path", directory]
     )
     session = None
     try:
-        helpers["wait_for_port"](port)
-        session = helpers["create_session"](port)
+        helpers.wait_for_port(port)
+        session = helpers.create_session(port)
 
         def command(method, path, body=None):
-            status, payload, raw = helpers["request"](port, method, f"/session/{session}/{path}", body)
+            status, payload, raw = helpers.request(port, method, f"/session/{session}/{path}", body)
             return status, payload, raw
 
         def wait_for_page(url):
@@ -139,7 +138,7 @@ with tempfile.TemporaryDirectory() as directory:
     finally:
         try:
             if session is not None:
-                helpers["request"](port, "DELETE", f"/session/{session}")
+                helpers.request(port, "DELETE", f"/session/{session}")
         finally:
             process.terminate()
             try:

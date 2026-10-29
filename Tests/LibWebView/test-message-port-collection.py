@@ -6,14 +6,11 @@
 
 import argparse
 import os
-import runpy
 import subprocess
 import sys
 import time
 
-from pathlib import Path
-
-helpers = runpy.run_path(str(Path(__file__).with_name("test-webdriver-delete-session.py")))
+import webdriver_test as helpers
 
 CHANNEL_COUNT = 50
 # A thread that has nothing to do with transports can still start between two counts, so a count may come out this
@@ -69,25 +66,25 @@ def main():
     parser.add_argument("webdriver_binary")
     webdriver_binary = parser.parse_args().webdriver_binary
 
-    port = helpers["unused_port"]()
+    port = helpers.unused_port()
     process = subprocess.Popen(
         [webdriver_binary, "--headless", "--expose-internals-object", "-l", "127.0.0.1", "-p", str(port)]
     )
     session = None
     try:
-        helpers["wait_for_port"](port)
-        session = helpers["create_session"](port)
+        helpers.wait_for_port(port)
+        session = helpers.create_session(port)
 
         def run(script, *args, asynchronous=False):
             path = f"/session/{session}/execute/{'async' if asynchronous else 'sync'}"
-            status, payload, raw = helpers["request"](port, "POST", path, {"script": script, "args": list(args)})
+            status, payload, raw = helpers.request(port, "POST", path, {"script": script, "args": list(args)})
             assert status == 200, raw
             return payload["value"]
 
         def collect_and_count(limit):
             run("internals.gc()")
             # The IO thread of a transport exits once collecting its port has closed it.
-            deadline = time.monotonic() + helpers["EVENT_TIMEOUT_SECONDS"]
+            deadline = time.monotonic() + helpers.EVENT_TIMEOUT_SECONDS
             threads = web_content_threads(process.pid)
             while threads > limit and time.monotonic() < deadline:
                 time.sleep(0.1)
@@ -163,7 +160,7 @@ def main():
     finally:
         try:
             if session is not None:
-                helpers["request"](port, "DELETE", f"/session/{session}")
+                helpers.request(port, "DELETE", f"/session/{session}")
         finally:
             process.terminate()
             try:

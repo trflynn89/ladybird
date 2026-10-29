@@ -5,7 +5,6 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
-import importlib
 import os
 import subprocess
 import tempfile
@@ -13,7 +12,7 @@ import time
 
 from pathlib import Path
 
-webdriver = importlib.import_module("test-webdriver-delete-session")
+import webdriver_test as webdriver
 
 
 def launch(webdriver_binary, environment):

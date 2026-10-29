@@ -17,6 +17,7 @@ lines-between-types = 1
 pythonVersion = "3.9"
 extraPaths = [
     "Meta",
+    "Tests/LibWebView",
     "Tests/LibWeb/Text/input/wpt-import",
     "Tests/LibWeb/Text/input/wpt-import/_wpttools",
     "Tests/LibWeb/Text/input/wpt-import/_wpttools/wptserve",

@@ -5,7 +5,6 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
-import importlib
 import os
 import shlex
 import subprocess
@@ -14,7 +13,7 @@ import time
 
 from pathlib import Path
 
-webdriver_helpers = importlib.import_module("test-webdriver-delete-session")
+import webdriver_test as webdriver_helpers
 
 # Terminate a worker at each of these delays after constructing it, to catch its process at every stage of starting up.
 TERMINATE_DELAYS_MS = list(range(0, 600, 25))

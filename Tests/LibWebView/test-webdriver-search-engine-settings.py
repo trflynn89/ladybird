@@ -6,13 +6,12 @@
 
 import argparse
 import json
-import runpy
 import subprocess
 import tempfile
 
 from pathlib import Path
 
-helpers = runpy.run_path(str(Path(__file__).with_name("test-webdriver-delete-session.py")))
+import webdriver_test as helpers
 
 
 def run_test(webdriver_binary, graphical):
@@ -31,22 +30,22 @@ def run_test(webdriver_binary, graphical):
                 }
             )
         )
-        port = helpers["unused_port"]()
+        port = helpers.unused_port()
         arguments = [webdriver_binary, "-l", "127.0.0.1", "-p", str(port), "--profile-path", directory]
         if not graphical:
             arguments.append("--headless")
         process = subprocess.Popen(arguments)
         session = None
         try:
-            helpers["wait_for_port"](port)
-            status, payload, raw = helpers["request"](
+            helpers.wait_for_port(port)
+            status, payload, raw = helpers.request(
                 port, "POST", "/session", {"capabilities": {"alwaysMatch": {"ladybird:headless": not graphical}}}
             )
             assert status == 200, raw
             session = payload["value"]["sessionId"]
 
             def command(path, body=None, method="POST"):
-                status, payload, raw = helpers["request"](port, method, f"/session/{session}/{path}", body)
+                status, payload, raw = helpers.request(port, method, f"/session/{session}/{path}", body)
                 assert status == 200, raw
                 return payload["value"]
 
@@ -192,8 +191,8 @@ def run_test(webdriver_binary, graphical):
             assert "name" not in saved["searchEngine"]
             assert saved["searchEngine"]["custom"][1]["suggestionsUrl"] == "https://example.com/suggest?q=%s"
 
-            helpers["request"](port, "DELETE", f"/session/{session}")
-            session = helpers["create_session"](port)
+            helpers.request(port, "DELETE", f"/session/{session}")
+            session = helpers.create_session(port)
             load_settings("Custom suggestions")
             assert state()[:2] == [True, False], "Combined search preference did not survive a new browser process"
             change_settings(
@@ -208,7 +207,7 @@ def run_test(webdriver_binary, graphical):
             print("PASS: search and suggestions use one engine, migrate, and preserve the user's toggle")
         finally:
             if session is not None:
-                helpers["request"](port, "DELETE", f"/session/{session}")
+                helpers.request(port, "DELETE", f"/session/{session}")
             process.terminate()
             try:
                 process.wait(timeout=5)

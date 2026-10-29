@@ -9,7 +9,6 @@ import http.client
 import http.server
 import json
 import os
-import socket
 import subprocess
 import sys
 import tempfile
@@ -17,6 +16,10 @@ import threading
 import time
 
 from typing import cast
+
+from webdriver_test import request as request_raw
+from webdriver_test import unused_port
+from webdriver_test import wait_for_port
 
 BLOCKED_RESPONSE_TIMEOUT_SECONDS = 30
 EVENT_TIMEOUT_SECONDS = 30
@@ -825,23 +828,6 @@ window.initialNavigationCurrentIndex = navigation.currentEntry.index;
         pass
 
 
-def unused_port():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
-
-
-def wait_for_port(port, timeout=EVENT_TIMEOUT_SECONDS):
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.1):
-                return
-        except OSError:
-            time.sleep(0.05)
-    raise RuntimeError(f"Timed out waiting for port {port}")
-
-
 def wait_for_event(event, label, timeout=EVENT_TIMEOUT_SECONDS):
     if event.wait(timeout=timeout):
         return
@@ -857,29 +843,6 @@ def count_open_fds(pid):
     except FileNotFoundError:
         return None
     return max(0, len(result.stdout.splitlines()) - 1)
-
-
-def request_raw(webdriver_port, method, path, body=None):
-    encoded_body = None
-    headers = {}
-    if body is not None:
-        encoded_body = json.dumps(body).encode()
-        headers["Content-Type"] = "application/json"
-
-    connection = http.client.HTTPConnection("127.0.0.1", webdriver_port, timeout=WEBDRIVER_REQUEST_TIMEOUT_SECONDS)
-    try:
-        connection.request(method, path, encoded_body, headers)
-        response = connection.getresponse()
-        response_body = response.read().decode()
-    finally:
-        connection.close()
-
-    try:
-        payload = json.loads(response_body) if response_body else {}
-    except json.JSONDecodeError as error:
-        raise RuntimeError(f"{method} {path} returned invalid JSON: {response_body}") from error
-
-    return response.status, payload, response_body
 
 
 def request(webdriver_port, method, path, body=None):

@@ -8,14 +8,20 @@ import argparse
 import gzip
 import http.client
 import http.server
-import json
-import socket
 import subprocess
+import sys
 import tempfile
 import threading
 import time
 
+from pathlib import Path
 from typing import cast
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "LibWebView"))
+
+from webdriver_test import request as webdriver_request
+from webdriver_test import unused_port
+from webdriver_test import wait_for_port
 
 EVENT_TIMEOUT_SECONDS = 30
 WEBDRIVER_REQUEST_TIMEOUT_SECONDS = 60
@@ -94,37 +100,10 @@ class TestPageHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 
-def unused_port():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
-
-
-def wait_for_port(port):
-    deadline = time.monotonic() + EVENT_TIMEOUT_SECONDS
-    while time.monotonic() < deadline:
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.1):
-                return
-        except OSError:
-            time.sleep(0.05)
-    raise RuntimeError(f"Timed out waiting for port {port}")
-
-
 def request(webdriver_port, method, path, body=None):
-    encoded_body = json.dumps(body).encode() if body is not None else None
-    headers = {"Content-Type": "application/json"} if body is not None else {}
-    connection = http.client.HTTPConnection("127.0.0.1", webdriver_port, timeout=WEBDRIVER_REQUEST_TIMEOUT_SECONDS)
-    try:
-        connection.request(method, path, encoded_body, headers)
-        response = connection.getresponse()
-        response_body = response.read().decode()
-    finally:
-        connection.close()
-
-    payload = json.loads(response_body) if response_body else {}
-    if response.status != 200:
-        raise RuntimeError(f"{method} {path} failed with HTTP {response.status}: {response_body}")
+    status, payload, response_body = webdriver_request(webdriver_port, method, path, body)
+    if status != 200:
+        raise RuntimeError(f"{method} {path} failed with HTTP {status}: {response_body}")
     return payload["value"]
 
 

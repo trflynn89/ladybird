@@ -7,14 +7,13 @@
 import argparse
 import http.server
 import json
-import runpy
 import subprocess
 import tempfile
 import threading
 
 from pathlib import Path
 
-helpers = runpy.run_path(str(Path(__file__).with_name("test-webdriver-delete-session.py")))
+import webdriver_test as helpers
 
 
 def run_test(webdriver_binary):
@@ -37,17 +36,17 @@ def run_test(webdriver_binary):
         config = Path(directory) / "config"
         config.mkdir()
         (config / "Settings.json").write_text(json.dumps({"contentBlockers": {"enabled": True}}))
-        port = helpers["unused_port"]()
+        port = helpers.unused_port()
         process = subprocess.Popen(
             [webdriver_binary, "--headless", "-l", "127.0.0.1", "-p", str(port), "--profile-path", directory]
         )
         session = None
         try:
-            helpers["wait_for_port"](port)
-            session = helpers["create_session"](port)
+            helpers.wait_for_port(port)
+            session = helpers.create_session(port)
 
             def command(path, body):
-                status, payload, raw = helpers["request"](port, "POST", f"/session/{session}/{path}", body)
+                status, payload, raw = helpers.request(port, "POST", f"/session/{session}/{path}", body)
                 assert status == 200, raw
                 return payload["value"]
 
@@ -199,7 +198,7 @@ def run_test(webdriver_binary):
         finally:
             release_download.set()
             if session is not None:
-                helpers["request"](port, "DELETE", f"/session/{session}")
+                helpers.request(port, "DELETE", f"/session/{session}")
             process.terminate()
             try:
                 process.wait(timeout=5)

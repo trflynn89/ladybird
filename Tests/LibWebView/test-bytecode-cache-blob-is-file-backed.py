@@ -8,16 +8,13 @@ import argparse
 import glob
 import http.server
 import os
-import runpy
 import subprocess
 import sys
 import tempfile
 import threading
 import time
 
-from pathlib import Path
-
-helpers = runpy.run_path(str(Path(__file__).with_name("test-webdriver-delete-session.py")))
+import webdriver_test as helpers
 
 FUNCTION_COUNT = 4000
 
@@ -90,26 +87,26 @@ def main():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
         with tempfile.TemporaryDirectory(prefix="ladybird-bytecode-cache-") as profile:
-            port = helpers["unused_port"]()
+            port = helpers.unused_port()
             process = subprocess.Popen(
                 [webdriver_binary, "--headless", f"--profile-path={profile}", "-l", "127.0.0.1", "-p", str(port)]
             )
             session = None
             try:
-                helpers["wait_for_port"](port)
-                session = helpers["create_session"](port)
-                status, _, raw = helpers["request"](
+                helpers.wait_for_port(port)
+                session = helpers.create_session(port)
+                status, _, raw = helpers.request(
                     port, "POST", f"/session/{session}/url", {"url": f"http://127.0.0.1:{server.server_port}/"}
                 )
                 assert status == 200, raw
 
                 # The first load of a fresh profile generates the script's bytecode cache blob and stores it in the
                 # profile's HTTP cache, after the script has run.
-                deadline = time.monotonic() + helpers["EVENT_TIMEOUT_SECONDS"]
+                deadline = time.monotonic() + helpers.EVENT_TIMEOUT_SECONDS
                 payload = {"value": None}
                 blobs = []
                 while time.monotonic() < deadline:
-                    status, payload, raw = helpers["request"](
+                    status, payload, raw = helpers.request(
                         port,
                         "POST",
                         f"/session/{session}/execute/sync",
@@ -132,7 +129,7 @@ def main():
                 # The script's executables are backed by a mapping of the stored blob, not by a heap copy of it.
                 pids = web_content_pids(process.pid)
                 assert pids, "No WebContent process"
-                deadline = time.monotonic() + helpers["EVENT_TIMEOUT_SECONDS"]
+                deadline = time.monotonic() + helpers.EVENT_TIMEOUT_SECONDS
                 mapped = []
                 while time.monotonic() < deadline:
                     mapped = [path for pid in pids for path in mapped_files(pid) if os.path.realpath(path) == blob]
@@ -144,7 +141,7 @@ def main():
             finally:
                 try:
                     if session is not None:
-                        helpers["request"](port, "DELETE", f"/session/{session}")
+                        helpers.request(port, "DELETE", f"/session/{session}")
                 finally:
                     process.terminate()
                     try:

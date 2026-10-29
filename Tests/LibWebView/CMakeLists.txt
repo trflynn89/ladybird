@@ -103,10 +103,10 @@ ladybird_test("${TestAutocompleteSuggestions_SOURCES}" LibWebView NAME TestAutoc
     endif()
 
     add_test(
-        NAME TestWebDriverDeleteSession
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-delete-session.py $<TARGET_FILE:WebDriver>
+        NAME TestWebDriverSession
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-session.py $<TARGET_FILE:WebDriver>
     )
-    set_tests_properties(TestWebDriverDeleteSession PROPERTIES TIMEOUT 120)
+    set_tests_properties(TestWebDriverSession PROPERTIES TIMEOUT 120)
 
     add_test(
         NAME TestWebDriverContentBlockers
@@ -156,11 +156,6 @@ ladybird_test("${TestAutocompleteSuggestions_SOURCES}" LibWebView NAME TestAutoc
     )
     set_tests_properties(TestWebDriverBiDi PROPERTIES TIMEOUT 120)
 
-    add_test(
-        NAME TestWebDriverErrorKeepAlive
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-webdriver-error-keep-alive.py $<TARGET_FILE:WebDriver>
-    )
-    set_tests_properties(TestWebDriverErrorKeepAlive PROPERTIES TIMEOUT 120)
 endif()
 
 if (BUILD_BROWSER_TESTS_ONLY)

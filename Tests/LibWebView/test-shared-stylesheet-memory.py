@@ -6,16 +6,13 @@
 
 import argparse
 import http.server
-import runpy
 import subprocess
 import sys
 import tempfile
 import threading
 import time
 
-from pathlib import Path
-
-helpers = runpy.run_path(str(Path(__file__).with_name("test-webdriver-delete-session.py")))
+import webdriver_test as helpers
 
 FRAME_COUNT = 8
 RULE_COUNT = 20000
@@ -82,15 +79,15 @@ def web_content_resident_bytes(root_pid):
 
 def measure(webdriver_binary, server_port, frame_count):
     with tempfile.TemporaryDirectory(prefix="ladybird-shared-sheet-") as profile:
-        port = helpers["unused_port"]()
+        port = helpers.unused_port()
         process = subprocess.Popen(
             [webdriver_binary, "--headless", f"--profile-path={profile}", "-l", "127.0.0.1", "-p", str(port)]
         )
         session = None
         try:
-            helpers["wait_for_port"](port)
-            session = helpers["create_session"](port)
-            status, _, raw = helpers["request"](
+            helpers.wait_for_port(port)
+            session = helpers.create_session(port)
+            status, _, raw = helpers.request(
                 port,
                 "POST",
                 f"/session/{session}/url",
@@ -106,10 +103,10 @@ def measure(webdriver_binary, server_port, frame_count):
                         && frame.contentDocument.styleSheets[0].cssRules.length === arguments[0];
                 });
             """
-            deadline = time.monotonic() + helpers["EVENT_TIMEOUT_SECONDS"]
+            deadline = time.monotonic() + helpers.EVENT_TIMEOUT_SECONDS
             payload = {"value": None}
             while time.monotonic() < deadline:
-                status, payload, raw = helpers["request"](
+                status, payload, raw = helpers.request(
                     port, "POST", f"/session/{session}/execute/sync", {"script": script, "args": [RULE_COUNT]}
                 )
                 assert status == 200, raw
@@ -122,7 +119,7 @@ def measure(webdriver_binary, server_port, frame_count):
         finally:
             try:
                 if session is not None:
-                    helpers["request"](port, "DELETE", f"/session/{session}")
+                    helpers.request(port, "DELETE", f"/session/{session}")
             finally:
                 process.terminate()
                 try:

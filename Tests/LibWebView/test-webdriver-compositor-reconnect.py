@@ -10,7 +10,6 @@
 
 import argparse
 import base64
-import importlib
 import os
 import shlex
 import signal
@@ -21,7 +20,7 @@ import urllib.parse
 
 from pathlib import Path
 
-webdriver_helpers = importlib.import_module("test-webdriver-delete-session")
+import webdriver_test as webdriver_helpers
 
 PAGE = "data:text/html," + urllib.parse.quote(
     """<style>

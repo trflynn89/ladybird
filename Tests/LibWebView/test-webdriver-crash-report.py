@@ -5,7 +5,6 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
-import importlib
 import os
 import re
 import shlex
@@ -16,7 +15,7 @@ import time
 
 from pathlib import Path
 
-webdriver_helpers = importlib.import_module("test-webdriver-delete-session")
+import webdriver_test as webdriver_helpers
 
 
 def crash_helper(webdriver_pid, process_name):
