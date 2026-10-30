@@ -66,3 +66,28 @@ TEST_CASE(a_non_boolean_saved_value_leaves_restoring_off)
     EXPECT(!settings.restore_previous_session());
     remove_settings_file();
 }
+
+TEST_CASE(permission_policies_persist_independently)
+{
+    using Web::Permissions::PermissionName;
+    using WebView::PermissionPolicy;
+
+    remove_settings_file();
+    {
+        auto settings = WebView::Settings::create(settings_path());
+        EXPECT_EQ(settings.permission_policy(PermissionName::Geolocation), PermissionPolicy::Ask);
+        EXPECT_EQ(settings.permission_policy(PermissionName::Microphone), PermissionPolicy::Ask);
+        settings.set_permission_policy(PermissionName::Microphone, PermissionPolicy::Block);
+    }
+    {
+        auto settings = WebView::Settings::create(settings_path());
+        EXPECT_EQ(settings.permission_policy(PermissionName::Geolocation), PermissionPolicy::Ask);
+        EXPECT_EQ(settings.permission_policy(PermissionName::Microphone), PermissionPolicy::Block);
+        settings.set_permission_policy(PermissionName::Geolocation, PermissionPolicy::Block);
+        settings.set_permission_policy(PermissionName::Microphone, PermissionPolicy::Ask);
+    }
+    auto settings = WebView::Settings::create(settings_path());
+    EXPECT_EQ(settings.permission_policy(PermissionName::Geolocation), PermissionPolicy::Block);
+    EXPECT_EQ(settings.permission_policy(PermissionName::Microphone), PermissionPolicy::Ask);
+    remove_settings_file();
+}

@@ -174,7 +174,7 @@ public:
     // True unless the user has turned location off, or there's no way to find it.
     bool sites_can_ask_for_location() const;
     Core::GeolocationAuthorization geolocation_authorization();
-    void location_policy_changed(Badge<ApplicationSettingsObserver>);
+    void permission_policy_changed(Badge<ApplicationSettingsObserver>);
     void permissions_changed(Badge<ApplicationPermissionManagerObserver>, PermissionManager const&);
 
     bool content_blocking_enabled() const;

@@ -74,7 +74,6 @@ static constexpr auto SITE_SETTING_POLICY_KEY = "policy"sv;
 static constexpr auto SITE_SETTING_SITE_FILTERS_KEY = "siteFilters"sv;
 
 static constexpr auto AUTOPLAY_KEY = "autoplay"sv;
-static constexpr auto LOCATION_POLICY_KEY = "locationPolicy"sv;
 
 static constexpr auto BROWSING_DATA_KEY = "browsingData"sv;
 static constexpr auto DISK_CACHE_KEY = "diskCache"sv;
@@ -423,10 +422,14 @@ Settings Settings::create(ByteString settings_path, Vector<String> platform_lang
 
     load_site_setting(settings.m_autoplay, AUTOPLAY_KEY);
 
-    // NB: The geolocationEnabled key this replaced was written on every save, so its false was rarely the user's
-    //     choice; it's ignored, and every profile starts out letting sites ask.
-    if (auto location_policy = settings_json.value().get_string(LOCATION_POLICY_KEY); location_policy.has_value() && *location_policy == "block"sv)
-        settings.m_location_policy = LocationPolicy::Block;
+    for (auto name : { Web::Permissions::PermissionName::Geolocation, Web::Permissions::PermissionName::Microphone }) {
+        if (auto setting = settings_json.value().get_object(Web::Permissions::to_string(name)); setting.has_value()) {
+            if (auto policy = setting->get_string(SITE_SETTING_POLICY_KEY); policy == "ask"sv)
+                settings.m_permission_policies.set(name, PermissionPolicy::Ask);
+            else if (policy == "block"sv)
+                settings.m_permission_policies.set(name, PermissionPolicy::Block);
+        }
+    }
 
     if (auto browsing_data_settings = settings_json.value().get(BROWSING_DATA_KEY); browsing_data_settings.has_value())
         settings.m_browsing_data_settings = parse_browsing_data_settings(*browsing_data_settings);
@@ -645,7 +648,11 @@ JsonValue Settings::serialize_json() const
 
     save_site_setting(m_autoplay, AUTOPLAY_KEY);
 
-    settings.set(LOCATION_POLICY_KEY, m_location_policy == LocationPolicy::Block ? "block"_string : "ask"_string);
+    for (auto name : { Web::Permissions::PermissionName::Geolocation, Web::Permissions::PermissionName::Microphone }) {
+        JsonObject setting;
+        setting.set(SITE_SETTING_POLICY_KEY, permission_policy(name) == PermissionPolicy::Block ? "block"sv : "ask"sv);
+        settings.set(Web::Permissions::to_string(name), move(setting));
+    }
 
     JsonObject disk_cache_settings;
     disk_cache_settings.set(DISK_CACHE_MAXIMUM_SIZE_KEY, m_browsing_data_settings.disk_cache_settings.maximum_size);
@@ -1113,13 +1120,18 @@ void Settings::remove_all_autoplay_site_filters()
         observer.autoplay_settings_changed();
 }
 
-void Settings::set_location_policy(LocationPolicy policy)
+PermissionPolicy Settings::permission_policy(Web::Permissions::PermissionName name) const
 {
-    m_location_policy = policy;
+    return m_permission_policies.get(name).value_or(PermissionPolicy::Ask);
+}
+
+void Settings::set_permission_policy(Web::Permissions::PermissionName name, PermissionPolicy policy)
+{
+    m_permission_policies.set(name, policy);
     persist_settings();
 
     for (auto& observer : m_observers)
-        observer.geolocation_settings_changed();
+        observer.permission_settings_changed(name);
 }
 
 BrowsingDataSettings Settings::parse_browsing_data_settings(JsonValue const& settings)

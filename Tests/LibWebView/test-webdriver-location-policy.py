@@ -35,18 +35,18 @@ def run_browser(webdriver_binary, settings, check):
                 assert status == 200, raw
                 return payload["value"]
 
-            def switch_state():
-                command("url", {"url": "about:settings"})
+            def policy_state():
+                command("url", {"url": "about:settings#location-permissions"})
                 return command(
                     "execute/async",
                     {
                         "script": """
                         const done = arguments[0];
-                        const toggle = document.querySelector('#enable-geolocation');
+                        const select = document.querySelector('#site-settings-policy');
                         document.addEventListener('WebUIMessage', function listener(event) {
                             if (event.detail.name !== 'loadSettings') return;
                             document.removeEventListener('WebUIMessage', listener);
-                            setTimeout(() => done([toggle.checked, toggle.disabled]));
+                            setTimeout(() => done(select.value));
                         });
                         // The page may have loaded its settings already, so ask for them again.
                         if (window.ladybird) ladybird.sendMessage('loadCurrentSettings');
@@ -55,7 +55,7 @@ def run_browser(webdriver_binary, settings, check):
                     },
                 )
 
-            def toggle_switch():
+            def toggle_policy():
                 command(
                     "execute/async",
                     {
@@ -66,13 +66,15 @@ def run_browser(webdriver_binary, settings, check):
                             document.removeEventListener('WebUIMessage', listener);
                             done();
                         });
-                        document.querySelector('#enable-geolocation').click();
+                        const select = document.querySelector('#site-settings-policy');
+                        select.value = select.value === 'ask' ? 'block' : 'ask';
+                        select.dispatchEvent(new Event('change'));
                     """,
                         "args": [],
                     },
                 )
 
-            check(switch_state, toggle_switch, settings_file)
+            check(policy_state, toggle_policy, settings_file)
 
             # The Permissions API is exposed to every site, not only under the experimental-interfaces flag.
             command("url", {"url": "about:blank"})
@@ -96,29 +98,24 @@ def run_browser(webdriver_binary, settings, check):
 
 
 def run_test(webdriver_binary):
-    # A profile saved before the location policy existed carries a geolocationEnabled of false that the user never
-    # chose, since every save wrote it. Such a profile lets sites ask.
-    def check_migrated_profile(switch_state, toggle_switch, settings_file):
-        checked, disabled = switch_state()
-        assert checked, "a profile with only the old geolocationEnabled key should let sites ask"
-        if disabled:
-            print("NOTE: no geolocation provider here, so the switch can't be toggled")
-            return
-        toggle_switch()
+    def check_default_policy(policy_state, toggle_policy, settings_file):
+        assert policy_state() == "ask", "the location policy should default to letting sites ask"
+        toggle_policy()
         saved = json.loads(settings_file.read_text())
-        assert saved.get("locationPolicy") == "block", saved
-        assert "geolocationEnabled" not in saved, saved
-        toggle_switch()
+        assert saved["geolocation"]["policy"] == "block", saved
+        toggle_policy()
         saved = json.loads(settings_file.read_text())
-        assert saved.get("locationPolicy") == "ask", saved
+        assert saved["geolocation"]["policy"] == "ask", saved
 
-    run_browser(webdriver_binary, {"geolocationEnabled": False}, check_migrated_profile)
+    run_browser(webdriver_binary, {}, check_default_policy)
+    run_browser(webdriver_binary, {"geolocation": {"policy": 42}}, check_default_policy)
 
-    def check_blocking_profile(switch_state, toggle_switch, settings_file):
-        checked, _ = switch_state()
-        assert not checked, "a profile whose location policy is block should keep sites from asking"
+    def check_blocking_profile(policy_state, toggle_policy, settings_file):
+        assert policy_state() == "block", "a saved block should keep sites from asking"
+        toggle_policy()
+        assert json.loads(settings_file.read_text())["geolocation"]["policy"] == "ask"
 
-    run_browser(webdriver_binary, {"locationPolicy": "block"}, check_blocking_profile)
+    run_browser(webdriver_binary, {"geolocation": {"policy": "block"}}, check_blocking_profile)
     print("PASS: the location policy defaults to letting sites ask, and a saved block stays")
 
 

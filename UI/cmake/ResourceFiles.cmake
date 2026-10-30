@@ -59,14 +59,12 @@ set(ABOUT_SETTINGS_RESOURCES
     browsing-behavior.js
     content.js
     dialog-deep-link.js
-    geolocation.js
     languages.js
     network.js
     permissions.js
     privacy.js
     search.js
     services.js
-    site-permissions.js
     startup.js
     tabs.js
 )

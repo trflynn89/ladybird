@@ -5,10 +5,12 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
+import http.server
 import json
 import runpy
 import subprocess
 import tempfile
+import threading
 import time
 
 from pathlib import Path
@@ -17,6 +19,19 @@ helpers = runpy.run_path(str(Path(__file__).with_name("test-webdriver-delete-ses
 
 
 def run_test(webdriver_binary):
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(b"<!DOCTYPE html><title>permissions settings</title>")
+
+        def log_message(self, format, *args):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    test_origin = f"http://127.0.0.1:{server.server_address[1]}"
     with tempfile.TemporaryDirectory() as directory:
         config = Path(directory) / "config"
         config.mkdir()
@@ -58,21 +73,33 @@ def run_test(webdriver_binary):
                     "execute/async",
                     {
                         "script": """
-                        const permission = arguments[0];
                         const done = arguments[1];
-                        const dialog = document.querySelector(`#site-permissions-${permission}`);
-                        const read = () => Array.from(dialog.querySelectorAll('.site-permission-row'))
-                            .map(row => [row.dataset.origin, row.querySelector('select').value]);
-                        const list = dialog.querySelector('.site-permissions-list');
-                        if (read().length) return done(read());
-                        const observer = new MutationObserver(() => {
-                            if (!read().length) return;
-                            observer.disconnect();
-                            done(read());
+                        document.addEventListener('WebUIMessage', function listener(event) {
+                            if (event.detail.name !== 'loadSettings') return;
+                            document.removeEventListener('WebUIMessage', listener);
+                            setTimeout(() => done(Array.from(document.querySelectorAll('#site-settings-list .dialog-list-item'))
+                                .map(row => [row.dataset.origin, row.querySelector('select').value])));
                         });
-                        observer.observe(list, { childList: true, subtree: true });
+                        ladybird.sendMessage('loadCurrentSettings');
                     """,
                         "args": [permission],
+                    },
+                )
+
+            def change(source, *args):
+                return command(
+                    "execute/async",
+                    {
+                        "script": """
+                        const done = arguments[arguments.length - 1];
+                        document.addEventListener('WebUIMessage', function listener(event) {
+                            if (event.detail.name !== 'loadSettings') return;
+                            document.removeEventListener('WebUIMessage', listener);
+                            setTimeout(done);
+                        });
+                        """
+                        + source,
+                        "args": list(args),
                     },
                 )
 
@@ -101,7 +128,7 @@ def run_test(webdriver_binary):
 
             rows("location-permissions", "geolocation")
             script("""
-                const select = document.querySelector('#site-permissions-geolocation .site-permission-row select');
+                const select = document.querySelector('#site-settings-list .dialog-list-item select');
                 select.value = 'block';
                 select.dispatchEvent(new Event('change'));
             """)
@@ -111,13 +138,89 @@ def run_test(webdriver_binary):
                 )
             )
 
-            script("document.querySelector('#site-permissions-geolocation .site-permission-row button').click();")
+            script("document.querySelector('#site-settings-list .dialog-list-item button').click();")
             wait_for_saved(lambda decisions: all(entry["origin"] != "https://example.com" for entry in decisions))
 
-            print("PASS: about:settings lists, changes, and removes site permissions")
+            for permission, hash in (("geolocation", "location-permissions"), ("microphone", "microphone-permissions")):
+                rows(hash, permission)
+                assert script("return document.querySelector('#site-settings-policy').value") == "ask"
+                for decision in ("allow", "block"):
+                    change(
+                        """
+                        document.querySelector('#site-settings-input').value = 'https://added.example/path';
+                        document.querySelector('#site-settings-decision').value = arguments[0];
+                        document.querySelector('#site-settings-add').click();
+                    """,
+                        decision,
+                    )
+                    wait_for_saved(
+                        lambda decisions, permission=permission, decision=decision: (
+                            {"origin": "https://added.example", "permission": permission, "decision": decision}
+                            in decisions
+                        )
+                    )
+
+                script("""
+                    document.querySelector('#site-settings-input').value = 'not a URL';
+                    document.querySelector('#site-settings-add').click();
+                """)
+                assert not script("return document.querySelector('#site-settings-input').validity.valid")
+
+                change(
+                    """
+                    document.querySelector('#site-settings-input').value = arguments[0];
+                    document.querySelector('#site-settings-decision').value = 'allow';
+                    document.querySelector('#site-settings-add').click();
+                """,
+                    test_origin,
+                )
+
+                for policy in ("block", "ask"):
+                    change(
+                        """
+                        const select = document.querySelector('#site-settings-policy');
+                        select.value = arguments[0];
+                        select.dispatchEvent(new Event('change'));
+                    """,
+                        policy,
+                    )
+                    saved = json.loads((config / "Settings.json").read_text())
+                    assert saved[permission]["policy"] == policy, saved
+                    command("url", {"url": test_origin})
+                    state = command(
+                        "execute/async",
+                        {
+                            "script": "navigator.permissions.query({name: arguments[0]}).then(status => arguments[1](status.state));",
+                            "args": [permission],
+                        },
+                    )
+                    assert state == ("denied" if policy == "block" else "granted"), (permission, policy, state)
+                    rows(hash, permission)
+
+                change("document.querySelector('#site-settings-remove-all').click();")
+                wait_for_saved(
+                    lambda decisions, permission=permission: all(
+                        entry["permission"] != permission for entry in decisions
+                    )
+                )
+                assert script("return document.querySelector('#site-settings-list').textContent") == "No sites added"
+
+            # Switching hashes while the shared dialog is open updates its controls without closing it.
+            script("location.hash = 'autoplay';")
+            assert script("return document.querySelector('#site-settings').open")
+            assert script("return document.querySelector('#site-settings-title').textContent") == "Autoplay"
+            change("""
+                document.querySelector('#site-settings-input').value = 'autoplay.example';
+                document.querySelector('#site-settings-add').click();
+            """)
+            assert "autoplay.example" in json.loads((config / "Settings.json").read_text())["autoplay"]["siteFilters"]
+            change("document.querySelector('#site-settings-remove-all').click();")
+
+            print("PASS: shared site settings dialogs load, add, change, and remove permissions and policies")
         finally:
             if session is not None:
                 helpers["request"](port, "DELETE", f"/session/{session}")
+            server.shutdown()
             process.terminate()
             try:
                 process.wait(timeout=5)

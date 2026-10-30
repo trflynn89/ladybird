@@ -971,29 +971,11 @@
                 <div class="card">
                     <div class="card-body">
                         <div class="card-group inline-container">
-                            <label for="enable-geolocation">
-                                Sites can ask for your location
-                                <p class="description">When this is off, sites can't see your location.</p>
-                            </label>
-                            <input id="enable-geolocation" type="checkbox" switch />
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-body">
-                        <div class="card-group inline-container">
-                            <span>
-                                Location
-                                <p class="description">The sites you allowed or blocked from knowing your location.</p>
-                            </span>
+                            <span>Location</span>
                             <button id="location-permissions-settings" class="secondary-button">Settings…</button>
                         </div>
                         <div class="card-group inline-container">
-                            <span>
-                                Microphone
-                                <p class="description">The sites you allowed or blocked from using your microphone.</p>
-                            </span>
+                            <span>Microphone</span>
                             <button id="microphone-permissions-settings" class="secondary-button">Settings…</button>
                         </div>
                     </div>
@@ -1307,26 +1289,6 @@
             </div>
         </dialog>
 
-        <dialog id="site-permissions-geolocation" class="site-permissions" closedby="any">
-            <div class="dialog-header">
-                <h3 class="dialog-title">Location</h3>
-                <button class="close-button dialog-button">&times;</button>
-            </div>
-            <div class="dialog-body">
-                <div class="site-permissions-list dialog-list"></div>
-            </div>
-        </dialog>
-
-        <dialog id="site-permissions-microphone" class="site-permissions" closedby="any">
-            <div class="dialog-header">
-                <h3 class="dialog-title">Microphone</h3>
-                <button class="close-button dialog-button">&times;</button>
-            </div>
-            <div class="dialog-body">
-                <div class="site-permissions-list dialog-list"></div>
-            </div>
-        </dialog>
-
         <dialog id="site-settings" closedby="any">
             <div class="dialog-header">
                 <h3 id="site-settings-title" class="dialog-title"></h3>
@@ -1338,10 +1300,14 @@
                     <select id="site-settings-policy"></select>
                 </div>
                 <hr />
-                <label>Allowlist</label>
+                <label id="site-settings-list-label">Allowlist</label>
                 <div id="site-settings-list" class="dialog-list"></div>
                 <div class="dialog-controls">
                     <input id="site-settings-input" type="text" placeholder="example.com" />
+                    <select id="site-settings-decision" aria-label="Permission for added site" class="hidden">
+                        <option value="allow">Allow</option>
+                        <option value="block">Block</option>
+                    </select>
                     <button id="site-settings-add" class="primary-button">Add&nbsp;site</button>
                 </div>
             </div>
@@ -1417,11 +1383,9 @@
         <script src="resource://ladybird/about-pages/settings/blocking.js" type="module"></script>
         <script src="resource://ladybird/about-pages/settings/browsing-behavior.js" type="module"></script>
         <script src="resource://ladybird/about-pages/settings/content.js" type="module"></script>
-        <script src="resource://ladybird/about-pages/settings/geolocation.js" type="module"></script>
         <script src="resource://ladybird/about-pages/settings/languages.js" type="module"></script>
         <script src="resource://ladybird/about-pages/settings/network.js" type="module"></script>
         <script src="resource://ladybird/about-pages/settings/permissions.js" type="module"></script>
-        <script src="resource://ladybird/about-pages/settings/site-permissions.js" type="module"></script>
         <script src="resource://ladybird/about-pages/settings/privacy.js" type="module"></script>
         <script src="resource://ladybird/about-pages/settings/search.js" type="module"></script>
         <script src="resource://ladybird/about-pages/settings/services.js" type="module"></script>

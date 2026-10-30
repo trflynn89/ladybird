@@ -816,7 +816,8 @@ protected:
     virtual void content_settings_changed() override;
     virtual void browsing_behavior_changed() override;
     virtual void autoplay_settings_changed() override;
-    virtual void geolocation_settings_changed() override;
+    virtual void permission_settings_changed(Web::Permissions::PermissionName) override;
+    void geolocation_settings_changed();
     virtual void global_privacy_control_changed() override;
 
     virtual void bookmarks_changed() override;

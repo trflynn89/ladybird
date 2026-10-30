@@ -18,6 +18,7 @@
 #include <LibHTTP/Cache/DiskCacheSettings.h>
 #include <LibURL/URL.h>
 #include <LibWebCommon/HTML/AutoplayPolicy.h>
+#include <LibWebCommon/Permissions/Permissions.h>
 #include <LibWebCommon/WebView/BrowsingBehavior.h>
 #include <LibWebView/Forward.h>
 #include <LibWebView/Options.h>
@@ -87,8 +88,8 @@ struct AutoplaySiteSetting : public SiteSetting {
     Web::HTML::AutoplayPolicy policy { Web::HTML::AutoplayPolicy::BlockAudio };
 };
 
-// Whether sites may ask for the user's location at all.
-enum class LocationPolicy : u8 {
+// Whether sites may ask for a permission at all.
+enum class PermissionPolicy : u8 {
     Ask,
     Block,
 };
@@ -157,7 +158,7 @@ public:
     virtual void global_privacy_control_changed() { }
     virtual void dns_settings_changed() { }
     virtual void config_variable_changed(ConfigVariableID) { }
-    virtual void geolocation_settings_changed() { }
+    virtual void permission_settings_changed(Web::Permissions::PermissionName) { }
     virtual void background_networking_settings_changed() { }
     virtual void content_blocker_settings_changed() { }
 
@@ -225,8 +226,8 @@ public:
     void remove_autoplay_site_filter(String const&);
     void remove_all_autoplay_site_filters();
 
-    LocationPolicy location_policy() const { return m_location_policy; }
-    void set_location_policy(LocationPolicy);
+    PermissionPolicy permission_policy(Web::Permissions::PermissionName) const;
+    void set_permission_policy(Web::Permissions::PermissionName, PermissionPolicy);
 
     static BrowsingDataSettings parse_browsing_data_settings(JsonValue const&);
     BrowsingDataSettings const& browsing_data_settings() const { return m_browsing_data_settings; }
@@ -301,7 +302,7 @@ private:
     Vector<SearchEngine> m_custom_search_engines;
 
     AutoplaySiteSetting m_autoplay;
-    LocationPolicy m_location_policy { LocationPolicy::Ask };
+    HashMap<Web::Permissions::PermissionName, PermissionPolicy> m_permission_policies;
 
     BrowsingDataSettings m_browsing_data_settings;
     GlobalPrivacyControl m_global_privacy_control { GlobalPrivacyControl::No };

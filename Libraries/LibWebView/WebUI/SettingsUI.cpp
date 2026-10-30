@@ -169,9 +169,6 @@ void SettingsUI::register_interfaces()
     register_interface("removeAllSiteSettingFilters"sv, [this](auto const& data) {
         remove_all_site_setting_filters(data);
     });
-    register_interface("setLocationPolicy"sv, [this](auto const& data) {
-        set_location_policy(data);
-    });
 
     register_interface("estimateBrowsingDataSizes"sv, [this](auto const& data) {
         estimate_browsing_data_sizes(data);
@@ -464,106 +461,75 @@ void SettingsUI::remove_custom_search_engine(JsonValue const& search_engine)
         Application::settings().remove_custom_search_engine(*custom_engine);
 }
 
-enum class SiteSettingType {
-    Autoplay,
-};
-
-static constexpr StringView site_setting_type_to_string(SiteSettingType setting)
-{
-    switch (setting) {
-    case SiteSettingType::Autoplay:
-        return "autoplay"sv;
-    }
-    VERIFY_NOT_REACHED();
-}
-
-static Optional<SiteSettingType> site_setting_type(JsonValue const& settings)
-{
-    if (!settings.is_object())
-        return {};
-
-    auto setting_type = settings.as_object().get_string("setting"sv);
-    if (!setting_type.has_value())
-        return {};
-
-    if (*setting_type == "autoplay"sv)
-        return SiteSettingType::Autoplay;
-    return {};
-}
-
 void SettingsUI::load_forcibly_enabled_site_settings()
 {
     JsonArray site_settings;
 
     if (Application::web_content_options().enable_autoplay == EnableAutoplay::Yes)
-        site_settings.must_append(site_setting_type_to_string(SiteSettingType::Autoplay));
+        site_settings.must_append("autoplay"sv);
 
     async_send_message("forciblyEnableSiteSettings"sv, move(site_settings));
 }
 
 void SettingsUI::set_site_setting_policy(JsonValue const& site_setting)
 {
-    auto setting = site_setting_type(site_setting);
-    if (!setting.has_value())
+    if (!site_setting.is_object())
         return;
 
+    auto setting = site_setting.as_object().get_string("setting"sv);
     auto policy = site_setting.as_object().get_string("policy"sv);
-    if (!policy.has_value())
+    if (!setting.has_value() || !policy.has_value())
         return;
 
-    switch (*setting) {
-    case SiteSettingType::Autoplay:
+    if (*setting == "autoplay"sv) {
         auto policy_utf16 = Utf16String::from_utf8_without_validation(*policy);
         if (auto parsed = Web::HTML::autoplay_policy_from_string(policy_utf16.utf16_view()); parsed.has_value())
             Application::settings().set_autoplay_policy(*parsed);
-        break;
+    } else if (auto name = Web::Permissions::permission_name_from_string(*setting); name.has_value()) {
+        if (*policy == "ask"sv)
+            Application::settings().set_permission_policy(*name, PermissionPolicy::Ask);
+        else if (*policy == "block"sv)
+            Application::settings().set_permission_policy(*name, PermissionPolicy::Block);
     }
 }
 
 void SettingsUI::add_site_setting_filter(JsonValue const& site_setting)
 {
-    auto setting = site_setting_type(site_setting);
-    if (!setting.has_value())
+    if (!site_setting.is_object())
         return;
 
+    auto setting = site_setting.as_object().get_string("setting"sv);
     auto filter = site_setting.as_object().get_string("filter"sv);
-    if (!filter.has_value())
-        return;
-
-    switch (*setting) {
-    case SiteSettingType::Autoplay:
+    if (setting == "autoplay"sv && filter.has_value())
         Application::settings().add_autoplay_site_filter(*filter);
-        break;
-    }
 }
 
 void SettingsUI::remove_site_setting_filter(JsonValue const& site_setting)
 {
-    auto setting = site_setting_type(site_setting);
-    if (!setting.has_value())
+    if (!site_setting.is_object())
         return;
 
+    auto setting = site_setting.as_object().get_string("setting"sv);
     auto filter = site_setting.as_object().get_string("filter"sv);
-    if (!filter.has_value())
-        return;
-
-    switch (*setting) {
-    case SiteSettingType::Autoplay:
+    if (setting == "autoplay"sv && filter.has_value())
         Application::settings().remove_autoplay_site_filter(*filter);
-        break;
-    }
 }
 
 void SettingsUI::remove_all_site_setting_filters(JsonValue const& site_setting)
 {
-    auto setting = site_setting_type(site_setting);
+    if (!site_setting.is_object())
+        return;
+
+    auto setting = site_setting.as_object().get_string("setting"sv);
     if (!setting.has_value())
         return;
 
-    switch (*setting) {
-    case SiteSettingType::Autoplay:
+    if (*setting == "autoplay"sv) {
         Application::settings().remove_all_autoplay_site_filters();
-        break;
+    } else if (auto name = Web::Permissions::permission_name_from_string(*setting); name.has_value()) {
+        auto& manager = *Application::the().default_session().permission_manager;
+        for (auto const& site : manager.site_decisions(*name))
+            manager.set_decision(*name, site.origin, {});
     }
 }
 
@@ -593,17 +559,6 @@ void SettingsUI::set_site_permission(JsonValue const& data)
     }
 
     Application::the().default_session().permission_manager->set_decision(**name, url->origin(), decision);
-}
-
-void SettingsUI::set_location_policy(JsonValue const& policy)
-{
-    if (!policy.is_string())
-        return;
-
-    if (policy.as_string() == "ask"sv)
-        Application::settings().set_location_policy(LocationPolicy::Ask);
-    else if (policy.as_string() == "block"sv)
-        Application::settings().set_location_policy(LocationPolicy::Block);
 }
 
 void SettingsUI::estimate_browsing_data_sizes(JsonValue const& options)

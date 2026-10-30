@@ -4467,6 +4467,12 @@ void ViewImplementation::revoke_geolocation_without_permission()
     update_location_in_use();
 }
 
+void ViewImplementation::permission_settings_changed(Web::Permissions::PermissionName name)
+{
+    if (name == Web::Permissions::PermissionName::Geolocation)
+        geolocation_settings_changed();
+}
+
 void ViewImplementation::geolocation_settings_changed()
 {
     using ErrorCode = Web::Geolocation::GeolocationPositionErrorCode;
