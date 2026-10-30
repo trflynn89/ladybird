@@ -210,10 +210,39 @@ def run_test(webdriver_binary):
             assert script("return document.querySelector('#site-settings').open")
             assert script("return document.querySelector('#site-settings-title').textContent") == "Autoplay"
             change("""
-                document.querySelector('#site-settings-input').value = 'autoplay.example';
+                document.querySelector('#site-settings-input').value = 'https://autoplay.example';
                 document.querySelector('#site-settings-add').click();
             """)
-            assert "autoplay.example" in json.loads((config / "Settings.json").read_text())["autoplay"]["siteFilters"]
+            wait_for_saved(
+                lambda decisions: (
+                    {"origin": "https://autoplay.example", "permission": "autoplay", "decision": "allow"} in decisions
+                )
+            )
+            for decision in ("allow-if-inaudible", "block"):
+                change(
+                    """
+                    const select = document.querySelector('#site-settings-list .dialog-list-item select');
+                    select.value = arguments[0];
+                    select.dispatchEvent(new Event('change'));
+                """,
+                    decision,
+                )
+                wait_for_saved(
+                    lambda decisions, decision=decision: (
+                        {"origin": "https://autoplay.example", "permission": "autoplay", "decision": decision}
+                        in decisions
+                    )
+                )
+            for policy in ("allow", "block", "allow-if-inaudible"):
+                change(
+                    """
+                    const select = document.querySelector('#site-settings-policy');
+                    select.value = arguments[0];
+                    select.dispatchEvent(new Event('change'));
+                """,
+                    policy,
+                )
+                assert json.loads((config / "Settings.json").read_text())["autoplay"]["policy"] == policy
             change("document.querySelector('#site-settings-remove-all').click();")
 
             print("PASS: shared site settings dialogs load, add, change, and remove permissions and policies")

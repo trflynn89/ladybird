@@ -160,6 +160,11 @@ struct ApplicationSettingsObserver final : public SettingsObserver {
         Application::the().content_blocker_settings_changed({});
     }
 
+    virtual void autoplay_settings_changed() override
+    {
+        Application::the().permission_policy_changed({});
+    }
+
     virtual void permission_settings_changed(Web::Permissions::PermissionName) override
     {
         Application::the().permission_policy_changed({});
@@ -3046,12 +3051,22 @@ Core::GeolocationAuthorization Application::geolocation_authorization()
 void Application::update_permission_defaults()
 {
     // NB: A private session reads its defaults from the ordinary one.
-    auto state = sites_can_ask_for_location() ? Web::Permissions::EffectiveState::Prompt : Web::Permissions::EffectiveState::Denied;
-    m_default_session->permission_manager->set_global_default(Web::Permissions::PermissionName::Geolocation, state);
-    auto microphone_state = settings().permission_policy(Web::Permissions::PermissionName::Microphone) == PermissionPolicy::Ask
-        ? Web::Permissions::EffectiveState::Prompt
-        : Web::Permissions::EffectiveState::Denied;
-    m_default_session->permission_manager->set_global_default(Web::Permissions::PermissionName::Microphone, microphone_state);
+    m_default_session->permission_manager->set_autoplay_default(settings().autoplay_policy());
+    m_default_session->permission_manager->set_autoplay_forcibly_enabled(web_content_options().enable_autoplay == EnableAutoplay::Yes);
+    for (auto name : Web::Permissions::permission_names) {
+        auto state = [&] {
+            switch (settings().permission_policy(name)) {
+            case PermissionPolicy::Ask:
+                return name == Web::Permissions::PermissionName::Geolocation && !sites_can_ask_for_location()
+                    ? Web::Permissions::EffectiveState::Denied
+                    : Web::Permissions::EffectiveState::Prompt;
+            case PermissionPolicy::Block:
+                return Web::Permissions::EffectiveState::Denied;
+            }
+            VERIFY_NOT_REACHED();
+        }();
+        m_default_session->permission_manager->set_global_default(name, state);
+    }
 }
 
 void Application::languages_changed(Badge<ApplicationSettingsObserver>)

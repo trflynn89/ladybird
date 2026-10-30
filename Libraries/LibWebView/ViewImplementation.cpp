@@ -1531,23 +1531,6 @@ static void send_browsing_behavior(WebContentPage const& page)
     page.async_set_browsing_behavior(Application::settings().browsing_behavior());
 }
 
-static void send_autoplay_settings(WebContentPage const& page)
-{
-    auto const& autoplay_settings = Application::settings().autoplay_settings();
-    auto const& web_content_options = Application::web_content_options();
-
-    auto policy = autoplay_settings.policy;
-    if (web_content_options.enable_autoplay == EnableAutoplay::Yes)
-        policy = Web::HTML::AutoplayPolicy::AllowAudioAndVideo;
-
-    Vector<Utf16String> allowlist;
-    allowlist.ensure_capacity(autoplay_settings.site_filters.size());
-    for (auto const& site_filter : autoplay_settings.site_filters)
-        allowlist.unchecked_append(Utf16String::from_utf8(site_filter));
-
-    page.async_set_autoplay_settings(policy, move(allowlist));
-}
-
 static void send_global_privacy_control(WebContentPage const& page)
 {
     page.async_set_enable_global_privacy_control(Application::settings().global_privacy_control() == GlobalPrivacyControl::Yes);
@@ -1570,7 +1553,6 @@ void ViewImplementation::send_preferences_to_page(WebContentPage& page)
     page.async_set_preferred_languages(Application::settings().languages());
     page.async_set_zoom_level(m_zoom_level);
     send_browsing_behavior(page);
-    send_autoplay_settings(page);
     send_global_privacy_control(page);
     auto* spell_checker = Application::the().spell_checker();
     page.async_set_spell_checking_available(spell_checker != nullptr);
@@ -4388,11 +4370,6 @@ void ViewImplementation::browsing_behavior_changed()
     traversable().for_each_hosting_page(send_browsing_behavior);
 }
 
-void ViewImplementation::autoplay_settings_changed()
-{
-    traversable().for_each_hosting_page(send_autoplay_settings);
-}
-
 void ViewImplementation::global_privacy_control_changed()
 {
     traversable().for_each_hosting_page(send_global_privacy_control);
@@ -4404,7 +4381,7 @@ Vector<SitePermissionRow> ViewImplementation::site_permission_rows() const
     auto const& manager = *session().permission_manager;
 
     Vector<SitePermissionRow> rows;
-    for (auto name : { Web::Permissions::PermissionName::Geolocation, Web::Permissions::PermissionName::Microphone }) {
+    for (auto name : Web::Permissions::permission_names) {
         auto decision = manager.decision(name, origin);
         rows.append({
             .name = name,
@@ -4419,6 +4396,16 @@ Vector<SitePermissionRow> ViewImplementation::site_permission_rows() const
 void ViewImplementation::set_site_permission(URL::Origin const& origin, Web::Permissions::PermissionName name, Optional<PermissionDecision> decision)
 {
     session().permission_manager->set_decision(name, origin, decision);
+}
+
+Optional<Web::HTML::AutoplayPolicy> ViewImplementation::site_autoplay_policy() const
+{
+    return session().permission_manager->autoplay_decision(permission_origin());
+}
+
+void ViewImplementation::set_site_autoplay_policy(URL::Origin const& origin, Optional<Web::HTML::AutoplayPolicy> policy)
+{
+    session().permission_manager->set_autoplay_policy(origin, policy);
 }
 
 void ViewImplementation::reset_site_permissions(URL::Origin const& origin)

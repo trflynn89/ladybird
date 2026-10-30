@@ -42,6 +42,11 @@ struct PermissionTimeouts {
     AK::Duration embargo { AK::Duration::from_seconds(7ll * 24 * 60 * 60) };
 };
 
+struct SiteAutoplayPolicy {
+    URL::Origin origin;
+    Web::HTML::AutoplayPolicy policy;
+};
+
 struct SiteDecision {
     URL::Origin origin;
     PermissionDecision decision;
@@ -71,14 +76,23 @@ public:
     virtual ~PermissionManager() override;
 
     Web::Permissions::EffectiveState effective_state(Web::Permissions::PermissionName, URL::Origin const& top_level_origin) const;
+    Web::HTML::AutoplayPolicy autoplay_policy(URL::Origin const&) const;
+    Optional<Web::HTML::AutoplayPolicy> autoplay_decision(URL::Origin const&) const;
+    void set_autoplay_policy(URL::Origin const&, Optional<Web::HTML::AutoplayPolicy>);
+    void set_autoplay_policy_for_testing(URL::Origin const&, Optional<Web::HTML::AutoplayPolicy>);
+    void set_autoplay_default(Web::HTML::AutoplayPolicy);
+    Vector<SiteAutoplayPolicy> site_autoplay_policies() const;
+
     Optional<PermissionDecision> decision(Web::Permissions::PermissionName, URL::Origin const& top_level_origin) const;
 
     // Moves with every decision made for a site, however it was made, so an answer given to a prompt can tell if
     // anything was decided while the prompt was up.
     u64 decision_generation(Web::Permissions::PermissionName, URL::Origin const& top_level_origin) const;
 
-    // An empty decision returns the site to asking.
+    // An empty decision returns the site to the global default.
     void set_decision(Web::Permissions::PermissionName, URL::Origin const& top_level_origin, Optional<PermissionDecision>);
+    // Test decisions use the same store and snapshots, and take precedence over command-line defaults.
+    void set_decision_for_testing(Web::Permissions::PermissionName, URL::Origin const& top_level_origin, Optional<PermissionDecision>);
     void reset_origin(URL::Origin const& top_level_origin);
     void record_prompt_outcome(Web::Permissions::PermissionName, URL::Origin const& top_level_origin, Web::Permissions::PromptOutcome);
 
@@ -86,9 +100,10 @@ public:
     void set_view_presence(u64 view_id, URL::Origin const& top_level_origin, bool visible);
     void remove_view(u64 view_id);
 
-    // What a site with no decision of its own gets: Prompt, or Denied when the user has turned the feature off.
+    // What a site with no decision of its own gets.
     void set_global_default(Web::Permissions::PermissionName, Web::Permissions::EffectiveState);
     void set_os_denies_geolocation(bool);
+    void set_autoplay_forcibly_enabled(bool);
 
     Web::Permissions::PermissionSnapshot snapshot() const;
     // Only the given sites' states, for a process that shows those sites and no others.
@@ -118,9 +133,19 @@ private:
         u8 dismissals { 0 };
         u8 ignores { 0 };
         Optional<UnixDateTime> embargo_until;
+        bool for_testing { false };
 
         bool is_empty() const { return !decision.has_value() && dismissals == 0 && ignores == 0 && !embargo_until.has_value(); }
     };
+
+    struct AutoplayEntry {
+        URL::Origin origin;
+        Web::HTML::AutoplayPolicy policy;
+        bool for_testing { false };
+    };
+    AutoplayEntry const* find_autoplay_entry(URL::Origin const&) const;
+    void set_autoplay_policy_impl(URL::Origin const&, Optional<Web::HTML::AutoplayPolicy>, bool for_testing);
+    Web::HTML::AutoplayPolicy autoplay_default() const;
 
     struct ViewPresence {
         URL::Origin origin;
@@ -146,6 +171,7 @@ private:
     Entry const* find_entry(Web::Permissions::PermissionName, URL::Origin const&) const;
     Entry& ensure_entry(Web::Permissions::PermissionName, URL::Origin const&);
     void remove_empty_entries();
+    void set_decision_impl(Web::Permissions::PermissionName, URL::Origin const&, Optional<PermissionDecision>, bool for_testing);
 
     OriginPresence presence_of(URL::Origin const&) const;
     bool apply_presence();
@@ -161,12 +187,15 @@ private:
     WeakPtr<PermissionManager> m_ordinary_session;
 
     Vector<Entry> m_entries;
+    Vector<AutoplayEntry> m_autoplay_entries;
     HashMap<u64, ViewPresence> m_views;
     HashMap<String, u64> m_generations;
 
+    Web::HTML::AutoplayPolicy m_autoplay_default { Web::HTML::AutoplayPolicy::BlockAudio };
     Web::Permissions::EffectiveState m_geolocation_default { Web::Permissions::EffectiveState::Prompt };
     Web::Permissions::EffectiveState m_microphone_default { Web::Permissions::EffectiveState::Prompt };
     bool m_os_denies_geolocation { false };
+    bool m_autoplay_forcibly_enabled { false };
 
     u64 m_revision { 0 };
     Vector<PermissionManagerObserver*> m_observers;

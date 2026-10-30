@@ -57,7 +57,6 @@
 #include <LibWeb/Fetch/Fetching/Fetching.h>
 #include <LibWeb/FileAPI/BlobURLStore.h>
 #include <LibWeb/Gamepad/GamepadRegistry.h>
-#include <LibWeb/HTML/AutoplaySettings.h>
 #include <LibWeb/HTML/BroadcastChannel.h>
 #include <LibWeb/HTML/BrowsingContext.h>
 #include <LibWeb/HTML/EventLoop/EventLoop.h>
@@ -3194,11 +3193,6 @@ void ConnectionFromClient::set_content_blockers(Core::AnonymousBuffer patterns_b
 
     if (had_cosmetic_rules || blocker.has_cosmetic_rules())
         m_page_host->invalidate_user_style();
-}
-
-void ConnectionFromClient::set_autoplay_settings(Web::PageId, Web::HTML::AutoplayPolicy policy, Vector<Utf16String> allowlist)
-{
-    Web::HTML::AutoplaySettings::the().set_policy(policy, allowlist);
 }
 
 void ConnectionFromClient::set_preferred_color_scheme(Web::PageId page_id, Web::CSS::PreferredColorScheme color_scheme)

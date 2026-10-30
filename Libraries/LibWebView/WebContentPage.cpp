@@ -1806,13 +1806,17 @@ Web::Permissions::PermissionSnapshot WebContentPage::set_permission_for_testing(
     auto document = hosted_document_with_id(document_id);
     auto top_level_origin = document ? document->top_level_origin() : Optional<URL::Origin> {};
 
-    if (permission_name.has_value() && top_level_origin.has_value()) {
+    if (name == "autoplay"sv && top_level_origin.has_value()) {
+        if (auto policy = Web::HTML::autoplay_policy_from_string(state); policy.has_value())
+            manager.set_autoplay_policy_for_testing(*top_level_origin, *policy);
+        client().add_permission_origin(*top_level_origin);
+    } else if (permission_name.has_value() && top_level_origin.has_value()) {
         if (state == "granted"sv)
-            manager.set_decision(*permission_name, *top_level_origin, PermissionDecision::Allow);
+            manager.set_decision_for_testing(*permission_name, *top_level_origin, PermissionDecision::Allow);
         else if (state == "denied"sv)
-            manager.set_decision(*permission_name, *top_level_origin, PermissionDecision::Block);
+            manager.set_decision_for_testing(*permission_name, *top_level_origin, PermissionDecision::Block);
         else if (state == "prompt"sv)
-            manager.set_decision(*permission_name, *top_level_origin, {});
+            manager.set_decision_for_testing(*permission_name, *top_level_origin, {});
         if (*permission_name == Web::Permissions::PermissionName::Microphone)
             client().update_audio_capture_permission();
         client().add_permission_origin(*top_level_origin);

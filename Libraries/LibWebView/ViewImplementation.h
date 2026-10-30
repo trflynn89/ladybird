@@ -150,6 +150,8 @@ public:
     Vector<SitePermissionRow> site_permission_rows() const;
     // These act on the site given, which a panel showing it keeps even after the view moves on to another site.
     void set_site_permission(URL::Origin const&, Web::Permissions::PermissionName, Optional<PermissionDecision>);
+    Optional<Web::HTML::AutoplayPolicy> site_autoplay_policy() const;
+    void set_site_autoplay_policy(URL::Origin const&, Optional<Web::HTML::AutoplayPolicy>);
     void reset_site_permissions(URL::Origin const&);
     void did_request_permission(Badge<WebContentPage>, Web::Permissions::PermissionName);
 
@@ -815,7 +817,6 @@ protected:
     virtual void languages_changed() override;
     virtual void content_settings_changed() override;
     virtual void browsing_behavior_changed() override;
-    virtual void autoplay_settings_changed() override;
     virtual void permission_settings_changed(Web::Permissions::PermissionName) override;
     void geolocation_settings_changed();
     virtual void global_privacy_control_changed() override;

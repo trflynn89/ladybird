@@ -228,6 +228,7 @@ if (NOT WIN32)
     set(HEADLESS_TEST_SOURCES
         TestApplicationDestruction.cpp
         TestAutocomplete.cpp
+        TestAutoplay.cpp
         TestBeforeUnload.cpp
         TestBrowserHistoryTraversal.cpp
         TestCompositorInputRouting.cpp

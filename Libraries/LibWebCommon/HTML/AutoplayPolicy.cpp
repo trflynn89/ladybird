@@ -8,28 +8,27 @@
 
 namespace Web::HTML {
 
-Optional<AutoplayPolicy> autoplay_policy_from_string(Utf16View string)
+Optional<AutoplayPolicy> autoplay_policy_from_string(StringView policy)
 {
-    if (string == u"allow-audio-and-video"sv)
+    if (policy == "allow"sv)
         return AutoplayPolicy::AllowAudioAndVideo;
-    if (string == u"block-audio"sv)
+    if (policy == "allow-if-inaudible"sv)
         return AutoplayPolicy::BlockAudio;
-    if (string == u"block-audio-and-video"sv)
+    if (policy == "block"sv)
         return AutoplayPolicy::BlockAudioAndVideo;
     return {};
 }
 
-Utf16View autoplay_policy_to_string(AutoplayPolicy policy)
+StringView autoplay_policy_to_string(AutoplayPolicy policy)
 {
     switch (policy) {
     case AutoplayPolicy::AllowAudioAndVideo:
-        return u"allow-audio-and-video"sv;
+        return "allow"sv;
     case AutoplayPolicy::BlockAudio:
-        return u"block-audio"sv;
+        return "allow-if-inaudible"sv;
     case AutoplayPolicy::BlockAudioAndVideo:
-        return u"block-audio-and-video"sv;
+        return "block"sv;
     }
-
     VERIFY_NOT_REACHED();
 }
 

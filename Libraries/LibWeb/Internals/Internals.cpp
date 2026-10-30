@@ -68,7 +68,6 @@
 #include <LibWeb/Geolocation/Geolocation.h>
 #include <LibWeb/Geometry/DOMRect.h>
 #include <LibWeb/HTML/AnimatedBitmapDecodedImageData.h>
-#include <LibWeb/HTML/AutoplaySettings.h>
 #include <LibWeb/HTML/BitmapDecodedImageData.h>
 #include <LibWeb/HTML/BrowsingContext.h>
 #include <LibWeb/HTML/EventLoop/EventLoop.h>
@@ -1665,8 +1664,18 @@ void Internals::record_display_list_for_testing(bool paint_overlay, bool cold)
 
 void Internals::set_autoplay_policy(Utf16String const& policy)
 {
-    if (auto parsed = HTML::autoplay_policy_from_string(policy.utf16_view()); parsed.has_value())
-        HTML::AutoplaySettings::the().set_policy(*parsed, {});
+    Optional<StringView> value;
+    if (policy == "allow-audio-and-video"sv)
+        value = "allow"sv;
+    else if (policy == "block-audio"sv)
+        value = "allow-if-inaudible"sv;
+    else if (policy == "block-audio-and-video"sv)
+        value = "block"sv;
+    if (!value.has_value())
+        return;
+    auto snapshot = page().client().page_did_set_permission_for_testing(window().associated_document().id(), "autoplay"_string, MUST(String::from_utf8(*value)));
+    if (snapshot.has_value())
+        PermissionsAPI::PermissionStore::the().apply_snapshot(snapshot.release_value());
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static

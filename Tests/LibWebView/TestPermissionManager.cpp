@@ -15,6 +15,7 @@
 #include <LibWebView/PermissionManager.h>
 
 using namespace WebView;
+using Web::HTML::AutoplayPolicy;
 using Web::Permissions::EffectiveState;
 using Web::Permissions::PermissionName;
 using Web::Permissions::PromptOutcome;
@@ -464,4 +465,118 @@ TEST_CASE(snapshot_for_lists_only_the_given_origins)
     EXPECT(none.entries.is_empty());
     EXPECT(none.origins.is_empty());
     EXPECT(none.microphone_default == EffectiveState::Denied);
+}
+
+TEST_CASE(autoplay_defaults_and_site_decisions_never_prompt)
+{
+    FakeClock clock;
+    auto manager = create_manager(clock, "autoplay"sv);
+    EXPECT_EQ(manager->autoplay_policy(maps), AutoplayPolicy::BlockAudio);
+
+    manager->set_autoplay_default(AutoplayPolicy::BlockAudioAndVideo);
+    EXPECT_EQ(manager->autoplay_policy(maps), AutoplayPolicy::BlockAudioAndVideo);
+    manager->set_autoplay_policy(maps, AutoplayPolicy::AllowAudioAndVideo);
+    EXPECT_EQ(manager->autoplay_policy(maps), AutoplayPolicy::AllowAudioAndVideo);
+    manager->set_autoplay_policy(maps, AutoplayPolicy::BlockAudio);
+    EXPECT_EQ(manager->autoplay_policy(maps), AutoplayPolicy::BlockAudio);
+
+    manager->set_autoplay_default(AutoplayPolicy::AllowAudioAndVideo);
+    manager->set_autoplay_policy(maps, AutoplayPolicy::BlockAudioAndVideo);
+    EXPECT_EQ(manager->autoplay_policy(maps), AutoplayPolicy::BlockAudioAndVideo);
+    manager->reset_origin(maps);
+    EXPECT_EQ(manager->autoplay_policy(maps), AutoplayPolicy::AllowAudioAndVideo);
+
+    EXPECT(!manager->autoplay_decision(maps).has_value());
+    EXPECT(!manager->next_deadline().has_value());
+}
+
+TEST_CASE(autoplay_site_decisions_persist_and_are_scoped_to_origins)
+{
+    auto path = persistence_path("autoplay-persistence"sv);
+    {
+        auto manager = PermissionManager::create_for_ordinary_session(path);
+        manager->set_autoplay_policy(maps, AutoplayPolicy::BlockAudio);
+        manager->set_autoplay_policy(talk, AutoplayPolicy::BlockAudioAndVideo);
+    }
+    auto manager = PermissionManager::create_for_ordinary_session(path);
+    manager->set_autoplay_default(AutoplayPolicy::AllowAudioAndVideo);
+    EXPECT_EQ(manager->autoplay_policy(maps), AutoplayPolicy::BlockAudio);
+    EXPECT_EQ(manager->autoplay_policy(talk), AutoplayPolicy::BlockAudioAndVideo);
+    EXPECT_EQ(manager->autoplay_policy(origin_of("https://maps.example.com:8443/"sv)), AutoplayPolicy::AllowAudioAndVideo);
+
+    auto snapshot = manager->snapshot_for({ maps });
+    EXPECT_EQ(snapshot.autoplay_default, AutoplayPolicy::AllowAudioAndVideo);
+    VERIFY(snapshot.autoplay_entries.size() == 1);
+    EXPECT_EQ(snapshot.autoplay_entries[0].policy, AutoplayPolicy::BlockAudio);
+}
+
+TEST_CASE(forced_autoplay_applies_to_private_sessions_and_snapshots)
+{
+    FakeClock clock;
+    auto ordinary = create_manager(clock, "autoplay-forced"sv);
+    auto private_session = PermissionManager::create_for_private_session(*ordinary);
+    ordinary->set_autoplay_policy(maps, AutoplayPolicy::BlockAudioAndVideo);
+    EXPECT_EQ(private_session->autoplay_policy(maps), AutoplayPolicy::BlockAudioAndVideo);
+
+    ordinary->set_autoplay_forcibly_enabled(true);
+    EXPECT_EQ(ordinary->autoplay_policy(maps), AutoplayPolicy::AllowAudioAndVideo);
+    EXPECT_EQ(private_session->autoplay_policy(maps), AutoplayPolicy::AllowAudioAndVideo);
+    EXPECT_EQ(private_session->snapshot_for({ maps }).autoplay_default, AutoplayPolicy::AllowAudioAndVideo);
+
+    ordinary->set_autoplay_forcibly_enabled(false);
+    EXPECT_EQ(private_session->autoplay_policy(maps), AutoplayPolicy::BlockAudioAndVideo);
+}
+
+TEST_CASE(autoplay_test_decisions_override_forced_playback_through_snapshots)
+{
+    auto path = persistence_path("autoplay-test-decisions"sv);
+    auto manager = PermissionManager::create_for_ordinary_session(path);
+    auto private_session = PermissionManager::create_for_private_session(*manager);
+    manager->set_autoplay_forcibly_enabled(true);
+
+    manager->set_autoplay_policy_for_testing(maps, AutoplayPolicy::BlockAudio);
+    EXPECT_EQ(manager->autoplay_policy(maps), AutoplayPolicy::BlockAudio);
+    EXPECT_EQ(manager->autoplay_policy(talk), AutoplayPolicy::AllowAudioAndVideo);
+    auto snapshot = manager->snapshot_for({ maps });
+    EXPECT_EQ(snapshot.autoplay_default, AutoplayPolicy::AllowAudioAndVideo);
+    VERIFY(snapshot.autoplay_entries.size() == 1);
+    EXPECT_EQ(snapshot.autoplay_entries[0].policy, AutoplayPolicy::BlockAudio);
+
+    // A normal decision with the same value must restore command-line precedence.
+    manager->set_autoplay_policy(maps, AutoplayPolicy::BlockAudio);
+    EXPECT_EQ(manager->autoplay_policy(maps), AutoplayPolicy::AllowAudioAndVideo);
+
+    manager->set_autoplay_policy_for_testing(maps, AutoplayPolicy::BlockAudioAndVideo);
+    EXPECT_EQ(manager->autoplay_policy(maps), AutoplayPolicy::BlockAudioAndVideo);
+    EXPECT_EQ(private_session->autoplay_policy(maps), AutoplayPolicy::BlockAudioAndVideo);
+    auto private_snapshot = private_session->snapshot_for({ maps });
+    VERIFY(private_snapshot.autoplay_entries.size() == 1);
+    EXPECT_EQ(private_snapshot.autoplay_entries[0].policy, AutoplayPolicy::BlockAudioAndVideo);
+
+    auto reloaded = PermissionManager::create_for_ordinary_session(path);
+    EXPECT(!reloaded->autoplay_decision(maps).has_value());
+
+    manager->reset_origin(maps);
+    EXPECT_EQ(manager->autoplay_policy(maps), AutoplayPolicy::AllowAudioAndVideo);
+    EXPECT(manager->snapshot_for({ maps }).autoplay_entries.is_empty());
+}
+
+TEST_CASE(private_autoplay_settings_inherit_blocks_and_defaults)
+{
+    FakeClock clock;
+    auto ordinary = create_manager(clock, "autoplay-private"sv);
+    auto private_session = PermissionManager::create_for_private_session(*ordinary);
+    private_session->set_autoplay_policy(maps, AutoplayPolicy::AllowAudioAndVideo);
+    ordinary->set_autoplay_policy(maps, AutoplayPolicy::BlockAudioAndVideo);
+    EXPECT_EQ(private_session->autoplay_policy(maps), AutoplayPolicy::BlockAudioAndVideo);
+    ordinary->set_autoplay_policy(maps, {});
+    EXPECT_EQ(private_session->autoplay_policy(maps), AutoplayPolicy::AllowAudioAndVideo);
+    EXPECT_EQ(ordinary->autoplay_policy(maps), AutoplayPolicy::BlockAudio);
+
+    ordinary->set_autoplay_default(AutoplayPolicy::BlockAudioAndVideo);
+    EXPECT_EQ(private_session->autoplay_policy(talk), AutoplayPolicy::BlockAudioAndVideo);
+    private_session->reset_origin(maps);
+    auto snapshot = private_session->snapshot_for({ maps });
+    EXPECT_EQ(snapshot.autoplay_default, AutoplayPolicy::BlockAudioAndVideo);
+    EXPECT(snapshot.autoplay_entries.is_empty());
 }

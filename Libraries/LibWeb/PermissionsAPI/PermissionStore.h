@@ -51,6 +51,8 @@ public:
     void apply_snapshot(Web::Permissions::PermissionSnapshot, Notify = Notify::Yes);
     Web::Permissions::EffectiveState state_for(Web::Permissions::PermissionName, URL::Origin const& key, Page&);
 
+    HTML::AutoplayPolicy autoplay_policy_for(URL::Origin const& key, Page&);
+
     void register_status(PermissionStatus&);
 
     // The sites this process holds decisions for.
@@ -59,14 +61,18 @@ public:
 private:
     PermissionStore() = default;
 
+    void ensure_site_is_cached(URL::Origin const&, Page&);
+
     Vector<PermissionStoreEntry> m_entries;
 
     struct CachedSite {
         u64 revision { 0 };
         Vector<Web::Permissions::PermissionSnapshotEntry> entries;
+        Optional<HTML::AutoplayPolicy> autoplay_policy;
     };
     HashMap<String, CachedSite> m_sites;
     Optional<u64> m_defaults_revision;
+    HTML::AutoplayPolicy m_autoplay_default { HTML::AutoplayPolicy::BlockAudio };
     Web::Permissions::EffectiveState m_geolocation_default { Web::Permissions::EffectiveState::Prompt };
     Web::Permissions::EffectiveState m_microphone_default { Web::Permissions::EffectiveState::Prompt };
     Vector<GC::Weak<PermissionStatus>> m_statuses;

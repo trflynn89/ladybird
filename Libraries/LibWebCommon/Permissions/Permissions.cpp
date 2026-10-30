@@ -56,6 +56,8 @@ ErrorOr<void> IPC::encode(Encoder& encoder, Web::Permissions::PermissionSnapshot
     TRY(encoder.encode(snapshot.revision));
     TRY(encoder.encode(snapshot.origins));
     TRY(encoder.encode(snapshot.entries));
+    TRY(encoder.encode(snapshot.autoplay_entries));
+    TRY(encoder.encode(snapshot.autoplay_default));
     TRY(encoder.encode(snapshot.geolocation_default));
     TRY(encoder.encode(snapshot.microphone_default));
     return {};
@@ -67,7 +69,25 @@ ErrorOr<Web::Permissions::PermissionSnapshot> IPC::decode(Decoder& decoder)
     auto revision = TRY(decoder.decode<u64>());
     auto origins = TRY(decoder.decode<Vector<URL::Origin>>());
     auto entries = TRY(decoder.decode<Vector<Web::Permissions::PermissionSnapshotEntry>>());
+    auto autoplay_entries = TRY(decoder.decode<Vector<Web::Permissions::AutoplaySnapshotEntry>>());
+    auto autoplay_default = TRY(decoder.decode<Web::HTML::AutoplayPolicy>());
     auto geolocation_default = TRY(decoder.decode<Web::Permissions::EffectiveState>());
     auto microphone_default = TRY(decoder.decode<Web::Permissions::EffectiveState>());
-    return Web::Permissions::PermissionSnapshot { revision, move(origins), move(entries), geolocation_default, microphone_default };
+    return Web::Permissions::PermissionSnapshot { revision, move(origins), move(entries), move(autoplay_entries), autoplay_default, geolocation_default, microphone_default };
+}
+
+template<>
+ErrorOr<void> IPC::encode(Encoder& encoder, Web::Permissions::AutoplaySnapshotEntry const& entry)
+{
+    TRY(encoder.encode(entry.top_level_origin));
+    TRY(encoder.encode(entry.policy));
+    return {};
+}
+
+template<>
+ErrorOr<Web::Permissions::AutoplaySnapshotEntry> IPC::decode(Decoder& decoder)
+{
+    auto top_level_origin = TRY(decoder.decode<URL::Origin>());
+    auto policy = TRY(decoder.decode<Web::HTML::AutoplayPolicy>());
+    return Web::Permissions::AutoplaySnapshotEntry { move(top_level_origin), policy };
 }

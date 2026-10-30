@@ -91,3 +91,24 @@ TEST_CASE(permission_policies_persist_independently)
     EXPECT_EQ(settings.permission_policy(PermissionName::Microphone), PermissionPolicy::Ask);
     remove_settings_file();
 }
+
+TEST_CASE(autoplay_permission_policy_is_persistent_and_cannot_prompt)
+{
+    using Web::HTML::AutoplayPolicy;
+
+    remove_settings_file();
+    write_settings_file(R"({"autoplay":{"policy":"ask"}})"sv);
+    {
+        auto settings = WebView::Settings::create(settings_path());
+        EXPECT_EQ(settings.autoplay_policy(), AutoplayPolicy::BlockAudio);
+        settings.set_autoplay_policy(AutoplayPolicy::AllowAudioAndVideo);
+    }
+    {
+        auto settings = WebView::Settings::create(settings_path());
+        EXPECT_EQ(settings.autoplay_policy(), AutoplayPolicy::AllowAudioAndVideo);
+        settings.set_autoplay_policy(AutoplayPolicy::BlockAudioAndVideo);
+    }
+    auto settings = WebView::Settings::create(settings_path());
+    EXPECT_EQ(settings.autoplay_policy(), AutoplayPolicy::BlockAudioAndVideo);
+    remove_settings_file();
+}

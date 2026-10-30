@@ -637,7 +637,6 @@ enum class CheckIfUnloadingIsCanceledResult;
 class AnimationFrameCallbackDriver;
 class AudioTrack;
 class AudioTrackList;
-class AutoplaySettings;
 class BarProp;
 class BeforeUnloadEvent;
 class BroadcastChannel;

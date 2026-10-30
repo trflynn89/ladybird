@@ -17,7 +17,6 @@
 #include <LibGfx/Size.h>
 #include <LibHTTP/Cache/DiskCacheSettings.h>
 #include <LibURL/URL.h>
-#include <LibWebCommon/HTML/AutoplayPolicy.h>
 #include <LibWebCommon/Permissions/Permissions.h>
 #include <LibWebCommon/WebView/BrowsingBehavior.h>
 #include <LibWebView/Forward.h>
@@ -77,22 +76,14 @@ struct SearchEngineSettings {
     bool suggestions { false };
 };
 
-struct SiteSetting {
-    OrderedHashTable<String> site_filters;
-
-protected:
-    SiteSetting() = default;
-};
-
-struct AutoplaySiteSetting : public SiteSetting {
-    Web::HTML::AutoplayPolicy policy { Web::HTML::AutoplayPolicy::BlockAudio };
-};
-
-// Whether sites may ask for a permission at all.
+// The default permission decision for sites without a decision of their own.
 enum class PermissionPolicy : u8 {
     Ask,
     Block,
 };
+
+WEBVIEW_API StringView permission_policy_to_string(PermissionPolicy);
+WEBVIEW_API Optional<PermissionPolicy> permission_policy_from_string(StringView);
 
 struct BrowsingDataSettings {
     HTTP::DiskCacheSettings disk_cache_settings;
@@ -153,12 +144,12 @@ public:
     virtual void tab_settings_changed() { }
     virtual void browsing_behavior_changed() { }
     virtual void search_engine_settings_changed() { }
-    virtual void autoplay_settings_changed() { }
     virtual void browsing_data_settings_changed() { }
     virtual void global_privacy_control_changed() { }
     virtual void dns_settings_changed() { }
     virtual void config_variable_changed(ConfigVariableID) { }
     virtual void permission_settings_changed(Web::Permissions::PermissionName) { }
+    virtual void autoplay_settings_changed() { }
     virtual void background_networking_settings_changed() { }
     virtual void content_blocker_settings_changed() { }
 
@@ -220,11 +211,8 @@ public:
     void add_custom_search_engine(SearchEngine);
     void remove_custom_search_engine(SearchEngine const&);
 
-    AutoplaySiteSetting const& autoplay_settings() const { return m_autoplay; }
+    Web::HTML::AutoplayPolicy autoplay_policy() const { return m_autoplay_policy; }
     void set_autoplay_policy(Web::HTML::AutoplayPolicy);
-    void add_autoplay_site_filter(String const&);
-    void remove_autoplay_site_filter(String const&);
-    void remove_all_autoplay_site_filters();
 
     PermissionPolicy permission_policy(Web::Permissions::PermissionName) const;
     void set_permission_policy(Web::Permissions::PermissionName, PermissionPolicy);
@@ -301,7 +289,7 @@ private:
     SearchEngineSettings m_search_engine_settings;
     Vector<SearchEngine> m_custom_search_engines;
 
-    AutoplaySiteSetting m_autoplay;
+    Web::HTML::AutoplayPolicy m_autoplay_policy { Web::HTML::AutoplayPolicy::BlockAudio };
     HashMap<Web::Permissions::PermissionName, PermissionPolicy> m_permission_policies;
 
     BrowsingDataSettings m_browsing_data_settings;

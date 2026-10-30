@@ -6,19 +6,26 @@
 
 #pragma once
 
+#include <AK/Array.h>
 #include <AK/Optional.h>
 #include <AK/StringView.h>
 #include <AK/Vector.h>
 #include <LibIPC/Forward.h>
 #include <LibURL/Origin.h>
 #include <LibWebCommon/Export.h>
+#include <LibWebCommon/HTML/AutoplayPolicy.h>
 
 namespace Web::Permissions {
 
-// The powerful features whose permission the UI process asks the user for.
+// The features whose permission decisions are owned by the UI process.
 enum class PermissionName : u8 {
     Geolocation,
     Microphone,
+};
+
+constexpr inline Array permission_names {
+    PermissionName::Geolocation,
+    PermissionName::Microphone,
 };
 
 WEBCOMMON_API Optional<PermissionName> permission_name_from_string(StringView);
@@ -49,6 +56,11 @@ struct WEBCOMMON_API PermissionSnapshotEntry {
     EffectiveState state;
 };
 
+struct WEBCOMMON_API AutoplaySnapshotEntry {
+    URL::Origin top_level_origin;
+    HTML::AutoplayPolicy policy;
+};
+
 // The effective states of some of a browsing session's sites, as the UI process sends them to a process that reads them:
 // only the sites that process shows, listed in origins. Of those, a site with no entry gets the default for the
 // permission's name.
@@ -56,6 +68,8 @@ struct WEBCOMMON_API PermissionSnapshot {
     u64 revision { 0 };
     Vector<URL::Origin> origins;
     Vector<PermissionSnapshotEntry> entries;
+    Vector<AutoplaySnapshotEntry> autoplay_entries;
+    HTML::AutoplayPolicy autoplay_default { HTML::AutoplayPolicy::BlockAudio };
     EffectiveState geolocation_default { EffectiveState::Prompt };
     EffectiveState microphone_default { EffectiveState::Prompt };
 };
@@ -63,6 +77,12 @@ struct WEBCOMMON_API PermissionSnapshot {
 }
 
 namespace IPC {
+
+template<>
+WEBCOMMON_API ErrorOr<void> encode(Encoder&, Web::Permissions::AutoplaySnapshotEntry const&);
+
+template<>
+WEBCOMMON_API ErrorOr<Web::Permissions::AutoplaySnapshotEntry> decode(Decoder&);
 
 template<>
 WEBCOMMON_API ErrorOr<void> encode(Encoder&, Web::Permissions::PermissionSnapshotEntry const&);

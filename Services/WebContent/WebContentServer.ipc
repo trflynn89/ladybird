@@ -19,7 +19,6 @@
 #include <LibWebCommon/Gamepad/GamepadSnapshot.h>
 #include <LibWebCommon/Gamepad/GamepadStateBuffer.h>
 #include <LibWebCommon/HTML/ApplyHistoryStep.h>
-#include <LibWebCommon/HTML/AutoplayPolicy.h>
 #include <LibWebCommon/HTML/BroadcastChannelMessage.h>
 #include <LibWebCommon/HTML/ColorPickerUpdateState.h>
 #include <LibWebCommon/HTML/CrossProcessId.h>
@@ -254,7 +253,6 @@ endpoint WebContentServer routed by Web::PageId page_id
     set_content_blocking_policy(Web::PageId page_id, bool enabled, Vector<String> disabled_sites) =|
     set_content_blockers(Core::AnonymousBuffer patterns) =|
 
-    set_autoplay_settings(Web::PageId page_id, Web::HTML::AutoplayPolicy policy, Vector<Utf16String> allowlist) =|
     set_preferred_color_scheme(Web::PageId page_id, Web::CSS::PreferredColorScheme color_scheme) =|
     set_preferred_contrast(Web::PageId page_id, Web::CSS::PreferredContrast contrast) =|
     set_preferred_motion(Web::PageId page_id, Web::CSS::PreferredMotion motion) =|

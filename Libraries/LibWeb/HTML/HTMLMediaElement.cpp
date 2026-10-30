@@ -36,7 +36,6 @@
 #include <LibWeb/FileAPI/BlobURLStore.h>
 #include <LibWeb/HTML/AudioTrack.h>
 #include <LibWeb/HTML/AudioTrackList.h>
-#include <LibWeb/HTML/AutoplaySettings.h>
 #include <LibWeb/HTML/CORSSettingAttribute.h>
 #include <LibWeb/HTML/EventLoop/EventLoop.h>
 #include <LibWeb/HTML/HTMLAudioElement.h>
@@ -66,6 +65,7 @@
 #include <LibWeb/Page/ScreenWakeLockHandle.h>
 #include <LibWeb/Painting/BoxViews.h>
 #include <LibWeb/Painting/PaintFacts.h>
+#include <LibWeb/PermissionsAPI/PermissionStore.h>
 #include <LibWeb/Platform/EventLoopPlugin.h>
 #include <LibWeb/StorageAPI/StorageKey.h>
 #include <LibWeb/WebIDL/Promise.h>
@@ -3560,12 +3560,24 @@ bool HTMLMediaElement::is_allowed_to_play() const
     if (auto window = document().window(); window && window->has_sticky_activation())
         return true;
 
-    switch (AutoplaySettings::the().decision_for_origin(document(), document().origin())) {
-    case AutoplayDecision::Allowed:
+    if (!document().is_allowed_to_use_feature(DOM::PolicyControlledFeature::Autoplay))
+        return false;
+
+    // AD-HOC: Allow autoplay for file:// origins.
+    if (document().origin().is_opaque_file_origin())
         return true;
-    case AutoplayDecision::AllowedIfInaudible:
+
+    auto const& top_level_origin = document().relevant_settings_object().top_level_origin;
+    if (!top_level_origin.has_value() || !document().window())
+        return false;
+
+    auto policy = PermissionsAPI::PermissionStore::the().autoplay_policy_for(*top_level_origin, document().window()->page());
+    switch (policy) {
+    case AutoplayPolicy::AllowAudioAndVideo:
+        return true;
+    case AutoplayPolicy::BlockAudio:
         return effective_media_volume() == 0.0;
-    case AutoplayDecision::Blocked:
+    case AutoplayPolicy::BlockAudioAndVideo:
         return false;
     }
 

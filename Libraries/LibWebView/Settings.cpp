@@ -10,7 +10,6 @@
 #include <AK/JsonObject.h>
 #include <AK/JsonValue.h>
 #include <AK/Random.h>
-#include <AK/Utf16String.h>
 #include <LibCore/GeolocationProvider.h>
 #include <LibCore/StandardPaths.h>
 #include <LibURL/InternalURLs.h>
@@ -71,9 +70,6 @@ static constexpr auto SEARCH_SUGGESTIONS_ENABLED_KEY = "suggestions"sv;
 static constexpr auto SEARCH_SUGGESTIONS_URL_KEY = "suggestionsUrl"sv;
 
 static constexpr auto SITE_SETTING_POLICY_KEY = "policy"sv;
-static constexpr auto SITE_SETTING_SITE_FILTERS_KEY = "siteFilters"sv;
-
-static constexpr auto AUTOPLAY_KEY = "autoplay"sv;
 
 static constexpr auto BROWSING_DATA_KEY = "browsingData"sv;
 static constexpr auto DISK_CACHE_KEY = "diskCache"sv;
@@ -399,35 +395,19 @@ Settings Settings::create(ByteString settings_path, Vector<String> platform_lang
         }
     }
 
-    auto load_site_setting = [&](AutoplaySiteSetting& site_setting, StringView key) {
-        auto saved_settings = settings_json.value().get_object(key);
-        if (!saved_settings.has_value())
-            return;
-
-        if (auto policy = saved_settings->get_string(SITE_SETTING_POLICY_KEY); policy.has_value()) {
-            auto policy_utf16 = Utf16String::from_utf8_without_validation(*policy);
-            if (auto parsed = Web::HTML::autoplay_policy_from_string(policy_utf16.utf16_view()); parsed.has_value())
-                site_setting.policy = *parsed;
+    if (auto autoplay = settings_json.value().get_object("autoplay"sv); autoplay.has_value()) {
+        if (auto policy = autoplay->get_string(SITE_SETTING_POLICY_KEY); policy.has_value()) {
+            if (auto parsed = Web::HTML::autoplay_policy_from_string(*policy); parsed.has_value())
+                settings.m_autoplay_policy = *parsed;
         }
+    }
 
-        if (auto site_filters = saved_settings->get_array(SITE_SETTING_SITE_FILTERS_KEY); site_filters.has_value()) {
-            site_setting.site_filters.clear();
-
-            site_filters->for_each([&](auto const& site_filter) {
-                if (site_filter.is_string())
-                    site_setting.site_filters.set(site_filter.as_string());
-            });
-        }
-    };
-
-    load_site_setting(settings.m_autoplay, AUTOPLAY_KEY);
-
-    for (auto name : { Web::Permissions::PermissionName::Geolocation, Web::Permissions::PermissionName::Microphone }) {
+    for (auto name : Web::Permissions::permission_names) {
         if (auto setting = settings_json.value().get_object(Web::Permissions::to_string(name)); setting.has_value()) {
-            if (auto policy = setting->get_string(SITE_SETTING_POLICY_KEY); policy == "ask"sv)
-                settings.m_permission_policies.set(name, PermissionPolicy::Ask);
-            else if (policy == "block"sv)
-                settings.m_permission_policies.set(name, PermissionPolicy::Block);
+            if (auto policy = setting->get_string(SITE_SETTING_POLICY_KEY); policy.has_value()) {
+                if (auto parsed = permission_policy_from_string(*policy); parsed.has_value())
+                    settings.m_permission_policies.set(name, *parsed);
+            }
         }
     }
 
@@ -632,27 +612,15 @@ JsonValue Settings::serialize_json() const
     search_engine.set(SEARCH_SUGGESTIONS_ENABLED_KEY, m_search_engine_settings.suggestions);
     settings.set(SEARCH_ENGINE_KEY, move(search_engine));
 
-    auto save_site_setting = [&](AutoplaySiteSetting const& site_setting, StringView key) {
-        JsonArray site_filters;
-        site_filters.ensure_capacity(site_setting.site_filters.size());
-
-        for (auto const& site_filter : site_setting.site_filters)
-            site_filters.must_append(site_filter);
-
+    for (auto name : Web::Permissions::permission_names) {
         JsonObject setting;
-        setting.set(SITE_SETTING_POLICY_KEY, MUST(Web::HTML::autoplay_policy_to_string(site_setting.policy).to_utf8()));
-        setting.set(SITE_SETTING_SITE_FILTERS_KEY, move(site_filters));
-
-        settings.set(key, move(setting));
-    };
-
-    save_site_setting(m_autoplay, AUTOPLAY_KEY);
-
-    for (auto name : { Web::Permissions::PermissionName::Geolocation, Web::Permissions::PermissionName::Microphone }) {
-        JsonObject setting;
-        setting.set(SITE_SETTING_POLICY_KEY, permission_policy(name) == PermissionPolicy::Block ? "block"sv : "ask"sv);
+        setting.set(SITE_SETTING_POLICY_KEY, permission_policy_to_string(permission_policy(name)));
         settings.set(Web::Permissions::to_string(name), move(setting));
     }
+
+    JsonObject autoplay;
+    autoplay.set(SITE_SETTING_POLICY_KEY, Web::HTML::autoplay_policy_to_string(m_autoplay_policy));
+    settings.set("autoplay"sv, move(autoplay));
 
     JsonObject disk_cache_settings;
     disk_cache_settings.set(DISK_CACHE_MAXIMUM_SIZE_KEY, m_browsing_data_settings.disk_cache_settings.maximum_size);
@@ -1080,44 +1048,24 @@ Optional<SearchEngine> Settings::find_search_engine_by_name(StringView name) con
     return {};
 }
 
-void Settings::set_autoplay_policy(Web::HTML::AutoplayPolicy policy)
+StringView permission_policy_to_string(PermissionPolicy policy)
 {
-    m_autoplay.policy = policy;
-    persist_settings();
-
-    for (auto& observer : m_observers)
-        observer.autoplay_settings_changed();
+    switch (policy) {
+    case PermissionPolicy::Ask:
+        return "ask"sv;
+    case PermissionPolicy::Block:
+        return "block"sv;
+    }
+    VERIFY_NOT_REACHED();
 }
 
-void Settings::add_autoplay_site_filter(String const& site_filter)
+Optional<PermissionPolicy> permission_policy_from_string(StringView policy)
 {
-    auto trimmed_site_filter = MUST(site_filter.trim_whitespace());
-    if (trimmed_site_filter.is_empty())
-        return;
-
-    m_autoplay.site_filters.set(move(trimmed_site_filter));
-    persist_settings();
-
-    for (auto& observer : m_observers)
-        observer.autoplay_settings_changed();
-}
-
-void Settings::remove_autoplay_site_filter(String const& site_filter)
-{
-    m_autoplay.site_filters.remove(site_filter);
-    persist_settings();
-
-    for (auto& observer : m_observers)
-        observer.autoplay_settings_changed();
-}
-
-void Settings::remove_all_autoplay_site_filters()
-{
-    m_autoplay.site_filters.clear();
-    persist_settings();
-
-    for (auto& observer : m_observers)
-        observer.autoplay_settings_changed();
+    if (policy == "block"sv)
+        return PermissionPolicy::Block;
+    if (policy == "ask"sv)
+        return PermissionPolicy::Ask;
+    return {};
 }
 
 PermissionPolicy Settings::permission_policy(Web::Permissions::PermissionName name) const
@@ -1132,6 +1080,16 @@ void Settings::set_permission_policy(Web::Permissions::PermissionName name, Perm
 
     for (auto& observer : m_observers)
         observer.permission_settings_changed(name);
+}
+
+void Settings::set_autoplay_policy(Web::HTML::AutoplayPolicy policy)
+{
+    if (m_autoplay_policy == policy)
+        return;
+    m_autoplay_policy = policy;
+    persist_settings();
+    for (auto& observer : m_observers)
+        observer.autoplay_settings_changed();
 }
 
 BrowsingDataSettings Settings::parse_browsing_data_settings(JsonValue const& settings)

@@ -46,7 +46,6 @@ URL::Origin permission_key_generation_algorithm(URL::Origin const& origin, URL::
     // This is known as permission delegation.
 }
 
-// FIXME: This should be store at the user-agent level (IPC to the browser process)
 PermissionStore& PermissionStore::the()
 {
     static auto& s_the = *new PermissionStore;
@@ -88,6 +87,7 @@ void PermissionStore::apply_snapshot(Web::Permissions::PermissionSnapshot snapsh
 
     if (!m_defaults_revision.has_value() || snapshot.revision > *m_defaults_revision) {
         m_defaults_revision = snapshot.revision;
+        m_autoplay_default = snapshot.autoplay_default;
         m_geolocation_default = snapshot.geolocation_default;
         m_microphone_default = snapshot.microphone_default;
         changed = true;
@@ -98,10 +98,14 @@ void PermissionStore::apply_snapshot(Web::Permissions::PermissionSnapshot snapsh
         if (auto cached = m_sites.get(key); cached.has_value() && snapshot.revision <= cached->revision)
             continue;
 
-        CachedSite site { .revision = snapshot.revision, .entries = {} };
+        CachedSite site { .revision = snapshot.revision, .entries = {}, .autoplay_policy = {} };
         for (auto const& entry : snapshot.entries) {
             if (entry.top_level_origin.is_same_origin(origin))
                 site.entries.append(entry);
+        }
+        for (auto const& entry : snapshot.autoplay_entries) {
+            if (entry.top_level_origin.is_same_origin(origin))
+                site.autoplay_policy = entry.policy;
         }
         m_sites.set(key, move(site));
         changed = true;
@@ -148,12 +152,8 @@ Web::Permissions::EffectiveState PermissionStore::state_for(Web::Permissions::Pe
     if (key.is_opaque())
         return default_state();
 
+    ensure_site_is_cached(key, page);
     auto serialized_key = key.serialize();
-    if (!m_sites.contains(serialized_key)) {
-        // No status has seen this site's state yet, so there's nothing to tell them about.
-        if (auto snapshot = page.client().page_did_request_permission_snapshot(key); snapshot.has_value())
-            apply_snapshot(snapshot.release_value(), Notify::No);
-    }
 
     if (auto site = m_sites.get(serialized_key); site.has_value()) {
         for (auto const& entry : site->entries) {
@@ -164,11 +164,27 @@ Web::Permissions::EffectiveState PermissionStore::state_for(Web::Permissions::Pe
     return default_state();
 }
 
+void PermissionStore::ensure_site_is_cached(URL::Origin const& key, Page& page)
+{
+    if (!key.is_opaque() && !m_sites.contains(key.serialize())) {
+        if (auto snapshot = page.client().page_did_request_permission_snapshot(key); snapshot.has_value())
+            apply_snapshot(snapshot.release_value(), Notify::No);
+    }
+}
+
+HTML::AutoplayPolicy PermissionStore::autoplay_policy_for(URL::Origin const& key, Page& page)
+{
+    ensure_site_is_cached(key, page);
+    if (auto site = m_sites.get(key.serialize()); site.has_value())
+        return site->autoplay_policy.value_or(m_autoplay_default);
+    return m_autoplay_default;
+}
+
 Vector<String> PermissionStore::cached_origins_for_testing() const
 {
     Vector<String> origins;
     for (auto const& it : m_sites) {
-        if (!it.value.entries.is_empty())
+        if (!it.value.entries.is_empty() || it.value.autoplay_policy.has_value())
             origins.append(it.key);
     }
     return origins;

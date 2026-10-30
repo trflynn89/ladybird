@@ -12,6 +12,7 @@
 
 namespace WebView {
 
+using Web::HTML::AutoplayPolicy;
 using Web::Permissions::EffectiveState;
 using Web::Permissions::PermissionName;
 using Web::Permissions::PromptOutcome;
@@ -149,10 +150,14 @@ void PermissionManager::remove_empty_entries()
 
 EffectiveState PermissionManager::effective_state(PermissionName name, URL::Origin const& origin) const
 {
+    auto const* entry = find_entry(name, origin);
+    auto const* inherited_entry = m_ordinary_session ? m_ordinary_session->find_entry(name, origin) : nullptr;
+    if (inherited_entry && inherited_entry->for_testing && inherited_entry->decision == PermissionDecision::Block)
+        return EffectiveState::Denied;
     if (ordinary_session_blocks(name, origin))
         return EffectiveState::Denied;
 
-    if (auto const* entry = find_entry(name, origin)) {
+    if (entry) {
         if (entry->decision == PermissionDecision::Block)
             return EffectiveState::Denied;
 
@@ -208,18 +213,29 @@ Optional<PermissionDecision> PermissionManager::decision(PermissionName name, UR
 
 void PermissionManager::set_decision(PermissionName name, URL::Origin const& origin, Optional<PermissionDecision> decision)
 {
+    set_decision_impl(name, origin, decision, false);
+}
+
+void PermissionManager::set_decision_for_testing(PermissionName name, URL::Origin const& origin, Optional<PermissionDecision> decision)
+{
+    set_decision_impl(name, origin, decision, true);
+}
+
+void PermissionManager::set_decision_impl(PermissionName name, URL::Origin const& origin, Optional<PermissionDecision> decision, bool for_testing)
+{
     if (origin.is_opaque())
         return;
     bump_generation(name, origin);
 
     auto const* existing = find_entry(name, origin);
-    if (existing && existing->decision == decision && existing->dismissals == 0 && existing->ignores == 0 && !existing->embargo_until.has_value())
+    if (existing && existing->decision == decision && existing->for_testing == for_testing && existing->dismissals == 0 && existing->ignores == 0 && !existing->embargo_until.has_value())
         return;
     if (!existing && !decision.has_value())
         return;
 
     auto& entry = ensure_entry(name, origin);
     entry.decision = decision;
+    entry.for_testing = for_testing;
     entry.decided_at = now();
     entry.hidden_since = {};
     entry.dismissals = 0;
@@ -234,10 +250,11 @@ void PermissionManager::set_decision(PermissionName name, URL::Origin const& ori
 
 void PermissionManager::reset_origin(URL::Origin const& origin)
 {
-    for (auto name : { PermissionName::Geolocation, PermissionName::Microphone })
+    for (auto name : Web::Permissions::permission_names)
         bump_generation(name, origin);
 
     auto removed = m_entries.remove_all_matching([&](auto const& entry) { return entry.origin.is_same_origin(origin); });
+    removed += m_autoplay_entries.remove_all_matching([&](auto const& entry) { return entry.origin.is_same_origin(origin); });
     if (removed)
         did_change();
 }
@@ -355,6 +372,95 @@ void PermissionManager::set_global_default(PermissionName name, EffectiveState s
     did_change();
 }
 
+AutoplayPolicy PermissionManager::autoplay_default() const
+{
+    return m_ordinary_session ? m_ordinary_session->autoplay_default() : m_autoplay_default;
+}
+
+PermissionManager::AutoplayEntry const* PermissionManager::find_autoplay_entry(URL::Origin const& origin) const
+{
+    for (auto const& entry : m_autoplay_entries) {
+        if (entry.origin.is_same_origin(origin))
+            return &entry;
+    }
+    return nullptr;
+}
+
+Optional<AutoplayPolicy> PermissionManager::autoplay_decision(URL::Origin const& origin) const
+{
+    if (m_ordinary_session && m_ordinary_session->autoplay_decision(origin) == AutoplayPolicy::BlockAudioAndVideo)
+        return AutoplayPolicy::BlockAudioAndVideo;
+    if (auto* entry = find_autoplay_entry(origin))
+        return entry->policy;
+    return {};
+}
+
+AutoplayPolicy PermissionManager::autoplay_policy(URL::Origin const& origin) const
+{
+    auto* entry = find_autoplay_entry(origin);
+    auto* inherited_entry = m_ordinary_session ? m_ordinary_session->find_autoplay_entry(origin) : nullptr;
+    if (inherited_entry && inherited_entry->for_testing && inherited_entry->policy == AutoplayPolicy::BlockAudioAndVideo)
+        return AutoplayPolicy::BlockAudioAndVideo;
+    if ((m_ordinary_session ? m_ordinary_session->m_autoplay_forcibly_enabled : m_autoplay_forcibly_enabled) && !(entry && entry->for_testing))
+        return AutoplayPolicy::AllowAudioAndVideo;
+    return autoplay_decision(origin).value_or(autoplay_default());
+}
+
+void PermissionManager::set_autoplay_policy(URL::Origin const& origin, Optional<AutoplayPolicy> policy)
+{
+    set_autoplay_policy_impl(origin, policy, false);
+}
+
+void PermissionManager::set_autoplay_policy_for_testing(URL::Origin const& origin, Optional<AutoplayPolicy> policy)
+{
+    set_autoplay_policy_impl(origin, policy, true);
+}
+
+void PermissionManager::set_autoplay_policy_impl(URL::Origin const& origin, Optional<AutoplayPolicy> policy, bool for_testing)
+{
+    if (origin.is_opaque())
+        return;
+    auto* entry = find_autoplay_entry(origin);
+    if (!policy.has_value()) {
+        if (m_autoplay_entries.remove_all_matching([&](auto const& entry) { return entry.origin.is_same_origin(origin); }))
+            did_change();
+        return;
+    }
+    if (entry && entry->policy == *policy && entry->for_testing == for_testing)
+        return;
+    if (entry)
+        *const_cast<AutoplayEntry*>(entry) = { origin, *policy, for_testing };
+    else
+        m_autoplay_entries.append({ origin, *policy, for_testing });
+    did_change();
+}
+
+void PermissionManager::set_autoplay_default(AutoplayPolicy policy)
+{
+    VERIFY(!m_ordinary_session);
+    if (m_autoplay_default == policy)
+        return;
+    m_autoplay_default = policy;
+    did_change();
+}
+
+Vector<SiteAutoplayPolicy> PermissionManager::site_autoplay_policies() const
+{
+    Vector<SiteAutoplayPolicy> policies;
+    for (auto const& entry : m_autoplay_entries)
+        policies.append({ entry.origin, entry.policy });
+    return policies;
+}
+
+void PermissionManager::set_autoplay_forcibly_enabled(bool enabled)
+{
+    VERIFY(!m_ordinary_session);
+    if (m_autoplay_forcibly_enabled == enabled)
+        return;
+    m_autoplay_forcibly_enabled = enabled;
+    did_change();
+}
+
 void PermissionManager::set_os_denies_geolocation(bool denies)
 {
     VERIFY(!m_ordinary_session);
@@ -368,6 +474,9 @@ Web::Permissions::PermissionSnapshot PermissionManager::snapshot() const
 {
     Web::Permissions::PermissionSnapshot snapshot;
     snapshot.revision = m_revision;
+    snapshot.autoplay_default = (m_ordinary_session ? m_ordinary_session->m_autoplay_forcibly_enabled : m_autoplay_forcibly_enabled)
+        ? AutoplayPolicy::AllowAudioAndVideo
+        : autoplay_default();
     snapshot.geolocation_default = global_default(PermissionName::Geolocation);
     snapshot.microphone_default = global_default(PermissionName::Microphone);
 
@@ -391,6 +500,24 @@ Web::Permissions::PermissionSnapshot PermissionManager::snapshot() const
         }
     }
 
+    auto add_autoplay_entry = [&](URL::Origin const& origin) {
+        auto policy = autoplay_policy(origin);
+        if (policy == snapshot.autoplay_default)
+            return;
+        for (auto const& entry : snapshot.autoplay_entries) {
+            if (entry.top_level_origin.is_same_origin(origin))
+                return;
+        }
+        snapshot.autoplay_entries.append({ origin, policy });
+    };
+    for (auto const& entry : m_autoplay_entries)
+        add_autoplay_entry(entry.origin);
+    if (m_ordinary_session) {
+        for (auto const& entry : m_ordinary_session->m_autoplay_entries) {
+            if (entry.policy == AutoplayPolicy::BlockAudioAndVideo)
+                add_autoplay_entry(entry.origin);
+        }
+    }
     return snapshot;
 }
 
@@ -398,6 +525,9 @@ Web::Permissions::PermissionSnapshot PermissionManager::snapshot_for(Vector<URL:
 {
     auto full = snapshot();
     full.entries.remove_all_matching([&](auto const& entry) {
+        return !origins.contains_slow(entry.top_level_origin);
+    });
+    full.autoplay_entries.remove_all_matching([&](auto const& entry) {
         return !origins.contains_slow(entry.top_level_origin);
     });
     full.origins = origins;
@@ -528,7 +658,19 @@ void PermissionManager::load()
         decisions->for_each([&](JsonValue const& value) {
             if (!value.is_object())
                 return;
-            auto entry = read_key(value.as_object());
+            auto const& object = value.as_object();
+            if (object.get_string("permission"sv) == "autoplay"sv) {
+                auto origin = object.get_string("origin"sv).map([](auto const& string) { return origin_from_string(string); });
+                auto policy = object.get_string("decision"sv).map([](auto const& string) { return Web::HTML::autoplay_policy_from_string(string); });
+                if (origin.has_value() && origin->has_value() && policy.has_value() && policy->has_value()) {
+                    if (auto* existing = find_autoplay_entry(**origin))
+                        const_cast<AutoplayEntry*>(existing)->policy = **policy;
+                    else
+                        m_autoplay_entries.append({ origin->release_value(), **policy });
+                }
+                return;
+            }
+            auto entry = read_key(object);
             auto decision = value.as_object().get_string("decision"sv).map([](auto const& string) { return persisted_decision_from_string(string); });
             if (!entry.has_value() || !decision.has_value() || !decision->has_value())
                 return;
@@ -564,10 +706,12 @@ void PermissionManager::persist() const
     JsonArray embargoes;
 
     for (auto const& entry : m_entries) {
+        if (entry.for_testing)
+            continue;
         auto origin = entry.origin.serialize();
         auto name = MUST(String::from_utf8(Web::Permissions::to_string(entry.name)));
 
-        if (entry.decision == PermissionDecision::Allow || entry.decision == PermissionDecision::Block) {
+        if (entry.decision.has_value() && entry.decision != PermissionDecision::AllowOnce) {
             JsonObject object;
             object.set("origin"sv, origin);
             object.set("permission"sv, name);
@@ -587,6 +731,16 @@ void PermissionManager::persist() const
                 object.set("until"sv, JsonValue {});
             embargoes.must_append(move(object));
         }
+    }
+
+    for (auto const& entry : m_autoplay_entries) {
+        if (entry.for_testing)
+            continue;
+        JsonObject object;
+        object.set("origin"sv, entry.origin.serialize());
+        object.set("permission"sv, "autoplay"sv);
+        object.set("decision"sv, Web::HTML::autoplay_policy_to_string(entry.policy));
+        decisions.must_append(move(object));
     }
 
     JsonObject json;

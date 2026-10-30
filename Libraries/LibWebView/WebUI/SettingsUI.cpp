@@ -6,12 +6,10 @@
 
 #include <AK/JsonArray.h>
 #include <AK/Platform.h>
-#include <AK/Utf16String.h>
 #include <LibCore/EventLoop.h>
 #include <LibCore/GeolocationProvider.h>
 #include <LibCore/Promise.h>
 #include <LibURL/Parser.h>
-#include <LibWebCommon/HTML/AutoplayPolicy.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/BrowsingSession.h>
 #include <LibWebView/CrashReport.h>
@@ -157,17 +155,11 @@ void SettingsUI::register_interfaces()
     register_interface("loadForciblyEnabledSiteSettings"sv, [this](auto const&) {
         load_forcibly_enabled_site_settings();
     });
-    register_interface("setSiteSettingPolicy"sv, [this](auto const& data) {
-        set_site_setting_policy(data);
+    register_interface("setPermissionPolicy"sv, [this](auto const& data) {
+        set_permission_policy(data);
     });
-    register_interface("addSiteSettingFilter"sv, [this](auto const& data) {
-        add_site_setting_filter(data);
-    });
-    register_interface("removeSiteSettingFilter"sv, [this](auto const& data) {
-        remove_site_setting_filter(data);
-    });
-    register_interface("removeAllSiteSettingFilters"sv, [this](auto const& data) {
-        remove_all_site_setting_filters(data);
+    register_interface("removeAllSitePermissions"sv, [this](auto const& data) {
+        remove_all_site_permissions(data);
     });
 
     register_interface("estimateBrowsingDataSizes"sv, [this](auto const& data) {
@@ -226,7 +218,7 @@ JsonObject SettingsUI::serialize_settings() const
 
     // The sites the user allowed or blocked, for each permission.
     JsonObject site_permissions;
-    for (auto name : { Web::Permissions::PermissionName::Geolocation, Web::Permissions::PermissionName::Microphone }) {
+    for (auto name : Web::Permissions::permission_names) {
         JsonArray sites;
         for (auto const& site : Application::the().default_session().permission_manager->site_decisions(name)) {
             JsonObject entry;
@@ -246,6 +238,14 @@ JsonObject SettingsUI::serialize_settings() const
         }
         site_permissions.set(Web::Permissions::to_string(name), move(sites));
     }
+    JsonArray autoplay_sites;
+    for (auto const& site : Application::the().default_session().permission_manager->site_autoplay_policies()) {
+        JsonObject object;
+        object.set("origin"sv, site.origin.serialize());
+        object.set("decision"sv, Web::HTML::autoplay_policy_to_string(site.policy));
+        autoplay_sites.must_append(move(object));
+    }
+    site_permissions.set("autoplay"sv, move(autoplay_sites));
     settings.as_object().set("sitePermissions"sv, move(site_permissions));
 
     JsonArray config_variables;
@@ -471,61 +471,38 @@ void SettingsUI::load_forcibly_enabled_site_settings()
     async_send_message("forciblyEnableSiteSettings"sv, move(site_settings));
 }
 
-void SettingsUI::set_site_setting_policy(JsonValue const& site_setting)
+void SettingsUI::set_permission_policy(JsonValue const& site_setting)
 {
     if (!site_setting.is_object())
         return;
 
-    auto setting = site_setting.as_object().get_string("setting"sv);
+    auto setting = site_setting.as_object().get_string("permission"sv);
     auto policy = site_setting.as_object().get_string("policy"sv);
     if (!setting.has_value() || !policy.has_value())
         return;
 
     if (*setting == "autoplay"sv) {
-        auto policy_utf16 = Utf16String::from_utf8_without_validation(*policy);
-        if (auto parsed = Web::HTML::autoplay_policy_from_string(policy_utf16.utf16_view()); parsed.has_value())
+        if (auto parsed = Web::HTML::autoplay_policy_from_string(*policy); parsed.has_value())
             Application::settings().set_autoplay_policy(*parsed);
     } else if (auto name = Web::Permissions::permission_name_from_string(*setting); name.has_value()) {
-        if (*policy == "ask"sv)
-            Application::settings().set_permission_policy(*name, PermissionPolicy::Ask);
-        else if (*policy == "block"sv)
-            Application::settings().set_permission_policy(*name, PermissionPolicy::Block);
+        if (auto parsed = permission_policy_from_string(*policy); parsed.has_value())
+            Application::settings().set_permission_policy(*name, *parsed);
     }
 }
 
-void SettingsUI::add_site_setting_filter(JsonValue const& site_setting)
+void SettingsUI::remove_all_site_permissions(JsonValue const& site_setting)
 {
     if (!site_setting.is_object())
         return;
 
-    auto setting = site_setting.as_object().get_string("setting"sv);
-    auto filter = site_setting.as_object().get_string("filter"sv);
-    if (setting == "autoplay"sv && filter.has_value())
-        Application::settings().add_autoplay_site_filter(*filter);
-}
-
-void SettingsUI::remove_site_setting_filter(JsonValue const& site_setting)
-{
-    if (!site_setting.is_object())
-        return;
-
-    auto setting = site_setting.as_object().get_string("setting"sv);
-    auto filter = site_setting.as_object().get_string("filter"sv);
-    if (setting == "autoplay"sv && filter.has_value())
-        Application::settings().remove_autoplay_site_filter(*filter);
-}
-
-void SettingsUI::remove_all_site_setting_filters(JsonValue const& site_setting)
-{
-    if (!site_setting.is_object())
-        return;
-
-    auto setting = site_setting.as_object().get_string("setting"sv);
+    auto setting = site_setting.as_object().get_string("permission"sv);
     if (!setting.has_value())
         return;
 
     if (*setting == "autoplay"sv) {
-        Application::settings().remove_all_autoplay_site_filters();
+        auto& manager = *Application::the().default_session().permission_manager;
+        for (auto const& site : manager.site_autoplay_policies())
+            manager.set_autoplay_policy(site.origin, {});
     } else if (auto name = Web::Permissions::permission_name_from_string(*setting); name.has_value()) {
         auto& manager = *Application::the().default_session().permission_manager;
         for (auto const& site : manager.site_decisions(*name))
@@ -539,15 +516,28 @@ void SettingsUI::set_site_permission(JsonValue const& data)
         return;
     auto const& object = data.as_object();
 
-    auto name = object.get_string("permission"sv).map([](auto const& string) { return Web::Permissions::permission_name_from_string(string); });
+    auto setting = object.get_string("permission"sv);
     auto origin_string = object.get_string("origin"sv);
-    if (!name.has_value() || !name->has_value() || !origin_string.has_value())
+    if (!setting.has_value() || !origin_string.has_value())
         return;
 
     auto url = URL::Parser::basic_parse(*origin_string);
     if (!url.has_value() || url->origin().is_opaque())
         return;
 
+    if (*setting == "autoplay"sv) {
+        Optional<Web::HTML::AutoplayPolicy> policy;
+        if (auto value = object.get_string("decision"sv); value.has_value()) {
+            policy = Web::HTML::autoplay_policy_from_string(*value);
+            if (!policy.has_value())
+                return;
+        }
+        Application::the().default_session().permission_manager->set_autoplay_policy(url->origin(), policy);
+        return;
+    }
+    auto name = Web::Permissions::permission_name_from_string(*setting);
+    if (!name.has_value())
+        return;
     Optional<PermissionDecision> decision;
     if (auto value = object.get_string("decision"sv); value.has_value()) {
         if (*value == "allow"sv)
@@ -558,7 +548,7 @@ void SettingsUI::set_site_permission(JsonValue const& data)
             return;
     }
 
-    Application::the().default_session().permission_manager->set_decision(**name, url->origin(), decision);
+    Application::the().default_session().permission_manager->set_decision(*name, url->origin(), decision);
 }
 
 void SettingsUI::estimate_browsing_data_sizes(JsonValue const& options)
