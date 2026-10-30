@@ -31,18 +31,18 @@ def run_browser(webdriver_binary, settings, check):
                 assert status == 200, raw
                 return payload["value"]
 
-            def switch_state():
-                command("url", {"url": "about:settings"})
+            def policy_state():
+                command("url", {"url": "about:settings#notifications-permissions"})
                 return command(
                     "execute/async",
                     {
                         "script": """
                         const done = arguments[0];
-                        const toggle = document.querySelector('#enable-notifications');
+                        const select = document.querySelector('#site-settings-policy');
                         document.addEventListener('WebUIMessage', function listener(event) {
                             if (event.detail.name !== 'loadSettings') return;
                             document.removeEventListener('WebUIMessage', listener);
-                            setTimeout(() => done(toggle.checked));
+                            setTimeout(() => done(select.value));
                         });
                         // The page may have loaded its settings already, so ask for them again.
                         if (window.ladybird) ladybird.sendMessage('loadCurrentSettings');
@@ -51,7 +51,7 @@ def run_browser(webdriver_binary, settings, check):
                     },
                 )
 
-            def toggle_switch():
+            def toggle_policy():
                 command(
                     "execute/async",
                     {
@@ -62,13 +62,15 @@ def run_browser(webdriver_binary, settings, check):
                             document.removeEventListener('WebUIMessage', listener);
                             done();
                         });
-                        document.querySelector('#enable-notifications').click();
+                        const select = document.querySelector('#site-settings-policy');
+                        select.value = select.value === 'ask' ? 'block' : 'ask';
+                        select.dispatchEvent(new Event('change'));
                     """,
                         "args": [],
                     },
                 )
 
-            check(switch_state, toggle_switch, settings_file)
+            check(policy_state, toggle_policy, settings_file)
         finally:
             if session is not None:
                 helpers["request"](port, "DELETE", f"/session/{session}")
@@ -81,21 +83,23 @@ def run_browser(webdriver_binary, settings, check):
 
 
 def run_test(webdriver_binary):
-    def check_fresh_profile(switch_state, toggle_switch, settings_file):
-        assert switch_state(), "a profile that never chose a notifications policy should let sites ask"
-        toggle_switch()
+    def check_fresh_profile(policy_state, toggle_policy, settings_file):
+        assert policy_state() == "ask", "a profile that never chose a notifications policy should let sites ask"
+        toggle_policy()
         saved = json.loads(settings_file.read_text())
-        assert saved.get("notificationsPolicy") == "block", saved
-        toggle_switch()
+        assert saved["notifications"]["policy"] == "block", saved
+        toggle_policy()
         saved = json.loads(settings_file.read_text())
-        assert saved.get("notificationsPolicy") == "ask", saved
+        assert saved["notifications"]["policy"] == "ask", saved
 
     run_browser(webdriver_binary, {"firstRunComplete": True}, check_fresh_profile)
 
-    def check_blocking_profile(switch_state, toggle_switch, settings_file):
-        assert not switch_state(), "a profile whose notifications policy is block should keep sites from asking"
+    def check_blocking_profile(policy_state, toggle_policy, settings_file):
+        assert policy_state() == "block", "a profile whose notifications policy is block should keep sites from asking"
 
-    run_browser(webdriver_binary, {"firstRunComplete": True, "notificationsPolicy": "block"}, check_blocking_profile)
+    run_browser(
+        webdriver_binary, {"firstRunComplete": True, "notifications": {"policy": "block"}}, check_blocking_profile
+    )
     print("PASS: the notifications policy defaults to letting sites ask, and a saved block stays")
 
 
