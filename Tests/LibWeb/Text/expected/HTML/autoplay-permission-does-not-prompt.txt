@@ -1,0 +1,9 @@
+allow-audio-and-video: TypeError
+muted=false: played
+muted=true: played
+block-audio: TypeError
+muted=false: NotAllowedError
+muted=true: played
+block-audio-and-video: TypeError
+muted=false: NotAllowedError
+muted=true: NotAllowedError

@@ -426,7 +426,6 @@ set(SOURCES
     HTML/AudioTrack.cpp
     HTML/AudioTrackList.cpp
     HTML/AutocompleteElement.cpp
-    HTML/AutoplaySettings.cpp
     HTML/BarProp.cpp
     HTML/BeforeUnloadEvent.cpp
     HTML/BroadcastChannel.cpp

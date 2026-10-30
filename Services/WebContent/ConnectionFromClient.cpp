@@ -57,7 +57,6 @@
 #include <LibWeb/Fetch/Fetching/Fetching.h>
 #include <LibWeb/FileAPI/BlobURLStore.h>
 #include <LibWeb/Gamepad/GamepadRegistry.h>
-#include <LibWeb/HTML/AutoplaySettings.h>
 #include <LibWeb/HTML/BroadcastChannel.h>
 #include <LibWeb/HTML/BrowsingContext.h>
 #include <LibWeb/HTML/EventLoop/EventLoop.h>
@@ -3227,11 +3226,6 @@ void ConnectionFromClient::set_force_dark_settings(Web::PageId page_id, bool ena
 {
     if (auto page = this->page(page_id); page.has_value() && page->page().has_local_traversable())
         page->page().local_traversable()->set_force_dark_settings(enabled, move(per_host));
-}
-
-void ConnectionFromClient::set_autoplay_settings(Web::PageId, Web::HTML::AutoplayPolicy policy, Vector<Utf16String> allowlist)
-{
-    Web::HTML::AutoplaySettings::the().set_policy(policy, allowlist);
 }
 
 void ConnectionFromClient::set_preferred_color_scheme(Web::PageId page_id, Web::CSS::PreferredColorScheme color_scheme)

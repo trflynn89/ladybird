@@ -166,6 +166,11 @@ struct ApplicationSettingsObserver final : public SettingsObserver {
         Application::the().content_blocker_settings_changed({});
     }
 
+    virtual void autoplay_settings_changed() override
+    {
+        Application::the().permission_policy_changed({});
+    }
+
     virtual void permission_settings_changed(Web::Permissions::PermissionName) override
     {
         Application::the().permission_policy_changed({});
@@ -3074,6 +3079,9 @@ Core::GeolocationAuthorization Application::geolocation_authorization()
 void Application::update_permission_defaults()
 {
     // A private session reads its defaults from the ordinary one.
+    m_default_session->permission_manager->set_autoplay_default(settings().autoplay_policy());
+    m_default_session->permission_manager->set_autoplay_forcibly_enabled(web_content_options().enable_autoplay == EnableAutoplay::Yes);
+
     for (auto name : Web::Permissions::permission_names) {
         auto state = [&]() {
             switch (settings().permission_policy(name)) {

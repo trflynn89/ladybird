@@ -95,9 +95,10 @@ TEST_CASE(private_site_controls_apply_saved_choices_without_changing_them)
     ScopeGuard cleanup { remove_settings };
     auto settings = WebView::Settings::create(settings_path());
     settings.set_force_dark_for_host("example.com"_string, true);
-    settings.add_autoplay_site_filter("example.com"_string);
     Ladybird::SiteSettingsPopover popover(nullptr, settings);
-    popover.set_site(site_for("example.com"_string, true));
+    auto site = site_for("example.com"_string, true);
+    site.autoplay_policy = Web::HTML::AutoplayPolicy::AllowAudioAndVideo;
+    popover.set_site(move(site));
     auto& toggle = force_dark_switch(popover);
     EXPECT(!toggle.isEnabled());
     EXPECT(toggle.isChecked());
@@ -139,7 +140,7 @@ TEST_CASE(canceling_autoplay_does_not_reset_force_dark)
     popover.show();
     QPushButton* autoplay = nullptr;
     for (auto* button : popover.findChildren<QPushButton*>()) {
-        if (button->objectName() == "LadybirdPopoverValueButton")
+        if (button->objectName() == "LadybirdSiteSettingsPermission-autoplay")
             autoplay = button;
     }
     VERIFY(autoplay);

@@ -1496,6 +1496,10 @@ void Tab::show_site_settings_popover()
             view().set_site_permission(*m_site_settings_popover_origin, name, decision);
             refresh_site_settings_popover();
         };
+        m_site_settings_popover->on_autoplay_change = [this](Optional<Web::HTML::AutoplayPolicy> policy) {
+            view().set_site_autoplay_policy(*m_site_settings_popover_origin, policy);
+            refresh_site_settings_popover();
+        };
         m_site_settings_popover->on_reset_permissions = [this] {
             view().reset_site_permissions(*m_site_settings_popover_origin);
             refresh_site_settings_popover();
@@ -1512,6 +1516,7 @@ void Tab::show_site_settings_popover()
         .favicon = m_favicon,
         .content_blocking = view().content_blocking_snapshot(),
         .permissions = view().site_permission_rows(),
+        .autoplay_policy = view().site_autoplay_policy(),
     });
     // The site settings button is hidden for a page with no host, so the popover hangs from the field then.
     auto& anchor = m_location_edit->site_settings_button();
@@ -1532,7 +1537,7 @@ void Tab::refresh_site_settings_popover()
         m_site_settings_popover->close();
         return;
     }
-    m_site_settings_popover->set_permissions(view().site_permission_rows());
+    m_site_settings_popover->set_permissions(view().site_permission_rows(), view().site_autoplay_policy());
 }
 
 void Tab::show_private_session_popover()

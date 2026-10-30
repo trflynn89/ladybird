@@ -1,0 +1,30 @@
+<!doctype html>
+<script src="../include.js"></script>
+<script>
+    asyncTest(async done => {
+        const video = document.createElement("video");
+        video.loop = true;
+        video.src = "../../../Assets/test-webm.webm";
+        for (const policy of ["allow-audio-and-video", "block-audio", "block-audio-and-video"]) {
+            internals.setAutoplayPolicy(policy);
+            try {
+                await navigator.permissions.query({ name: "autoplay" });
+                println(`${policy}: unexpectedly supported`);
+            } catch (error) {
+                println(`${policy}: ${error.name}`);
+            }
+            for (const muted of [false, true]) {
+                video.pause();
+                video.muted = muted;
+                try {
+                    await video.play();
+                    println(`muted=${muted}: played`);
+                } catch (error) {
+                    println(`muted=${muted}: ${error.name}`);
+                }
+            }
+        }
+        video.pause();
+        done();
+    });
+</script>

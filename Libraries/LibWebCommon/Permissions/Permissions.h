@@ -13,6 +13,7 @@
 #include <LibIPC/Forward.h>
 #include <LibURL/Origin.h>
 #include <LibWebCommon/Export.h>
+#include <LibWebCommon/HTML/AutoplayPolicy.h>
 
 namespace Web::Permissions {
 
@@ -57,6 +58,11 @@ struct WEBCOMMON_API PermissionSnapshotEntry {
     EffectiveState state;
 };
 
+struct WEBCOMMON_API AutoplaySnapshotEntry {
+    URL::Origin top_level_origin;
+    HTML::AutoplayPolicy policy;
+};
+
 // The effective states of some of a browsing session's sites, as the UI process sends them to a process that reads them:
 // only the sites that process shows, listed in origins. Of those, a site with no entry gets the default for the
 // permission's name.
@@ -64,6 +70,8 @@ struct WEBCOMMON_API PermissionSnapshot {
     u64 revision { 0 };
     Vector<URL::Origin> origins;
     Vector<PermissionSnapshotEntry> entries;
+    Vector<AutoplaySnapshotEntry> autoplay_entries;
+    HTML::AutoplayPolicy autoplay_default { HTML::AutoplayPolicy::BlockAudio };
     EffectiveState geolocation_default { EffectiveState::Prompt };
     EffectiveState microphone_default { EffectiveState::Prompt };
     EffectiveState notifications_default { EffectiveState::Prompt };
@@ -78,6 +86,12 @@ WEBCOMMON_API ErrorOr<void> encode(Encoder&, Web::Permissions::PermissionSnapsho
 
 template<>
 WEBCOMMON_API ErrorOr<Web::Permissions::PermissionSnapshotEntry> decode(Decoder&);
+
+template<>
+WEBCOMMON_API ErrorOr<void> encode(Encoder&, Web::Permissions::AutoplaySnapshotEntry const&);
+
+template<>
+WEBCOMMON_API ErrorOr<Web::Permissions::AutoplaySnapshotEntry> decode(Decoder&);
 
 template<>
 WEBCOMMON_API ErrorOr<void> encode(Encoder&, Web::Permissions::PermissionSnapshot const&);

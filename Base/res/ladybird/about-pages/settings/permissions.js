@@ -5,7 +5,6 @@ const siteSettingsAdd = document.querySelector("#site-settings-add");
 const siteSettingsClose = document.querySelector("#site-settings-close");
 const siteSettingsPolicy = document.querySelector("#site-settings-policy");
 const siteSettingsList = document.querySelector("#site-settings-list");
-const siteSettingsListLabel = document.querySelector("#site-settings-list-label");
 const siteSettingsInput = document.querySelector("#site-settings-input");
 const siteSettingsDecision = document.querySelector("#site-settings-decision");
 const siteSettingsRemoveAll = document.querySelector("#site-settings-remove-all");
@@ -68,21 +67,27 @@ function setSiteDecision(origin, decision) {
 
 function renderSiteSettings() {
     const settings = SETTINGS[currentSetting] ?? {};
-    const isPermission = currentSetting !== "autoplay";
 
     siteSettingsPolicy.replaceChildren(
         ...SITE_SETTING_POLICY_OPTIONS[currentSetting].map(({ value, label }) => option(value, label))
     );
     siteSettingsPolicy.value = settings.policy ?? SITE_SETTING_POLICY_OPTIONS[currentSetting][0].value;
-    siteSettingsListLabel.textContent = isPermission ? "Site permissions" : "Allowlist";
-    siteSettingsDecision.classList.toggle("hidden", !isPermission);
-    siteSettingsInput.placeholder = isPermission ? "https://example.com" : "example.com";
+    const decisionOptions =
+        currentSetting === "autoplay"
+            ? SITE_SETTING_POLICY_OPTIONS.autoplay
+            : [
+                  { value: "allow", label: "Allow" },
+                  { value: "block", label: "Block" },
+              ];
+    const selectedDecision = siteSettingsDecision.value;
+    siteSettingsDecision.replaceChildren(...decisionOptions.map(({ value, label }) => option(value, label)));
+    siteSettingsDecision.value = decisionOptions.some(({ value }) => value === selectedDecision)
+        ? selectedDecision
+        : decisionOptions[0].value;
     siteSettingsList.replaceChildren();
 
     // A deep link can open this dialog before the settings have loaded.
-    const sites = isPermission
-        ? (SETTINGS.sitePermissions?.[currentSetting] ?? [])
-        : (settings.siteFilters ?? []).map(origin => ({ origin }));
+    const sites = SETTINGS.sitePermissions?.[currentSetting] ?? [];
 
     if (sites.length === 0) {
         const placeholder = document.createElement("div");
@@ -101,29 +106,22 @@ function renderSiteSettings() {
         label.textContent = site.origin;
         row.append(label);
 
-        if (isPermission) {
-            const select = document.createElement("select");
-            select.setAttribute("aria-label", `Permission for ${site.origin}`);
-            select.append(option("allow", "Allow"));
-            if (site.decision === "allow-once") {
-                select.append(option("allow-once", "Allow this time"));
-            }
-            select.append(option("block", "Block"));
-            select.value = site.decision;
-            select.addEventListener("change", () => setSiteDecision(site.origin, select.value));
-            row.append(select);
+        const select = document.createElement("select");
+        select.setAttribute("aria-label", `Permission for ${site.origin}`);
+        select.append(...decisionOptions.map(({ value, label }) => option(value, label)));
+        if (site.decision === "allow-once") {
+            select.append(option("allow-once", "Allow this time"));
         }
+        select.value = site.decision;
+        select.addEventListener("change", () => setSiteDecision(site.origin, select.value));
+        row.append(select);
 
         const remove = document.createElement("button");
         remove.className = "dialog-button";
         remove.innerHTML = "&times;";
         remove.title = `Remove ${site.origin}`;
         remove.addEventListener("click", () => {
-            if (isPermission) {
-                setSiteDecision(site.origin, null);
-            } else {
-                ladybird.sendMessage("removeSiteSettingFilter", { setting: currentSetting, filter: site.origin });
-            }
+            setSiteDecision(site.origin, null);
         });
         row.append(remove);
         siteSettingsList.append(row);
@@ -144,30 +142,26 @@ function showSiteSettings(setting) {
     setTimeout(() => siteSettingsInput.focus());
 }
 
-function addSiteSettingFilter() {
+function addSitePermission() {
     const filter = siteSettingsInput.value.trim();
     if (!filter) {
         return;
     }
 
-    if (currentSetting === "autoplay") {
-        ladybird.sendMessage("addSiteSettingFilter", { setting: currentSetting, filter });
-    } else {
-        let url;
-        try {
-            url = new URL(filter);
-        } catch {
-            // Invalid and opaque URLs cannot identify a site permission.
-        }
-
-        if (!url || url.origin === "null") {
-            siteSettingsInput.setCustomValidity("Enter a site URL, such as https://example.com.");
-            siteSettingsInput.reportValidity();
-            return;
-        }
-
-        setSiteDecision(url.origin, siteSettingsDecision.value);
+    let url;
+    try {
+        url = new URL(filter);
+    } catch {
+        // Invalid and opaque URLs cannot identify a site permission.
     }
+
+    if (!url || url.origin === "null") {
+        siteSettingsInput.setCustomValidity("Enter a site URL, such as https://example.com.");
+        siteSettingsInput.reportValidity();
+        return;
+    }
+
+    setSiteDecision(url.origin, siteSettingsDecision.value);
 
     siteSettingsInput.classList.add("success");
     siteSettingsInput.value = "";
@@ -176,18 +170,18 @@ function addSiteSettingFilter() {
 }
 
 siteSettingsPolicy.addEventListener("change", () => {
-    ladybird.sendMessage("setSiteSettingPolicy", { setting: currentSetting, policy: siteSettingsPolicy.value });
+    ladybird.sendMessage("setPermissionPolicy", { permission: currentSetting, policy: siteSettingsPolicy.value });
 });
-siteSettingsAdd.addEventListener("click", addSiteSettingFilter);
+siteSettingsAdd.addEventListener("click", addSitePermission);
 siteSettingsInput.addEventListener("input", () => siteSettingsInput.setCustomValidity(""));
 siteSettingsInput.addEventListener("keydown", event => {
     if (event.key === "Enter") {
-        addSiteSettingFilter();
+        addSitePermission();
     }
 });
 siteSettingsClose.addEventListener("click", () => siteSettings.close());
 siteSettingsRemoveAll.addEventListener("click", () => {
-    ladybird.sendMessage("removeAllSiteSettingFilters", { setting: currentSetting });
+    ladybird.sendMessage("removeAllSitePermissions", { permission: currentSetting });
 });
 
 for (const [setting, { hash, button }] of Object.entries(SITE_SETTINGS)) {
