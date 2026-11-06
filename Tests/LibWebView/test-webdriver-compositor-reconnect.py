@@ -7,7 +7,6 @@
 # When the Compositor dies, the browser connects a new one, and the page's next rendering update
 # has to bring the new Compositor up to date: its first frame carries the whole display list again,
 # not only what changed since the old Compositor's last frame.
-
 import argparse
 import base64
 import os
@@ -21,6 +20,9 @@ import urllib.parse
 from pathlib import Path
 
 import webdriver_test_utils as helpers
+
+from test_utils import cleanup
+from test_utils import stop_process
 
 PAGE = "data:text/html," + urllib.parse.quote(
     """<style>
@@ -99,12 +101,7 @@ def run_test(webdriver_binary):
             assert take_screenshot(port, session) != first
             helpers.request(port, "DELETE", f"/session/{session}")
         finally:
-            webdriver.terminate()
-            try:
-                webdriver.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                webdriver.kill()
-                webdriver.wait()
+            cleanup(lambda: stop_process(webdriver))
 
 
 if __name__ == "__main__":

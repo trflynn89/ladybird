@@ -6,9 +6,10 @@
 
 import argparse
 import concurrent.futures
-import subprocess
 import time
 
+from test_utils import cleanup
+from test_utils import stop_process
 from webdriver_test_utils import create_session
 from webdriver_test_utils import launch_webdriver
 from webdriver_test_utils import request
@@ -68,12 +69,7 @@ def run_test(webdriver_binary):
             if payload != expected_payload:
                 raise AssertionError(f"Queued Delete Session failed with HTTP {status}: {response_body}")
     finally:
-        webdriver.terminate()
-        try:
-            webdriver.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            webdriver.kill()
-            webdriver.wait()
+        cleanup(lambda: stop_process(webdriver))
 
     if webdriver.returncode not in (0, -15):
         raise RuntimeError(f"WebDriver exited with status {webdriver.returncode}")

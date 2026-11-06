@@ -12,6 +12,8 @@ import threading
 
 from pathlib import Path
 
+from test_utils import cleanup
+
 devtools = runpy.run_path(str(Path(__file__).with_name("test-devtools-client-follows-the-tab.py")))
 PAGE = b"""<!doctype html><title>iframe-console</title>
 <iframe srcdoc="<script>console.log('logged by the iframe at load', { early: 1 }); window.loggedAtLoad = true;</script>"></iframe>
@@ -111,8 +113,10 @@ def main():
                 client.close()
                 devtools["stop"](process)
     finally:
-        server.shutdown()
-        server.server_close()
+        cleanup(
+            server.shutdown,
+            server.server_close,
+        )
 
 
 if __name__ == "__main__":

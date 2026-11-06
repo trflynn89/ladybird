@@ -6,7 +6,6 @@
 
 import http.server
 import json
-import subprocess
 import sys
 import tempfile
 import threading
@@ -15,6 +14,9 @@ import time
 from pathlib import Path
 
 import webdriver_test_utils as helpers
+
+from test_utils import cleanup
+from test_utils import stop_process
 
 requested = threading.Event()
 release_response = threading.Event()
@@ -114,14 +116,10 @@ with tempfile.TemporaryDirectory() as directory:
         release_response.set()
         print("PASS: site zoom follows the committed document")
     finally:
-        release_response.set()
-        if session is not None:
-            helpers.request(port, "DELETE", f"/session/{session}")
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
-        server.shutdown()
-        server.server_close()
+        cleanup(
+            release_response.set,
+            lambda: helpers.request(port, "DELETE", f"/session/{session}") if session is not None else None,
+            lambda: stop_process(process),
+            server.shutdown,
+            server.server_close,
+        )

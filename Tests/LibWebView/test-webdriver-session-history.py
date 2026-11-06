@@ -19,6 +19,8 @@ from typing import cast
 
 import webdriver_test_utils as helpers
 
+from test_utils import stop_process
+
 BLOCKED_RESPONSE_TIMEOUT_SECONDS = 30
 EVENT_TIMEOUT_SECONDS = 30
 WEB_ELEMENT_IDENTIFIER = "element-6066-11e4-a52e-4f735466cecf"
@@ -5086,12 +5088,7 @@ return [Math.floor(rect.left + rect.width / 2), Math.floor(rect.top + rect.heigh
             except Exception:
                 pass
 
-        webdriver.terminate()
-        try:
-            webdriver.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            webdriver.kill()
-            webdriver.wait()
+        stop_process(webdriver)
 
         webdriver_stdout.seek(0)
         webdriver_stderr.seek(0)

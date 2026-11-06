@@ -15,6 +15,9 @@ import time
 
 import webdriver_test_utils as helpers
 
+from test_utils import cleanup
+from test_utils import stop_process
+
 FRAME_COUNT = 8
 RULE_COUNT = 20000
 
@@ -158,16 +161,10 @@ def measure(webdriver_binary, server_port, frame_count, kind="link"):
             time.sleep(2)
             return web_content_resident_bytes(process.pid), style_bytes
         finally:
-            try:
-                if session is not None:
-                    helpers.request(port, "DELETE", f"/session/{session}")
-            finally:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
+            cleanup(
+                lambda: helpers.request(port, "DELETE", f"/session/{session}") if session is not None else None,
+                lambda: stop_process(process),
+            )
 
 
 def main():
@@ -186,8 +183,10 @@ def main():
             for kind in ("empty", "link", "print", "own-first")
         }
     finally:
-        server.shutdown()
-        server.server_close()
+        cleanup(
+            server.shutdown,
+            server.server_close,
+        )
 
     (one, _), (many, _) = measured["link"]
     # The frames share one parse of the sheet, so the page costs little more than one frame does. Parsing the sheet

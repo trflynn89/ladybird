@@ -17,6 +17,9 @@ from pathlib import Path
 
 import webdriver_test_utils as helpers
 
+from test_utils import cleanup
+from test_utils import stop_process
+
 
 def wait_for_compositor(port, session):
     # The Compositor takes a screenshot, so once one succeeds, the Compositor is done starting up and waiting in its
@@ -145,12 +148,7 @@ def run_test(webdriver_binary, process_name):
             assert directory.stat().st_mode & 0o777 == 0o700
             helpers.request(port, "DELETE", f"/session/{session}")
         finally:
-            webdriver.terminate()
-            try:
-                webdriver.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                webdriver.kill()
-                webdriver.wait()
+            cleanup(lambda: stop_process(webdriver))
 
 
 if __name__ == "__main__":

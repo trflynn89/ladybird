@@ -16,6 +16,8 @@ import time
 
 from pathlib import Path
 
+from test_utils import cleanup
+
 devtools = runpy.run_path(str(Path(__file__).with_name("test-devtools-client-follows-the-tab.py")))
 DevToolsClient = devtools["DevToolsClient"]
 helpers = devtools["helpers"]
@@ -131,8 +133,10 @@ def main():
         with tempfile.TemporaryDirectory() as directory:
             test_user_agent_preset_reaches_child_frames(ladybird_binary, Path(directory) / "profile", server)
     finally:
-        server.shutdown()
-        server.server_close()
+        cleanup(
+            server.shutdown,
+            server.server_close,
+        )
 
 
 if __name__ == "__main__":

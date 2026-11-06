@@ -13,7 +13,6 @@ import json
 import os
 import socket
 import struct
-import subprocess
 import sys
 import tempfile
 import threading
@@ -21,6 +20,9 @@ import time
 import urllib.parse
 
 import webdriver_test_utils as helpers
+
+from test_utils import cleanup
+from test_utils import stop_process
 
 
 class BiDiConnection:
@@ -2420,39 +2422,17 @@ def check_viewport_changes(bidi, connection, session_id, first, second):
 
 
 def cleanup_resources(server, webdriver, connection, bidi, session_id, *, primary_error=None):
-    errors = []
-
-    def attempt(action):
-        try:
-            action()
-        except BaseException as error:
-            errors.append(error)
-
-    def stop_driver():
-        if webdriver is None:
-            return
-        attempt(webdriver.terminate)
-        try:
-            webdriver.wait(timeout=5)
-        except BaseException as error:
-            if not isinstance(error, subprocess.TimeoutExpired):
-                errors.append(error)
-            attempt(webdriver.kill)
-            attempt(lambda: webdriver.wait(timeout=5))
-
-    attempt(server.release_response.set)
-    attempt(server.release_interception.set)
+    actions = [server.release_response.set, server.release_interception.set]
     if session_id and connection:
-        attempt(lambda: helpers.request_on_connection(connection, "DELETE", f"/session/{session_id}"))
+        actions.append(lambda: helpers.request_on_connection(connection, "DELETE", f"/session/{session_id}"))
     if bidi:
-        attempt(bidi.close)
+        actions.append(bidi.close)
     if connection:
-        attempt(connection.close)
-    attempt(stop_driver)
-    attempt(server.shutdown)
-    attempt(server.server_close)
-    if errors and primary_error is None:
-        raise errors[0]
+        actions.append(connection.close)
+    if webdriver is not None:
+        actions.append(lambda: stop_process(webdriver))
+    actions.extend([server.shutdown, server.server_close])
+    cleanup(*actions, primary_error=primary_error)
 
 
 def run_test(

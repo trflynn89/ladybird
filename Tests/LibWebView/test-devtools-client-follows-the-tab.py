@@ -18,6 +18,9 @@ from pathlib import Path
 
 import webdriver_test_utils as helpers
 
+from test_utils import cleanup
+from test_utils import stop_process
+
 TIMEOUT_SECONDS = helpers.EVENT_TIMEOUT_SECONDS
 
 
@@ -223,17 +226,11 @@ def launch(ladybird_binary, profile, url):
                 return process, devtools_port, DevToolsClient(devtools_port, deadline=attempt_deadline)
             except OSError:
                 pass
-        stop(process)
+        stop_process(process)
     raise AssertionError("The DevTools server didn't start")
 
 
-def stop(process):
-    process.terminate()
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
+stop = stop_process
 
 
 def assert_page_survives_disconnects(devtools_port, path, load):
@@ -272,7 +269,7 @@ def test_cross_site_navigation(ladybird_binary, profile, server):
         assert process.poll() is None, "The browser exited"
         print("PASS: A DevTools client follows the tab into a cross-site navigation's page")
     finally:
-        stop(process)
+        cleanup(lambda: stop_process(process))
 
 
 def test_crash_recovery(ladybird_binary, profile, server):
@@ -298,7 +295,7 @@ def test_crash_recovery(ladybird_binary, profile, server):
         assert process.poll() is None, "The browser exited"
         print("PASS: A DevTools client follows the tab into the page that replaces a crashed one")
     finally:
-        stop(process)
+        cleanup(lambda: stop_process(process))
 
 
 def main():
@@ -313,8 +310,10 @@ def main():
             test_cross_site_navigation(ladybird_binary, Path(directory) / "navigation", server)
             test_crash_recovery(ladybird_binary, Path(directory) / "crash", server)
     finally:
-        server.shutdown()
-        server.server_close()
+        cleanup(
+            server.shutdown,
+            server.server_close,
+        )
 
 
 if __name__ == "__main__":

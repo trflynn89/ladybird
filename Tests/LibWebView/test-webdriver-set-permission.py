@@ -7,13 +7,15 @@
 import argparse
 import http.server
 import json
-import subprocess
 import tempfile
 import threading
 
 from pathlib import Path
 
 import webdriver_test_utils as helpers
+
+from test_utils import cleanup
+from test_utils import stop_process
 
 
 def run_test(webdriver_binary):
@@ -77,15 +79,11 @@ def run_test(webdriver_binary):
 
             print("PASS: Set Permission sets the current site's permission, and rejects invalid arguments")
         finally:
-            if session is not None:
-                helpers.request(port, "DELETE", f"/session/{session}")
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
-            server.shutdown()
+            cleanup(
+                lambda: helpers.request(port, "DELETE", f"/session/{session}") if session is not None else None,
+                lambda: stop_process(process),
+                server.shutdown,
+            )
 
 
 if __name__ == "__main__":

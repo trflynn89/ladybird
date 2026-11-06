@@ -6,9 +6,11 @@
 
 import argparse
 import http.client
-import subprocess
 
 import webdriver_test_utils as helpers
+
+from test_utils import cleanup
+from test_utils import stop_process
 
 WEBDRIVER_REQUEST_TIMEOUT_SECONDS = 30
 
@@ -60,14 +62,10 @@ def run_test(webdriver_binary):
         if status != 200:
             raise AssertionError(f"Delete Session failed with HTTP {status}: {response_body}")
     finally:
-        if connection is not None:
-            connection.close()
-        webdriver.terminate()
-        try:
-            webdriver.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            webdriver.kill()
-            webdriver.wait()
+        cleanup(
+            lambda: connection.close() if connection is not None else None,
+            lambda: stop_process(webdriver),
+        )
 
     if webdriver.returncode not in (0, -15):
         raise RuntimeError(f"WebDriver exited with status {webdriver.returncode}")

@@ -6,12 +6,14 @@
 
 import argparse
 import json
-import subprocess
 import tempfile
 
 from pathlib import Path
 
 import webdriver_test_utils as helpers
+
+from test_utils import cleanup
+from test_utils import stop_process
 
 
 def run_browser(webdriver_binary, settings, check):
@@ -69,14 +71,10 @@ def run_browser(webdriver_binary, settings, check):
 
             check(switch_state, toggle_switch, settings_file)
         finally:
-            if session is not None:
-                helpers.request(port, "DELETE", f"/session/{session}")
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+            cleanup(
+                lambda: helpers.request(port, "DELETE", f"/session/{session}") if session is not None else None,
+                lambda: stop_process(process),
+            )
 
 
 def run_test(webdriver_binary):

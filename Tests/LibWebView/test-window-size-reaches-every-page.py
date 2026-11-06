@@ -13,6 +13,8 @@ import threading
 
 from pathlib import Path
 
+from test_utils import cleanup
+
 devtools = runpy.run_path(str(Path(__file__).with_name("test-devtools-client-follows-the-tab.py")))
 launch = devtools["launch"]
 stop = devtools["stop"]
@@ -80,7 +82,9 @@ def main():
         with tempfile.TemporaryDirectory() as directory:
             test_window_size_reaches_every_page(ladybird_binary, Path(directory) / "profile", server)
     finally:
-        server.shutdown()
+        cleanup(
+            server.shutdown,
+        )
 
 
 if __name__ == "__main__":

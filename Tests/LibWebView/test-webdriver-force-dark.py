@@ -8,7 +8,6 @@ import base64
 import http.server
 import json
 import struct
-import subprocess
 import sys
 import tempfile
 import threading
@@ -18,6 +17,9 @@ import zlib
 from pathlib import Path
 
 import webdriver_test_utils as helpers
+
+from test_utils import cleanup
+from test_utils import stop_process
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -228,18 +230,12 @@ def run_test(default):
             assert "localhost" not in saved["forceDarkPerHost"]
             print(f"PASS: settings toggle and per-host reset (default={default})")
         finally:
-            try:
-                if session is not None:
-                    helpers.request(port, "DELETE", f"/session/{session}")
-            finally:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
-                server.shutdown()
-                server.server_close()
+            cleanup(
+                lambda: helpers.request(port, "DELETE", f"/session/{session}") if session is not None else None,
+                lambda: stop_process(process),
+                server.shutdown,
+                server.server_close,
+            )
 
 
 for default in (True, False):

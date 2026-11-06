@@ -12,6 +12,9 @@ import time
 
 import webdriver_test_utils as helpers
 
+from test_utils import cleanup
+from test_utils import stop_process
+
 CHANNEL_COUNT = 50
 # A thread that has nothing to do with transports can still start between two counts, so a count may come out this
 # far above the baseline. A channel the collector missed keeps two threads, one per transport, which the slack can't
@@ -154,16 +157,10 @@ def main():
         assert collected is True, "A started port that was transferred again was not collected"
         print(f"PASS: {CHANNEL_COUNT} dropped channels collected ({baseline} -> {threads} threads)")
     finally:
-        try:
-            if session is not None:
-                helpers.request(port, "DELETE", f"/session/{session}")
-        finally:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+        cleanup(
+            lambda: helpers.request(port, "DELETE", f"/session/{session}") if session is not None else None,
+            lambda: stop_process(process),
+        )
 
 
 if __name__ == "__main__":

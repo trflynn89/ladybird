@@ -5,10 +5,12 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
-import subprocess
 import tempfile
 
 import webdriver_test_utils as helpers
+
+from test_utils import cleanup
+from test_utils import stop_process
 
 
 # A tab opened from a WebUI page starts in that page's process, so a second page of the same WebUI there must not take
@@ -58,16 +60,10 @@ def run_test(webdriver_binary):
             assert round_trip(), "The first page lost its WebUI channel"
             print("PASS: two WebUI pages in one process each keep their channel")
         finally:
-            try:
-                if session is not None:
-                    helpers.request(port, "DELETE", f"/session/{session}")
-            finally:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
+            cleanup(
+                lambda: helpers.request(port, "DELETE", f"/session/{session}") if session is not None else None,
+                lambda: stop_process(process),
+            )
 
 
 if __name__ == "__main__":

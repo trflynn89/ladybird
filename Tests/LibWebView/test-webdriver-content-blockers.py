@@ -15,6 +15,9 @@ from pathlib import Path
 
 import webdriver_test_utils as helpers
 
+from test_utils import cleanup
+from test_utils import stop_process
+
 request = helpers.request
 hits = []
 release_downloads = threading.Event()
@@ -314,10 +317,10 @@ with tempfile.TemporaryDirectory() as directory:
             == "edits made while saving"
         )
     finally:
-        release_downloads.set()
-        release_stall.set()
-        if session:
-            request(port, "DELETE", f"/session/{session}")
-        process.terminate()
-        process.wait(timeout=10)
-        server.shutdown()
+        cleanup(
+            release_downloads.set,
+            release_stall.set,
+            lambda: request(port, "DELETE", f"/session/{session}") if session else None,
+            lambda: stop_process(process),
+            server.shutdown,
+        )

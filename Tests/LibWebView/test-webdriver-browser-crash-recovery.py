@@ -6,13 +6,15 @@
 
 import argparse
 import os
-import subprocess
 import tempfile
 import time
 
 from pathlib import Path
 
 import webdriver_test_utils as webdriver
+
+from test_utils import cleanup
+from test_utils import stop_process
 
 
 def launch(webdriver_binary, environment):
@@ -43,15 +45,6 @@ def write_browser_report(reports_directory):
     return report
 
 
-def stop(process):
-    process.terminate()
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
-
-
 def run_test(webdriver_binary):
     with tempfile.TemporaryDirectory(prefix="ladybird-browser-crash-") as temporary:
         environment = os.environ.copy()
@@ -80,7 +73,7 @@ def run_test(webdriver_binary):
             assert not (reports_directory / "Seen" / report.name).exists()
             webdriver.request(port, "DELETE", f"/session/{session}")
         finally:
-            stop(process)
+            cleanup(lambda: stop_process(process))
 
 
 if __name__ == "__main__":

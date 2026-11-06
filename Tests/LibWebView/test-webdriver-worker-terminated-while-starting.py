@@ -15,6 +15,9 @@ from pathlib import Path
 
 import webdriver_test_utils as helpers
 
+from test_utils import cleanup
+from test_utils import stop_process
+
 # Terminate a worker at each of these delays after constructing it, to catch its process at every stage of starting up.
 TERMINATE_DELAYS_MS = list(range(0, 600, 25))
 
@@ -99,12 +102,7 @@ def run_test(webdriver_binary):
 
             helpers.request(port, "DELETE", f"/session/{session}")
         finally:
-            webdriver.terminate()
-            try:
-                webdriver.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                webdriver.kill()
-                webdriver.wait()
+            cleanup(lambda: stop_process(webdriver))
 
 
 if __name__ == "__main__":
