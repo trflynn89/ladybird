@@ -7,23 +7,17 @@
 import argparse
 import http.server
 import json
-import runpy
-import subprocess
-import sys
 import tempfile
 import threading
-import time
 
 from pathlib import Path
 
-from test_utils import cleanup
+import devtools_test_utils as devtools
 
-devtools = runpy.run_path(str(Path(__file__).with_name("test-devtools-client-follows-the-tab.py")))
-DevToolsClient = devtools["DevToolsClient"]
-helpers = devtools["helpers"]
-stop = devtools["stop"]
-wait_until = devtools["wait_until"]
-TIMEOUT_SECONDS = helpers.EVENT_TIMEOUT_SECONDS
+from test_utils import cleanup
+from test_utils import stop_process
+
+wait_until = devtools.wait_until
 
 USER_AGENT_PRESET = "Safari macOS Desktop"
 
@@ -56,49 +50,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass
 
 
-def launch(ladybird_binary, profile, url):
-    # Like the DevTools tests' launch(), with the User-Agent preset the test is about.
-    deadline = time.monotonic() + TIMEOUT_SECONDS
-    for _ in range(5):
-        if time.monotonic() >= deadline:
-            break
-        devtools_port = helpers.unused_port()
-        process = subprocess.Popen(
-            [
-                ladybird_binary,
-                "--headless=manual",
-                f"--profile-path={profile}",
-                f"--devtools={devtools_port}",
-                f"--user-agent-preset={USER_AGENT_PRESET}",
-                url,
-            ],
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        bind_failed = threading.Event()
-
-        def forward_stderr(stderr=process.stderr, bind_failed=bind_failed):
-            assert stderr is not None
-            for line in stderr:
-                if line.startswith("Unable to launch devtools server"):
-                    bind_failed.set()
-                sys.stderr.write(line)
-
-        threading.Thread(target=forward_stderr, daemon=True).start()
-
-        while not bind_failed.is_set() and process.poll() is None and time.monotonic() < deadline:
-            try:
-                attempt_deadline = min(deadline, time.monotonic() + 1)
-                return process, DevToolsClient(devtools_port, deadline=attempt_deadline)
-            except OSError:
-                pass
-        stop(process)
-    raise AssertionError("The DevTools server didn't start")
-
-
 def test_user_agent_preset_reaches_child_frames(ladybird_binary, profile, server):
     parent_url = f"http://127.0.0.1:{server.server_port}/parent"
-    process, client = launch(ladybird_binary, profile, parent_url)
+    process, _, client = devtools.launch(
+        ladybird_binary, profile, parent_url, f"--user-agent-preset={USER_AGENT_PRESET}", expose_internals=False
+    )
     try:
         wait_until("the tab shows the parent", lambda: client.tab().get("title") == "/parent")
         client.watch_frame_targets()
@@ -117,7 +73,7 @@ def test_user_agent_preset_reaches_child_frames(ladybird_binary, profile, server
         print("PASS: A child frame in another process gets the tab's User-Agent preset and languages")
     finally:
         client.close()
-        stop(process)
+        stop_process(process)
 
 
 def main():

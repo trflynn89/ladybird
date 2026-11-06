@@ -7,18 +7,18 @@
 import argparse
 import http.server
 import json
-import runpy
 import tempfile
 import threading
 
 from pathlib import Path
 
-from test_utils import cleanup
+import devtools_test_utils as devtools
 
-devtools = runpy.run_path(str(Path(__file__).with_name("test-devtools-client-follows-the-tab.py")))
-launch = devtools["launch"]
-stop = devtools["stop"]
-wait_for_page = devtools["wait_for_page"]
+from test_utils import cleanup
+from test_utils import stop_process
+
+launch = devtools.launch
+wait_for_page = devtools.wait_for_page
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -67,8 +67,7 @@ def test_window_size_reaches_every_page(ladybird_binary, profile, server):
 
         print("PASS: Every page the tab is hosted by reports the window size")
     finally:
-        client.close()
-        stop(process)
+        cleanup(client.close, lambda: stop_process(process))
 
 
 def main():

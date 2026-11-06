@@ -6,15 +6,13 @@
 
 import argparse
 import http.server
-import runpy
 import tempfile
 import threading
 
-from pathlib import Path
+import devtools_test_utils as devtools
 
 from test_utils import cleanup
-
-devtools = runpy.run_path(str(Path(__file__).with_name("test-devtools-client-follows-the-tab.py")))
+from test_utils import stop_process
 
 # The container generates no box, so the unit below it resolves without one: Every full layout leaves that unit's
 # style to update.
@@ -53,10 +51,10 @@ def main():
     url = f"http://127.0.0.1:{server.server_port}/catch-up"
     try:
         with tempfile.TemporaryDirectory(prefix="ladybird-devtools-") as profile:
-            process, devtools_port, client = devtools["launch"](ladybird_binary, profile, url)
+            process, devtools_port, client = devtools.launch(ladybird_binary, profile, url)
             try:
                 try:
-                    devtools["wait_for_page"](client, url, "catch-up")
+                    devtools.wait_for_page(client, url, "catch-up")
                     # The first client lays the document out once more, to collect the layout inspection data.
                     client.watch_frame_targets()
                     assert client.evaluate("window.loaded") is True
@@ -65,7 +63,7 @@ def main():
                 assert process.poll() is None, "The browser exited"
                 print("PASS: A DevTools client's catch-up layout settles")
             finally:
-                devtools["stop"](process)
+                stop_process(process)
     finally:
         cleanup(
             server.shutdown,

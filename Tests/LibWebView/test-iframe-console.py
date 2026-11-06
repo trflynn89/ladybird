@@ -6,15 +6,14 @@
 
 import argparse
 import http.server
-import runpy
 import tempfile
 import threading
 
-from pathlib import Path
+import devtools_test_utils as devtools
 
 from test_utils import cleanup
+from test_utils import stop_process
 
-devtools = runpy.run_path(str(Path(__file__).with_name("test-devtools-client-follows-the-tab.py")))
 PAGE = b"""<!doctype html><title>iframe-console</title>
 <iframe srcdoc="<script>console.log('logged by the iframe at load', { early: 1 }); window.loggedAtLoad = true;</script>"></iframe>
 <iframe id="blank"></iframe>
@@ -44,9 +43,9 @@ def main():
     url = f"http://127.0.0.1:{server.server_port}/page"
     try:
         with tempfile.TemporaryDirectory(prefix="ladybird-iframe-console-") as profile:
-            process, _, client = devtools["launch"](ladybird_binary, profile, url)
+            process, _, client = devtools.launch(ladybird_binary, profile, url)
             try:
-                devtools["wait_for_page"](client, url, "iframe-console")
+                devtools.wait_for_page(client, url, "iframe-console")
                 watcher = client.watch_frame_targets()
                 messages = []
                 receive = client.receive
@@ -66,7 +65,7 @@ def main():
                 client.receive = receive_and_record_messages
 
                 # What the iframe logged before the client watched arrives once it does.
-                devtools["wait_until"](
+                devtools.wait_until(
                     "the page has loaded, and the iframe has logged",
                     lambda: client.evaluate("document.readyState === 'complete' && frames[0].loggedAtLoad === true"),
                 )
@@ -111,7 +110,7 @@ def main():
                 print("PASS: An iframe's console messages reach the tab's console, and its logged objects expand")
             finally:
                 client.close()
-                devtools["stop"](process)
+                stop_process(process)
     finally:
         cleanup(
             server.shutdown,

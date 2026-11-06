@@ -7,15 +7,14 @@
 import argparse
 import http.server
 import json
-import runpy
 import tempfile
 import threading
 
-from pathlib import Path
+import devtools_test_utils as devtools
 
 from test_utils import cleanup
+from test_utils import stop_process
 
-devtools = runpy.run_path(str(Path(__file__).with_name("test-devtools-client-follows-the-tab.py")))
 PAGE = b"""<!doctype html><title>worker-console</title>
 <script>
 window.onerror = (message, filename, line, column) => {
@@ -51,9 +50,9 @@ def main():
     worker_url = origin + "/worker.js"
     try:
         with tempfile.TemporaryDirectory(prefix="ladybird-worker-console-") as profile:
-            process, _, client = devtools["launch"](ladybird_binary, profile, url)
+            process, _, client = devtools.launch(ladybird_binary, profile, url)
             try:
-                devtools["wait_for_page"](client, url, "worker-console")
+                devtools.wait_for_page(client, url, "worker-console")
                 watcher = client.watch_frame_targets()
                 # The page sends its errors once a client watches them.
                 client.send({"to": watcher, "type": "watchResources", "resourceTypes": ["error-message"]})
@@ -85,7 +84,7 @@ def main():
                 print("PASS: An unhandled worker exception keeps its message and source location in the console")
             finally:
                 client.close()
-                devtools["stop"](process)
+                stop_process(process)
     finally:
         cleanup(
             server.shutdown,
