@@ -20,9 +20,7 @@ from typing import cast
 
 WEBDRIVER_REQUEST_TIMEOUT_SECONDS = 60
 
-webdriver_helpers = runpy.run_path(
-    str(Path(__file__).parent.parent / "LibWebView" / "test-webdriver-delete-session.py")
-)
+webdriver_helpers = runpy.run_path(str(Path(__file__).parent.parent / "LibWebView" / "webdriver_test_utils.py"))
 
 
 class TestPageServer(http.server.ThreadingHTTPServer):

@@ -10,7 +10,6 @@
 
 import argparse
 import base64
-import importlib
 import os
 import shlex
 import signal
@@ -21,7 +20,7 @@ import urllib.parse
 
 from pathlib import Path
 
-webdriver_helpers = importlib.import_module("test-webdriver-delete-session")
+import webdriver_test_utils as helpers
 
 PAGE = "data:text/html," + urllib.parse.quote(
     """<style>
@@ -50,7 +49,7 @@ def descendants_named(root_pid, process_name):
 
 
 def execute(port, session, script):
-    status, payload, body = webdriver_helpers.request(
+    status, payload, body = helpers.request(
         port, "POST", f"/session/{session}/execute/sync", {"script": script, "args": []}
     )
     assert status == 200, body
@@ -58,7 +57,7 @@ def execute(port, session, script):
 
 
 def take_screenshot(port, session):
-    status, payload, body = webdriver_helpers.request(port, "GET", f"/session/{session}/screenshot")
+    status, payload, body = helpers.request(port, "GET", f"/session/{session}/screenshot")
     assert status == 200, body
     png = base64.b64decode(payload["value"])
     assert png.startswith(b"\x89PNG\r\n\x1a\n"), "Screenshot is not a PNG"
@@ -74,10 +73,10 @@ def run_test(webdriver_binary):
             ("XDG_CACHE_HOME", "cache"),
         ):
             environment[variable] = str(Path(temporary) / directory)
-        webdriver, port = webdriver_helpers.launch_webdriver(webdriver_binary, "--headless", env=environment)
+        webdriver, port = helpers.launch_webdriver(webdriver_binary, "--headless", env=environment)
         try:
-            session = webdriver_helpers.create_session(port)
-            status, _, body = webdriver_helpers.request(port, "POST", f"/session/{session}/url", {"url": PAGE})
+            session = helpers.create_session(port)
+            status, _, body = helpers.request(port, "POST", f"/session/{session}/url", {"url": PAGE})
             assert status == 200, body
             first = take_screenshot(port, session)
 
@@ -85,7 +84,7 @@ def run_test(webdriver_binary):
             assert len(compositors) == 1, f"Expected one Compositor, found {len(compositors)}"
             os.kill(compositors[0], signal.SIGKILL)
 
-            deadline = time.monotonic() + webdriver_helpers.EVENT_TIMEOUT_SECONDS
+            deadline = time.monotonic() + helpers.EVENT_TIMEOUT_SECONDS
             while True:
                 replacements = [pid for pid in descendants_named(webdriver.pid, "Compositor") if pid != compositors[0]]
                 if replacements:
@@ -98,7 +97,7 @@ def run_test(webdriver_binary):
             assert take_screenshot(port, session) == first
             execute(port, session, "document.getElementById('box').style.background = 'green';")
             assert take_screenshot(port, session) != first
-            webdriver_helpers.request(port, "DELETE", f"/session/{session}")
+            helpers.request(port, "DELETE", f"/session/{session}")
         finally:
             webdriver.terminate()
             try:

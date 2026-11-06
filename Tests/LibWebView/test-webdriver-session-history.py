@@ -7,7 +7,6 @@
 import argparse
 import http.client
 import http.server
-import importlib
 import json
 import os
 import subprocess
@@ -18,11 +17,10 @@ import time
 
 from typing import cast
 
-webdriver_helpers = importlib.import_module("test-webdriver-delete-session")
+import webdriver_test_utils as helpers
 
 BLOCKED_RESPONSE_TIMEOUT_SECONDS = 30
 EVENT_TIMEOUT_SECONDS = 30
-WEBDRIVER_REQUEST_TIMEOUT_SECONDS = 60
 WEB_ELEMENT_IDENTIFIER = "element-6066-11e4-a52e-4f735466cecf"
 
 
@@ -844,31 +842,8 @@ def count_open_fds(pid):
     return max(0, len(result.stdout.splitlines()) - 1)
 
 
-def request_raw(webdriver_port, method, path, body=None):
-    encoded_body = None
-    headers = {}
-    if body is not None:
-        encoded_body = json.dumps(body).encode()
-        headers["Content-Type"] = "application/json"
-
-    connection = http.client.HTTPConnection("127.0.0.1", webdriver_port, timeout=WEBDRIVER_REQUEST_TIMEOUT_SECONDS)
-    try:
-        connection.request(method, path, encoded_body, headers)
-        response = connection.getresponse()
-        response_body = response.read().decode()
-    finally:
-        connection.close()
-
-    try:
-        payload = json.loads(response_body) if response_body else {}
-    except json.JSONDecodeError as error:
-        raise RuntimeError(f"{method} {path} returned invalid JSON: {response_body}") from error
-
-    return response.status, payload, response_body
-
-
 def request(webdriver_port, method, path, body=None):
-    status, payload, response_body = request_raw(webdriver_port, method, path, body)
+    status, payload, response_body = helpers.request(webdriver_port, method, path, body)
     if status >= 400 or isinstance(payload.get("value"), dict) and payload["value"].get("error"):
         raise RuntimeError(f"{method} {path} failed with HTTP {status}: {response_body}")
 
@@ -1030,7 +1005,7 @@ def create_session(
 def expect_ladybird_test_hooks_require_capability(webdriver_port):
     session_id = create_session(webdriver_port, enable_test_hooks=False)
     try:
-        status, payload, response_body = request_raw(
+        status, payload, response_body = helpers.request(
             webdriver_port, "GET", f"/session/{session_id}/ladybird/session-history"
         )
         value = payload.get("value")
@@ -1099,7 +1074,7 @@ def expect_beforeunload_event_recorded(webdriver_port, session_id, source_url, l
 
 
 def expect_no_user_prompt(webdriver_port, session_id, label, log):
-    status, payload, response_body = request_raw(
+    status, payload, response_body = helpers.request(
         webdriver_port,
         "GET",
         f"/session/{session_id}/alert/text",
@@ -2051,7 +2026,7 @@ def run_webdriver_script_timeout_after_navigation_test(webdriver_port, url_a, ta
         load_url_from_ui(webdriver_port, session_id, url_a)
         request(webdriver_port, "POST", f"/session/{session_id}/timeouts", {"script": 2000})
 
-        status, payload, response_body = request_raw(
+        status, payload, response_body = helpers.request(
             webdriver_port,
             "POST",
             f"/session/{session_id}/execute/async",
@@ -2992,7 +2967,7 @@ def run_test(webdriver_binary):
     expect_reload_pending_history_log = False
     expect_no_entry_history_log = False
 
-    webdriver, webdriver_port = webdriver_helpers.launch_webdriver(
+    webdriver, webdriver_port = helpers.launch_webdriver(
         webdriver_binary, "--headless", output=webdriver_stdout, stderr=webdriver_stderr, env=env
     )
 

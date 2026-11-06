@@ -6,14 +6,13 @@
 
 import argparse
 import json
-import runpy
 import subprocess
 import tempfile
 import time
 
 from pathlib import Path
 
-helpers = runpy.run_path(str(Path(__file__).with_name("test-webdriver-delete-session.py")))
+import webdriver_test_utils as helpers
 
 
 def run_test(webdriver_binary):
@@ -36,13 +35,13 @@ def run_test(webdriver_binary):
             )
         )
 
-        process, port = helpers["launch_webdriver"](webdriver_binary, "--headless", "--profile-path", directory)
+        process, port = helpers.launch_webdriver(webdriver_binary, "--headless", "--profile-path", directory)
         session = None
         try:
-            session = helpers["create_session"](port)
+            session = helpers.create_session(port)
 
             def command(path, body=None, method="POST"):
-                status, payload, raw = helpers["request"](port, method, f"/session/{session}/{path}", body)
+                status, payload, raw = helpers.request(port, method, f"/session/{session}/{path}", body)
                 assert status == 200, raw
                 return payload["value"]
 
@@ -115,7 +114,7 @@ def run_test(webdriver_binary):
             print("PASS: about:settings lists, changes, and removes site permissions")
         finally:
             if session is not None:
-                helpers["request"](port, "DELETE", f"/session/{session}")
+                helpers.request(port, "DELETE", f"/session/{session}")
             process.terminate()
             try:
                 process.wait(timeout=5)

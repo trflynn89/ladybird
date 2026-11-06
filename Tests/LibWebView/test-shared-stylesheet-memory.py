@@ -6,7 +6,6 @@
 
 import argparse
 import http.server
-import runpy
 import socket
 import subprocess
 import sys
@@ -14,9 +13,7 @@ import tempfile
 import threading
 import time
 
-from pathlib import Path
-
-helpers = runpy.run_path(str(Path(__file__).with_name("test-webdriver-delete-session.py")))
+import webdriver_test_utils as helpers
 
 FRAME_COUNT = 8
 RULE_COUNT = 20000
@@ -109,13 +106,13 @@ def web_content_resident_bytes(root_pid):
 
 def measure(webdriver_binary, server_port, frame_count, kind="link"):
     with tempfile.TemporaryDirectory(prefix="ladybird-shared-sheet-") as profile:
-        process, port = helpers["launch_webdriver"](
+        process, port = helpers.launch_webdriver(
             webdriver_binary, "--headless", "--expose-internals-object", f"--profile-path={profile}"
         )
         session = None
         try:
-            session = helpers["create_session"](port)
-            status, _, raw = helpers["request"](
+            session = helpers.create_session(port)
+            status, _, raw = helpers.request(
                 port,
                 "POST",
                 f"/session/{session}/url",
@@ -136,10 +133,10 @@ def measure(webdriver_binary, server_port, frame_count, kind="link"):
                     return sheets.length === shared + 1 && sheets[shared].cssRules.length === arguments[0];
                 });
             """
-            deadline = time.monotonic() + helpers["EVENT_TIMEOUT_SECONDS"]
+            deadline = time.monotonic() + helpers.EVENT_TIMEOUT_SECONDS
             payload = {"value": None}
             while time.monotonic() < deadline:
-                status, payload, raw = helpers["request"](
+                status, payload, raw = helpers.request(
                     port,
                     "POST",
                     f"/session/{session}/execute/sync",
@@ -150,7 +147,7 @@ def measure(webdriver_binary, server_port, frame_count, kind="link"):
                     break
                 time.sleep(0.2)
             assert payload["value"] is True, f"The {frame_count} frames never finished loading the sheet"
-            status, payload, raw = helpers["request"](
+            status, payload, raw = helpers.request(
                 port,
                 "POST",
                 f"/session/{session}/execute/sync",
@@ -163,7 +160,7 @@ def measure(webdriver_binary, server_port, frame_count, kind="link"):
         finally:
             try:
                 if session is not None:
-                    helpers["request"](port, "DELETE", f"/session/{session}")
+                    helpers.request(port, "DELETE", f"/session/{session}")
             finally:
                 process.terminate()
                 try:

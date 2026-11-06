@@ -9,7 +9,6 @@ import base64
 import hashlib
 import http.client
 import http.server
-import importlib
 import json
 import os
 import socket
@@ -21,8 +20,7 @@ import threading
 import time
 import urllib.parse
 
-helpers = importlib.import_module("test-webdriver-error-keep-alive")
-webdriver_helpers = importlib.import_module("test-webdriver-delete-session")
+import webdriver_test_utils as helpers
 
 
 class BiDiConnection:
@@ -1963,7 +1961,9 @@ def check_input_cross_context(bidi, connection, session_id, parent, server):
         bidi.command("input.releaseActions", {"context": target})
 
     def classic(method, suffix, payload=None):
-        status, result, _ = helpers.request(connection, method, f"/session/{session_id}/{suffix}", payload)
+        status, result, _ = helpers.request_on_connection(
+            connection, method, f"/session/{session_id}/{suffix}", payload
+        )
         assert status == 200, result
         return result["value"]
 
@@ -2159,7 +2159,9 @@ def check_input_click_navigation(bidi, connection, session_id, parent, server):
     assert tree["children"][0]["url"] == child_url, tree
 
     def classic(method, suffix, payload=None):
-        status, result, _ = helpers.request(connection, method, f"/session/{session_id}/{suffix}", payload)
+        status, result, _ = helpers.request_on_connection(
+            connection, method, f"/session/{session_id}/{suffix}", payload
+        )
         assert status == 200, result
         return result["value"]
 
@@ -2378,9 +2380,11 @@ def check_viewport_changes(bidi, connection, session_id, first, second):
         )
     )
     assert result["type"] == "error" and result["error"] == "unsupported operation", result
-    status, payload, _ = helpers.request(connection, "POST", f"/session/{session_id}/window", {"handle": fresh})
+    status, payload, _ = helpers.request_on_connection(
+        connection, "POST", f"/session/{session_id}/window", {"handle": fresh}
+    )
     assert status == 200, payload
-    status, payload, _ = helpers.request(
+    status, payload, _ = helpers.request_on_connection(
         connection, "POST", f"/session/{session_id}/window/rect", {"width": 640, "height": 480}
     )
     assert status == 200, payload
@@ -2400,7 +2404,7 @@ def check_viewport_changes(bidi, connection, session_id, first, second):
         "browsingContext.setViewport",
         {"context": fresh, "viewport": {"width": 333, "height": 201}, "devicePixelRatio": 1.5},
     )
-    status, payload, _ = helpers.request(
+    status, payload, _ = helpers.request_on_connection(
         connection, "POST", f"/session/{session_id}/window/rect", {"width": 600, "height": 450}
     )
     assert status == 200, payload
@@ -2409,7 +2413,7 @@ def check_viewport_changes(bidi, connection, session_id, first, second):
     assert metrics(fresh) == [400, 300, 2], metrics(fresh)
     bidi.command("browsingContext.setViewport", {"context": fresh, "viewport": None, "devicePixelRatio": None})
     assert metrics(fresh) == expected_default, metrics(fresh)
-    helpers.request(connection, "POST", f"/session/{session_id}/window", {"handle": first})
+    helpers.request_on_connection(connection, "POST", f"/session/{session_id}/window", {"handle": first})
     bidi.command("browsingContext.close", {"context": fresh})
     for context in [first, second]:
         bidi.command("browsingContext.setViewport", {"context": context, "viewport": None, "devicePixelRatio": None})
@@ -2439,7 +2443,7 @@ def cleanup_resources(server, webdriver, connection, bidi, session_id, *, primar
     attempt(server.release_response.set)
     attempt(server.release_interception.set)
     if session_id and connection:
-        attempt(lambda: helpers.request(connection, "DELETE", f"/session/{session_id}"))
+        attempt(lambda: helpers.request_on_connection(connection, "DELETE", f"/session/{session_id}"))
     if bidi:
         attempt(bidi.close)
     if connection:
@@ -2469,7 +2473,7 @@ def run_test(
         bidi = None
         session_id = None
         try:
-            webdriver, port = webdriver_helpers.launch_webdriver(
+            webdriver, port = helpers.launch_webdriver(
                 webdriver_binary,
                 "--headless",
                 "--expose-internals-object",
@@ -2478,7 +2482,7 @@ def run_test(
                 env={**os.environ, "XDG_DOWNLOAD_DIR": downloads},
             )
             connection = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
-            status, payload, _ = helpers.request(
+            status, payload, _ = helpers.request_on_connection(
                 connection,
                 "POST",
                 "/session",
@@ -2501,20 +2505,20 @@ def run_test(
             context = bidi.command("browsingContext.getTree", {})["contexts"][0]["context"]
             if network_interception_only:
                 check_network_interception(bidi, context, server, network_interception_case)
-                status, payload, _ = helpers.request(connection, "DELETE", f"/session/{session_id}")
+                status, payload, _ = helpers.request_on_connection(connection, "DELETE", f"/session/{session_id}")
                 assert status == 200, payload
                 session_id = None
                 return
             if network_download_only:
                 check_network_download_events(bidi, context, server, downloads)
-                status, payload, _ = helpers.request(connection, "DELETE", f"/session/{session_id}")
+                status, payload, _ = helpers.request_on_connection(connection, "DELETE", f"/session/{session_id}")
                 assert status == 200, payload
                 session_id = None
                 return
             if input_cross_context_only:
                 check_input_cross_context(bidi, connection, session_id, context, server)
                 check_input_click_navigation(bidi, connection, session_id, context, server)
-                status, payload, _ = helpers.request(connection, "DELETE", f"/session/{session_id}")
+                status, payload, _ = helpers.request_on_connection(connection, "DELETE", f"/session/{session_id}")
                 assert status == 200, payload
                 session_id = None
                 return
@@ -2701,7 +2705,7 @@ def run_test(
                 {"target": {"context": context}, "expression": "new Promise(() => {})", "awaitPromise": True},
             )
             bidi.evaluate(context, "internals.gc(); undefined")
-            status, payload, _ = helpers.request(connection, "DELETE", f"/session/{session_id}")
+            status, payload, _ = helpers.request_on_connection(connection, "DELETE", f"/session/{session_id}")
             assert status == 200, payload
             session_id = None
         finally:

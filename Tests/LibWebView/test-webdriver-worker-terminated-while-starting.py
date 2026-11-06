@@ -5,7 +5,6 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
-import importlib
 import os
 import shlex
 import subprocess
@@ -14,7 +13,7 @@ import time
 
 from pathlib import Path
 
-webdriver_helpers = importlib.import_module("test-webdriver-delete-session")
+import webdriver_test_utils as helpers
 
 # Terminate a worker at each of these delays after constructing it, to catch its process at every stage of starting up.
 TERMINATE_DELAYS_MS = list(range(0, 600, 25))
@@ -51,17 +50,17 @@ def run_test(webdriver_binary):
             ("XDG_CACHE_HOME", "cache"),
         ):
             environment[variable] = str(Path(temporary) / directory)
-        webdriver, port = webdriver_helpers.launch_webdriver(webdriver_binary, "--headless", env=environment)
+        webdriver, port = helpers.launch_webdriver(webdriver_binary, "--headless", env=environment)
         try:
-            session = webdriver_helpers.create_session(port)
-            status, _, body = webdriver_helpers.request(
+            session = helpers.create_session(port)
+            status, _, body = helpers.request(
                 port, "POST", f"/session/{session}/url", {"url": "data:text/html,<title>Workers</title>"}
             )
             assert status == 200, body
 
             # Each worker's process is launched before its constructor returns, and is still starting up when
             # terminate() tears the worker down.
-            status, payload, body = webdriver_helpers.request(
+            status, payload, body = helpers.request(
                 port,
                 "POST",
                 f"/session/{session}/execute/async",
@@ -88,7 +87,7 @@ def run_test(webdriver_binary):
             )
             assert status == 200 and payload == {"value": None}, body
 
-            deadline = time.monotonic() + webdriver_helpers.EVENT_TIMEOUT_SECONDS
+            deadline = time.monotonic() + helpers.EVENT_TIMEOUT_SECONDS
             while descendants_named(webdriver.pid, "WebWorker"):
                 if time.monotonic() >= deadline:
                     raise AssertionError("A terminated worker's process never exited")
@@ -98,7 +97,7 @@ def run_test(webdriver_binary):
             reports = list((Path(temporary) / "data/Ladybird/CrashReports").glob("*-WebWorker-*.txt"))
             assert not reports, reports[0].read_text()
 
-            webdriver_helpers.request(port, "DELETE", f"/session/{session}")
+            helpers.request(port, "DELETE", f"/session/{session}")
         finally:
             webdriver.terminate()
             try:

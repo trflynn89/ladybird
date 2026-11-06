@@ -7,7 +7,6 @@
 import base64
 import http.server
 import json
-import runpy
 import struct
 import subprocess
 import sys
@@ -18,7 +17,7 @@ import zlib
 
 from pathlib import Path
 
-helpers = runpy.run_path(str(Path(__file__).with_name("test-webdriver-delete-session.py")))
+import webdriver_test_utils as helpers
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -93,15 +92,15 @@ def run_test(default):
         threading.Thread(target=server.serve_forever, daemon=True).start()
         # The pixels are colors the display list carries, which take no GPU to draw. The GPU of a CI machine can refuse
         # every submission of the Compositor, which would leave the screenshots showing earlier colors.
-        process, port = helpers["launch_webdriver"](
+        process, port = helpers.launch_webdriver(
             sys.argv[1], "--headless", "--force-cpu-painting", "--profile-path", directory
         )
         session = None
         try:
-            session = helpers["create_session"](port)
+            session = helpers.create_session(port)
 
             def command(method, path, body=None):
-                status, payload, raw = helpers["request"](port, method, f"/session/{session}/{path}", body)
+                status, payload, raw = helpers.request(port, method, f"/session/{session}/{path}", body)
                 return status, payload, raw
 
             def wait_for_page(url):
@@ -231,7 +230,7 @@ def run_test(default):
         finally:
             try:
                 if session is not None:
-                    helpers["request"](port, "DELETE", f"/session/{session}")
+                    helpers.request(port, "DELETE", f"/session/{session}")
             finally:
                 process.terminate()
                 try:

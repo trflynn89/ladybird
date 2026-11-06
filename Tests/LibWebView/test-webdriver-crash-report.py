@@ -5,7 +5,6 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
-import importlib
 import os
 import re
 import shlex
@@ -16,16 +15,16 @@ import time
 
 from pathlib import Path
 
-webdriver_helpers = importlib.import_module("test-webdriver-delete-session")
+import webdriver_test_utils as helpers
 
 
 def wait_for_compositor(port, session):
     # The Compositor takes a screenshot, so once one succeeds, the Compositor is done starting up and waiting in its
     # event loop. A signal sent while it's still starting can land in a system library built without frame pointers,
     # which leaves the report with a single frame. Until then, taking a screenshot fails with "unable to capture screen".
-    deadline = time.monotonic() + webdriver_helpers.EVENT_TIMEOUT_SECONDS
+    deadline = time.monotonic() + helpers.EVENT_TIMEOUT_SECONDS
     while True:
-        status, _, body = webdriver_helpers.request(port, "GET", f"/session/{session}/screenshot")
+        status, _, body = helpers.request(port, "GET", f"/session/{session}/screenshot")
         if status == 200:
             return
         assert "unable to capture screen" in body, body
@@ -65,9 +64,9 @@ def run_test(webdriver_binary, process_name):
             ("XDG_CACHE_HOME", "cache"),
         ):
             environment[variable] = str(Path(temporary) / directory)
-        webdriver, port = webdriver_helpers.launch_webdriver(webdriver_binary, "--headless", env=environment)
+        webdriver, port = helpers.launch_webdriver(webdriver_binary, "--headless", env=environment)
         try:
-            status, payload, body = webdriver_helpers.request(
+            status, payload, body = helpers.request(
                 port,
                 "POST",
                 "/session",
@@ -75,7 +74,7 @@ def run_test(webdriver_binary, process_name):
             )
             assert status == 200, body
             session = payload["value"]["sessionId"]
-            status, _, body = webdriver_helpers.request(
+            status, _, body = helpers.request(
                 port,
                 "POST",
                 f"/session/{session}/url",
@@ -83,13 +82,11 @@ def run_test(webdriver_binary, process_name):
             )
             assert status == 200, body
             if process_name == "WebContent":
-                status, _, body = webdriver_helpers.request(
-                    port, "POST", f"/session/{session}/ladybird/crash-current-page", {}
-                )
+                status, _, body = helpers.request(port, "POST", f"/session/{session}/ladybird/crash-current-page", {})
                 assert status == 200, body
             else:
                 if process_name == "WebWorker":
-                    status, payload, body = webdriver_helpers.request(
+                    status, payload, body = helpers.request(
                         port,
                         "POST",
                         f"/session/{session}/execute/async",
@@ -110,7 +107,7 @@ def run_test(webdriver_binary, process_name):
                     wait_for_compositor(port, session)
                 crash_helper(webdriver.pid, process_name)
             directory = Path(temporary) / "data/Ladybird/CrashReports"
-            deadline = time.monotonic() + webdriver_helpers.EVENT_TIMEOUT_SECONDS
+            deadline = time.monotonic() + helpers.EVENT_TIMEOUT_SECONDS
             while True:
                 reports = list(directory.glob(f"*-{process_name}-*.txt"))
                 if reports:
@@ -146,7 +143,7 @@ def run_test(webdriver_binary, process_name):
             assert temporary not in text and str(Path.home()) not in text, text
             assert reports[0].stat().st_mode & 0o777 == 0o400
             assert directory.stat().st_mode & 0o777 == 0o700
-            webdriver_helpers.request(port, "DELETE", f"/session/{session}")
+            helpers.request(port, "DELETE", f"/session/{session}")
         finally:
             webdriver.terminate()
             try:

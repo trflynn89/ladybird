@@ -7,15 +7,15 @@
 import http.server
 import json
 import os
-import runpy
 import sys
 import tempfile
 import threading
 
 from pathlib import Path
 
-helpers = runpy.run_path(str(Path(__file__).with_name("test-webdriver-delete-session.py")))
-request = helpers["request"]
+import webdriver_test_utils as helpers
+
+request = helpers.request
 hits = []
 release_downloads = threading.Event()
 release_stall = threading.Event()
@@ -74,7 +74,7 @@ with tempfile.TemporaryDirectory() as directory:
     )
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    process, port = helpers["launch_webdriver"](
+    process, port = helpers.launch_webdriver(
         sys.argv[1],
         "--headless",
         "--profile-path",
@@ -83,7 +83,7 @@ with tempfile.TemporaryDirectory() as directory:
     )
     session = None
     try:
-        session = helpers["create_session"](port)
+        session = helpers.create_session(port)
 
         def command(path, body):
             status, payload, raw = request(port, "POST", f"/session/{session}/{path}", body)

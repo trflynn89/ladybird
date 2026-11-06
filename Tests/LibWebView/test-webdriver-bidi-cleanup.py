@@ -37,7 +37,9 @@ class CleanupTests(unittest.TestCase):
     def test_cleanup_failures_preserve_primary_error_and_release_every_resource(self):
         resources = self.resources()
         primary = AssertionError("original test failure")
-        with patch.object(bidi_helpers.helpers, "request", side_effect=OSError("DELETE failed")) as delete:
+        with patch.object(
+            bidi_helpers.helpers, "request_on_connection", side_effect=OSError("DELETE failed")
+        ) as delete:
             with self.assertRaises(AssertionError) as raised:
                 try:
                     raise primary
@@ -50,7 +52,7 @@ class CleanupTests(unittest.TestCase):
     def test_cleanup_without_primary_error_reports_failure_after_releasing_resources(self):
         resources = self.resources()
         failure = OSError("DELETE failed")
-        with patch.object(bidi_helpers.helpers, "request", side_effect=failure):
+        with patch.object(bidi_helpers.helpers, "request_on_connection", side_effect=failure):
             with self.assertRaises(OSError) as raised:
                 bidi_helpers.cleanup_resources(*resources, "session")
             self.assertIs(raised.exception, failure)
@@ -59,14 +61,14 @@ class CleanupTests(unittest.TestCase):
     def test_termination_failure_still_waits_and_kills(self):
         resources = self.resources()
         resources[1].terminate.side_effect = OSError("terminate failed")
-        with patch.object(bidi_helpers.helpers, "request", side_effect=OSError("DELETE failed")):
+        with patch.object(bidi_helpers.helpers, "request_on_connection", side_effect=OSError("DELETE failed")):
             bidi_helpers.cleanup_resources(*resources, "session", primary_error=AssertionError("primary"))
         self.assert_cleaned(*resources)
 
     def test_unexpected_wait_failure_still_kills_and_waits(self):
         resources = self.resources()
         resources[1].wait.side_effect = [OSError("wait failed"), 0]
-        with patch.object(bidi_helpers.helpers, "request", side_effect=OSError("DELETE failed")):
+        with patch.object(bidi_helpers.helpers, "request_on_connection", side_effect=OSError("DELETE failed")):
             bidi_helpers.cleanup_resources(*resources, "session", primary_error=AssertionError("primary"))
         self.assert_cleaned(*resources)
 
