@@ -7,7 +7,6 @@
 import http.server
 import sys
 import threading
-import time
 
 import webdriver_test_utils as helpers
 
@@ -43,33 +42,15 @@ with temporary_profile(settings={"content": {"zoomPerHost": {"127.0.0.1": 1.8}}}
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     with running_http_server(server):
         with helpers.webdriver_session(sys.argv[1], "--headless", "--profile-path", directory) as browser:
-            port = browser.port
-            session = browser.session_id
             try:
                 command = browser.command
                 script = browser.script
 
                 def wait_for_page(url, pixel_ratio):
-                    deadline = time.monotonic() + 30
-                    state = None
-                    while time.monotonic() < deadline:
-                        status, payload, raw = helpers.request(
-                            port,
-                            "POST",
-                            f"/session/{session}/execute/sync",
-                            {"script": "return [location.href, document.readyState, devicePixelRatio]", "args": []},
-                        )
-                        if (
-                            status == 500
-                            and payload["value"]["message"] == "WebContent was replaced while executing the command"
-                        ):
-                            continue
-                        assert status == 200, raw
-                        state = payload["value"]
-                        if state == [url, "complete", pixel_ratio]:
-                            return
-                        time.sleep(0.01)
-                    raise AssertionError(f"Expected {url} at scale {pixel_ratio}, got {state}")
+                    browser.wait_for_script(
+                        "return [location.href, document.readyState, devicePixelRatio]",
+                        expected=[url, "complete", pixel_ratio],
+                    )
 
                 # Measure the platform's unzoomed ratio rather than assuming a particular display density.
                 baseline_ratio = script("return devicePixelRatio")

@@ -63,6 +63,30 @@ class WebDriverSessionTests(unittest.TestCase):
             self.assertEqual([call.args[2] for call in request.call_args_list], ["/session/first", "/session/second"])
 
 
+class ScriptWaitingTests(unittest.TestCase):
+    def test_waiting_retries_renderer_replacement(self):
+        session = webdriver.WebDriverSession(Mock(), 1234)
+        session.session_id = "session"
+        with patch.object(
+            session,
+            "request",
+            side_effect=[
+                (500, {"value": {"message": "WebContent was replaced while executing the command"}}, ""),
+                (200, {"value": ["complete", 2]}, ""),
+            ],
+        ):
+            self.assertEqual(session.wait_for_script("return state", expected=["complete", 2]), ["complete", 2])
+
+    def test_waiting_does_not_retry_other_command_errors(self):
+        session = webdriver.WebDriverSession(Mock(), 1234)
+        with patch.object(
+            session, "request", return_value=(500, {"value": {"message": "Script failed"}}, "Script failed")
+        ) as request:
+            with self.assertRaisesRegex(AssertionError, "Script failed"):
+                session.wait_for_script("return state")
+            request.assert_called_once()
+
+
 class HTTPServerTests(unittest.TestCase):
     def test_shutdown_failure_still_closes_the_socket_and_joins_the_thread(self):
         server = Mock()

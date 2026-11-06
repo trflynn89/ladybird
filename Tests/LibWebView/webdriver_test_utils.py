@@ -138,6 +138,20 @@ class WebDriverSession:
     def async_script(self, source, *args):
         return self.command("execute/async", {"script": source, "args": list(args)})
 
+    def wait_for_script(self, source, *args, expected: object = True, timeout=EVENT_TIMEOUT_SECONDS, interval=0.01):
+        deadline = time.monotonic() + timeout
+        state = None
+        while time.monotonic() < deadline:
+            status, payload, raw = self.request("execute/sync", {"script": source, "args": list(args)})
+            if status == 500 and payload["value"]["message"] == "WebContent was replaced while executing the command":
+                continue
+            assert status == 200, raw
+            state = payload["value"]
+            if state == expected:
+                return state
+            time.sleep(interval)
+        raise AssertionError(f"Expected {expected!r} from {source!r}, got {state!r}")
+
 
 @contextmanager
 def webdriver_session(webdriver_binary, *arguments, capabilities=None, **popen_arguments):

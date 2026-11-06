@@ -58,14 +58,10 @@ def main():
 
     with helpers.webdriver_session(webdriver_binary, "--headless", "--expose-internals-object") as browser:
         process = browser.process
-        port = browser.port
-        session = browser.session_id
 
         def run(script, *args, asynchronous=False):
-            path = f"/session/{session}/execute/{'async' if asynchronous else 'sync'}"
-            status, payload, raw = helpers.request(port, "POST", path, {"script": script, "args": list(args)})
-            assert status == 200, raw
-            return payload["value"]
+            execute = browser.async_script if asynchronous else browser.script
+            return execute(script, *args)
 
         def collect_and_count(limit):
             run("internals.gc()")

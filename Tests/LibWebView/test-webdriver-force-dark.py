@@ -9,7 +9,6 @@ import http.server
 import json
 import struct
 import sys
-import time
 import zlib
 
 import webdriver_test_utils as helpers
@@ -97,25 +96,7 @@ def run_test(default):
                     return status, payload, raw
 
                 def wait_for_page(url):
-                    deadline = time.monotonic() + 30
-                    state = None
-                    while time.monotonic() < deadline:
-                        status, payload, raw = command(
-                            "POST",
-                            "execute/sync",
-                            {"script": "return [location.href, document.readyState]", "args": []},
-                        )
-                        if (
-                            status == 500
-                            and payload["value"]["message"] == "WebContent was replaced while executing the command"
-                        ):
-                            continue
-                        assert status == 200, raw
-                        state = payload["value"]
-                        if state == [url, "complete"]:
-                            return
-                        time.sleep(0.01)
-                    raise AssertionError(f"Expected {url}, got {state}")
+                    browser.wait_for_script("return [location.href, document.readyState]", expected=[url, "complete"])
 
                 def assert_force_dark(description, expected, check_initial=True):
                     status, payload, raw = command("GET", "screenshot")
@@ -171,18 +152,10 @@ def run_test(default):
                 assert_force_dark("Reload", not default)
                 print(f"PASS: per-host force-dark across navigation (default={default})")
 
-                def evaluate(script):
-                    status, payload, raw = command("POST", "execute/sync", {"script": script, "args": []})
-                    assert status == 200, raw
-                    return payload["value"]
+                evaluate = browser.script
 
                 def wait_for_condition(script):
-                    deadline = time.monotonic() + 10
-                    while time.monotonic() < deadline:
-                        if evaluate(script):
-                            return
-                        time.sleep(0.01)
-                    raise AssertionError(f"Condition did not become true: {script}")
+                    browser.wait_for_script(script, timeout=10)
 
                 status, payload, raw = command("GET", "window")
                 assert status == 200, raw

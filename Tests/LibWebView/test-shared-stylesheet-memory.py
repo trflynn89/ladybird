@@ -124,28 +124,8 @@ def measure(webdriver_binary, server_port, frame_count, kind="link"):
                     return sheets.length === shared + 1 && sheets[shared].cssRules.length === arguments[0];
                 });
             """
-            deadline = time.monotonic() + helpers.EVENT_TIMEOUT_SECONDS
-            payload = {"value": None}
-            while time.monotonic() < deadline:
-                status, payload, raw = helpers.request(
-                    port,
-                    "POST",
-                    f"/session/{session}/execute/sync",
-                    {"script": script, "args": [RULE_COUNT, kind]},
-                )
-                assert status == 200, raw
-                if payload["value"] is True:
-                    break
-                time.sleep(0.2)
-            assert payload["value"] is True, f"The {frame_count} frames never finished loading the sheet"
-            status, payload, raw = helpers.request(
-                port,
-                "POST",
-                f"/session/{session}/execute/sync",
-                {"script": "return internals.styleMemoryOfFrames();", "args": []},
-            )
-            assert status == 200, raw
-            style_bytes = payload["value"]
+            browser.wait_for_script(script, RULE_COUNT, kind, interval=0.2)
+            style_bytes = browser.script("return internals.styleMemoryOfFrames();")
             time.sleep(2)
             return web_content_resident_bytes(process.pid), style_bytes
 
