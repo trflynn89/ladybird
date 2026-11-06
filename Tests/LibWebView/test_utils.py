@@ -4,6 +4,7 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
+import argparse
 import json
 import subprocess
 import sys
@@ -69,3 +70,11 @@ def running_http_server(server):
         yield server
     finally:
         cleanup(server.shutdown, server.server_close, thread.join)
+
+
+def run_test_cases(cases, binary_argument):
+    parser = argparse.ArgumentParser()
+    parser.add_argument(binary_argument)
+    args = parser.parse_args()
+    for case in cases:
+        case(getattr(args, binary_argument))
