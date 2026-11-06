@@ -38,6 +38,7 @@ class DevToolsClient:
                 continue
             self.buffer = b""
             self.console = None
+            self.resources = {}
             try:
                 self.receive()
                 return
@@ -60,6 +61,9 @@ class DevToolsClient:
                 if len(self.buffer) >= end:
                     packet = json.loads(self.buffer[separator + 1 : end])
                     self.buffer = self.buffer[end:]
+                    if packet.get("type") == "resources-available-array":
+                        for resource_type, resources in packet.get("array", []):
+                            self.resources.setdefault(resource_type, []).extend(resources)
                     return packet
             chunk = self.socket.recv(65536)
             if not chunk:
@@ -89,6 +93,11 @@ class DevToolsClient:
         self.send({"to": watcher, "type": "watchTargets", "targetType": "frame"})
         self.follow_frame_target()
         return watcher
+
+    def watch_resources(self, watcher, resource_type):
+        resources = self.resources.setdefault(resource_type, [])
+        self.send({"to": watcher, "type": "watchResources", "resourceTypes": [resource_type]})
+        return resources
 
     def follow_frame_target(self):
         self.receive_matching(lambda packet: packet.get("type") == "target-available-form")
