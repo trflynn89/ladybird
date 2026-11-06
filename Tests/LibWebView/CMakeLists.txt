@@ -1,7 +1,6 @@
 if (BUILD_TESTING AND NOT WIN32)
     if (APPLE OR LINUX)
-        ladybird_python_test(test-devtools-catch-up-layout.py ARGS $<TARGET_FILE:ladybird>)
-        ladybird_python_test(test-devtools-client-follows-the-tab.py ARGS $<TARGET_FILE:ladybird>)
+        ladybird_python_test(test-devtools-targets.py ARGS $<TARGET_FILE:ladybird>)
         ladybird_python_test(test-devtools-console.py ARGS $<TARGET_FILE:ladybird>)
         ladybird_python_test(test-message-port-collection.py ARGS $<TARGET_FILE:WebDriver>)
         ladybird_python_test(test-shared-stylesheet-memory.py ARGS $<TARGET_FILE:WebDriver> TIMEOUT 180)

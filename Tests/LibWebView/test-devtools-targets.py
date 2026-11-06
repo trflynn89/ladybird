@@ -4,21 +4,29 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
-import argparse
 import http.server
 import json
-import tempfile
 import threading
-
-from pathlib import Path
 
 from devtools_test_utils import DevToolsClient
 from devtools_test_utils import launch
 from devtools_test_utils import wait_for_page
 from devtools_test_utils import wait_until
 from test_utils import cleanup
+from test_utils import run_test_cases
 from test_utils import running_http_server
 from test_utils import stop_process
+from test_utils import temporary_profile
+
+# This container generates no box. Each layout leaves its descendant container unit pending a style update.
+CATCH_UP_PAGE = b"""<!doctype html><title>catch-up</title>
+<style>
+    .container { container-type: inline-size; display: contents; }
+    .item { width: 50cqw; }
+</style>
+<div class="container"><div class="item">item</div></div>
+<script>window.loaded = true;</script>
+"""
 
 loads_lock = threading.Lock()
 loads = {}
@@ -34,14 +42,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.path == "/favicon.ico":
             self.send_error(404)
             return
-        with loads_lock:
-            load = loads.get(self.path, 0) + 1
-            loads[self.path] = load
+        if self.path == "/catch-up":
+            body = CATCH_UP_PAGE
+        else:
+            with loads_lock:
+                load = loads.get(self.path, 0) + 1
+                loads[self.path] = load
+            body = f"<!doctype html><title>{self.path}</title><script>window.load = {load};</script>".encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/html")
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        self.wfile.write(f"<!doctype html><title>{self.path}</title><script>window.load = {load};</script>".encode())
+        self.wfile.write(body)
 
     def log_message(self, format, *args):
         pass
@@ -56,7 +68,7 @@ def assert_page_survives_disconnects(devtools_port, path, load):
         page_load = client.evaluate("window.load")
         assert page_load == load, f"window.load is {page_load!r}"
     finally:
-        client.close()
+        cleanup(client.close)
     assert load_count(path) == load, f"{path} was loaded {load_count(path)} times"
 
 
@@ -77,7 +89,7 @@ def test_cross_site_navigation(ladybird_binary, profile, server):
             client.submit(navigate)
             wait_for_page(client, target_url, "/target")
         finally:
-            client.close()
+            cleanup(client.close)
 
         assert_page_survives_disconnects(devtools_port, "/target", 1)
         assert process.poll() is None, "The browser exited"
@@ -103,7 +115,7 @@ def test_crash_recovery(ladybird_binary, profile, server):
             # A target form for the crashed page itself can still arrive first.
             wait_until("the client inspects the restored page", lambda: client.evaluate("window.load") == 2)
         finally:
-            client.close()
+            cleanup(client.close)
 
         assert_page_survives_disconnects(devtools_port, "/crash", 2)
         assert process.poll() is None, "The browser exited"
@@ -112,17 +124,33 @@ def test_crash_recovery(ladybird_binary, profile, server):
         cleanup(lambda: stop_process(process))
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("ladybird_binary")
-    ladybird_binary = parser.parse_args().ladybird_binary
-
+def test_tab_lifecycle(ladybird_binary):
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     with running_http_server(server):
-        with tempfile.TemporaryDirectory(prefix="ladybird-devtools-") as directory:
-            test_cross_site_navigation(ladybird_binary, Path(directory) / "navigation", server)
-            test_crash_recovery(ladybird_binary, Path(directory) / "crash", server)
+        with temporary_profile(prefix="ladybird-devtools-") as directory:
+            test_cross_site_navigation(ladybird_binary, directory / "navigation", server)
+            test_crash_recovery(ladybird_binary, directory / "crash", server)
+
+
+def test_catch_up_layout(ladybird_binary):
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    with running_http_server(server):
+        url = f"http://127.0.0.1:{server.server_port}/catch-up"
+        with temporary_profile(prefix="ladybird-devtools-") as profile:
+            process, devtools_port, client = launch(ladybird_binary, profile, url)
+            try:
+                try:
+                    wait_for_page(client, url, "catch-up")
+                    # The first client lays the document out once more, to collect the layout inspection data.
+                    client.watch_frame_targets()
+                    assert client.evaluate("window.loaded") is True
+                finally:
+                    cleanup(client.close)
+                assert process.poll() is None, "The browser exited"
+                print("PASS: A DevTools client's catch-up layout settles")
+            finally:
+                cleanup(lambda: stop_process(process))
 
 
 if __name__ == "__main__":
-    main()
+    run_test_cases([test_catch_up_layout, test_tab_lifecycle], "ladybird_binary")
