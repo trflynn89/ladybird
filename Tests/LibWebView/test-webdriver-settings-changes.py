@@ -13,6 +13,7 @@ import webdriver_test_utils as helpers
 from test_utils import cleanup
 from test_utils import running_http_server
 from test_utils import temporary_profile
+from webui_test_utils import settings_exchange
 
 
 def run_test(webdriver_binary):
@@ -38,20 +39,8 @@ def run_test(webdriver_binary):
                     script = browser.script
 
                     def change(name, data):
-                        return command(
-                            "execute/async",
-                            {
-                                "script": """
-                                const [name, data, done] = arguments;
-                                document.addEventListener('WebUIMessage', function listener(event) {
-                                    if (event.detail.name !== 'loadSettings') return;
-                                    document.removeEventListener('WebUIMessage', listener);
-                                    done(event.detail.data);
-                                });
-                                ladybird.sendMessage(name, data);
-                            """,
-                                "args": [name, data],
-                            },
+                        return settings_exchange(
+                            browser, "ladybird.sendMessage(parameters[0], parameters[1]);", name, data
                         )
 
                     command("url", {"url": "about:settings#advanced"})

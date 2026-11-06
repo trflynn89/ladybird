@@ -10,6 +10,7 @@ import json
 import webdriver_test_utils as helpers
 
 from test_utils import temporary_profile
+from webui_test_utils import settings_exchange
 
 
 def run_test(webdriver_binary, graphical):
@@ -34,24 +35,8 @@ def run_test(webdriver_binary, graphical):
             script = browser.script
 
             def change_settings(action, condition, *args):
-                command(
-                    "execute/async",
-                    {
-                        "script": f"""
-                        const parameters = Array.from(arguments);
-                        const done = parameters.pop();
-                        document.addEventListener('WebUIMessage', function listener(event) {{
-                            if (event.detail.name !== 'loadSettings') return;
-                            if (!Object.hasOwn(event.detail.data, 'searchEngine')) return;
-                            const settings = event.detail.data;
-                            if (!({condition})) return;
-                            document.removeEventListener('WebUIMessage', listener);
-                            done();
-                        }});
-                        {action}
-                    """,
-                        "args": list(args),
-                    },
+                settings_exchange(
+                    browser, action, *args, condition=f"Object.hasOwn(settings, 'searchEngine') && ({condition})"
                 )
 
             def select_engine(name):

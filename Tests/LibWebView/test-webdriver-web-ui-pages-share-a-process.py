@@ -9,6 +9,7 @@ import argparse
 import webdriver_test_utils as helpers
 
 from test_utils import temporary_profile
+from webui_test_utils import settings_exchange
 
 
 # A tab opened from a WebUI page starts in that page's process, so a second page of the same WebUI there must not take
@@ -22,21 +23,8 @@ def run_test(webdriver_binary):
             command = browser.command
 
             def round_trip():
-                return command(
-                    "execute/async",
-                    {
-                        "script": """
-                        const done = arguments[0];
-                        document.addEventListener('WebUIMessage', function listener(event) {
-                            if (event.detail.name !== 'loadSettings') return;
-                            document.removeEventListener('WebUIMessage', listener);
-                            done(true);
-                        });
-                        ladybird.sendMessage('loadCurrentSettings');
-                    """,
-                        "args": [],
-                    },
-                )
+                settings_exchange(browser, "ladybird.sendMessage('loadCurrentSettings');")
+                return True
 
             command("timeouts", {"script": 5000})
             command("url", {"url": "about:settings"})
