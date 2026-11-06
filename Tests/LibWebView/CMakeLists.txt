@@ -4,12 +4,11 @@ if (BUILD_TESTING AND NOT WIN32)
         ladybird_python_test(test-devtools-console.py ARGS $<TARGET_FILE:ladybird>)
         ladybird_python_test(test-message-port-collection.py ARGS $<TARGET_FILE:WebDriver>)
         ladybird_python_test(test-shared-stylesheet-memory.py ARGS $<TARGET_FILE:WebDriver> TIMEOUT 180)
-        ladybird_python_test(test-user-agent-preset-reaches-child-frames.py ARGS $<TARGET_FILE:ladybird>)
+        ladybird_python_test(test-browser-state-propagation.py ARGS $<TARGET_FILE:ladybird>)
         ladybird_python_test(test-webdriver-browser-crash-recovery.py ARGS $<TARGET_FILE:WebDriver>)
         ladybird_python_test(test-webdriver-compositor-reconnect.py ARGS $<TARGET_FILE:WebDriver>)
         ladybird_python_test(test-webdriver-crash-report.py ARGS $<TARGET_FILE:WebDriver>)
         ladybird_python_test(test-webdriver-worker-terminated-while-starting.py ARGS $<TARGET_FILE:WebDriver>)
-        ladybird_python_test(test-window-size-reaches-every-page.py ARGS $<TARGET_FILE:ladybird>)
 
         foreach(helper IN ITEMS Compositor ImageDecoder RequestServer WebWorker)
             ladybird_python_test(test-webdriver-crash-report.py
