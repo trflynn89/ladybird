@@ -5,27 +5,21 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
-import tempfile
 
 import webdriver_test_utils as helpers
 
-from test_utils import cleanup
-from test_utils import stop_process
+from test_utils import temporary_profile
 
 
 # A tab opened from a WebUI page starts in that page's process, so a second page of the same WebUI there must not take
 # the first page's channel to the UI process.
 def run_test(webdriver_binary):
-    with tempfile.TemporaryDirectory() as directory:
-        process, port = helpers.launch_webdriver(webdriver_binary, "--headless", "--profile-path", directory)
-        session = None
-        try:
-            session = helpers.create_session(port)
+    with temporary_profile() as directory:
+        with helpers.webdriver_session(webdriver_binary, "--headless", "--profile-path", directory) as browser:
+            port = browser.port
+            session = browser.session_id
 
-            def command(path, body):
-                status, payload, raw = helpers.request(port, "POST", f"/session/{session}/{path}", body)
-                assert status == 200, raw
-                return payload["value"]
+            command = browser.command
 
             def round_trip():
                 return command(
@@ -59,11 +53,6 @@ def run_test(webdriver_binary):
             command("window", {"handle": first_window})
             assert round_trip(), "The first page lost its WebUI channel"
             print("PASS: two WebUI pages in one process each keep their channel")
-        finally:
-            cleanup(
-                lambda: helpers.request(port, "DELETE", f"/session/{session}") if session is not None else None,
-                lambda: stop_process(process),
-            )
 
 
 if __name__ == "__main__":

@@ -7,11 +7,10 @@
 import argparse
 import http.server
 import tempfile
-import threading
 
 import devtools_test_utils as devtools
 
-from test_utils import cleanup
+from test_utils import running_http_server
 from test_utils import stop_process
 
 PAGE = b"""<!doctype html><title>iframe-console</title>
@@ -39,9 +38,8 @@ def main():
     parser.add_argument("ladybird_binary")
     ladybird_binary = parser.parse_args().ladybird_binary
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    url = f"http://127.0.0.1:{server.server_port}/page"
-    try:
+    with running_http_server(server):
+        url = f"http://127.0.0.1:{server.server_port}/page"
         with tempfile.TemporaryDirectory(prefix="ladybird-iframe-console-") as profile:
             process, _, client = devtools.launch(ladybird_binary, profile, url)
             try:
@@ -111,11 +109,6 @@ def main():
             finally:
                 client.close()
                 stop_process(process)
-    finally:
-        cleanup(
-            server.shutdown,
-            server.server_close,
-        )
 
 
 if __name__ == "__main__":

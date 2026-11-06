@@ -6,31 +6,18 @@
 
 import argparse
 import json
-import tempfile
-
-from pathlib import Path
 
 import webdriver_test_utils as helpers
 
-from test_utils import cleanup
-from test_utils import stop_process
+from test_utils import temporary_profile
 
 
 def run_browser(webdriver_binary, settings, check):
-    with tempfile.TemporaryDirectory() as directory:
-        config = Path(directory) / "config"
-        config.mkdir()
+    with temporary_profile(settings=settings) as directory:
+        config = directory / "config"
         settings_file = config / "Settings.json"
-        settings_file.write_text(json.dumps(settings))
-        process, port = helpers.launch_webdriver(webdriver_binary, "--headless", "--profile-path", directory)
-        session = None
-        try:
-            session = helpers.create_session(port)
-
-            def command(path, body=None, method="POST"):
-                status, payload, raw = helpers.request(port, method, f"/session/{session}/{path}", body)
-                assert status == 200, raw
-                return payload["value"]
+        with helpers.webdriver_session(webdriver_binary, "--headless", "--profile-path", directory) as browser:
+            command = browser.command
 
             def switch_state():
                 command("url", {"url": "about:settings"})
@@ -70,11 +57,6 @@ def run_browser(webdriver_binary, settings, check):
                 )
 
             check(switch_state, toggle_switch, settings_file)
-        finally:
-            cleanup(
-                lambda: helpers.request(port, "DELETE", f"/session/{session}") if session is not None else None,
-                lambda: stop_process(process),
-            )
 
 
 def run_test(webdriver_binary):

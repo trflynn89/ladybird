@@ -9,8 +9,8 @@ import gzip
 import http.client
 import http.server
 import json
-import runpy
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -20,7 +20,9 @@ from typing import cast
 
 WEBDRIVER_REQUEST_TIMEOUT_SECONDS = 60
 
-webdriver_helpers = runpy.run_path(str(Path(__file__).parent.parent / "LibWebView" / "webdriver_test_utils.py"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "LibWebView"))
+
+import webdriver_test_utils as helpers  # noqa: E402
 
 
 class TestPageServer(http.server.ThreadingHTTPServer):
@@ -230,7 +232,7 @@ def run_test(webdriver_binary):
     page_server = TestPageServer()
     threading.Thread(target=page_server.serve_forever, daemon=True).start()
     with tempfile.TemporaryDirectory() as profile, tempfile.TemporaryFile(mode="w+") as log:
-        webdriver, webdriver_port = webdriver_helpers["launch_webdriver"](
+        webdriver, webdriver_port = helpers.launch_webdriver(
             webdriver_binary, "--headless", "--profile-path", profile, output=log, stderr=log
         )
         session_id = None

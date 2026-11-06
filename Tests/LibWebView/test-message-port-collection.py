@@ -13,8 +13,6 @@ import time
 import webdriver_test_utils as helpers
 
 from process_test_utils import descendants_named
-from test_utils import cleanup
-from test_utils import stop_process
 
 CHANNEL_COUNT = 50
 # A thread that has nothing to do with transports can still start between two counts, so a count may come out this
@@ -58,10 +56,10 @@ def main():
     parser.add_argument("webdriver_binary")
     webdriver_binary = parser.parse_args().webdriver_binary
 
-    process, port = helpers.launch_webdriver(webdriver_binary, "--headless", "--expose-internals-object")
-    session = None
-    try:
-        session = helpers.create_session(port)
+    with helpers.webdriver_session(webdriver_binary, "--headless", "--expose-internals-object") as browser:
+        process = browser.process
+        port = browser.port
+        session = browser.session_id
 
         def run(script, *args, asynchronous=False):
             path = f"/session/{session}/execute/{'async' if asynchronous else 'sync'}"
@@ -145,11 +143,6 @@ def main():
         )
         assert collected is True, "A started port that was transferred again was not collected"
         print(f"PASS: {CHANNEL_COUNT} dropped channels collected ({baseline} -> {threads} threads)")
-    finally:
-        cleanup(
-            lambda: helpers.request(port, "DELETE", f"/session/{session}") if session is not None else None,
-            lambda: stop_process(process),
-        )
 
 
 if __name__ == "__main__":

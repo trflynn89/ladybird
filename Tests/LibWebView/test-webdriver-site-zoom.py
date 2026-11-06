@@ -5,18 +5,15 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import http.server
-import json
 import sys
-import tempfile
 import threading
 import time
-
-from pathlib import Path
 
 import webdriver_test_utils as helpers
 
 from test_utils import cleanup
-from test_utils import stop_process
+from test_utils import running_http_server
+from test_utils import temporary_profile
 
 requested = threading.Event()
 release_response = threading.Event()
@@ -42,84 +39,71 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass
 
 
-with tempfile.TemporaryDirectory() as directory:
-    config = Path(directory) / "config"
-    config.mkdir()
-    (config / "Settings.json").write_text(json.dumps({"content": {"zoomPerHost": {"127.0.0.1": 1.8}}}))
+with temporary_profile(settings={"content": {"zoomPerHost": {"127.0.0.1": 1.8}}}) as directory:
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    process, port = helpers.launch_webdriver(sys.argv[1], "--headless", "--profile-path", directory)
-    session = None
-    try:
-        session = helpers.create_session(port)
+    with running_http_server(server):
+        with helpers.webdriver_session(sys.argv[1], "--headless", "--profile-path", directory) as browser:
+            port = browser.port
+            session = browser.session_id
+            try:
+                command = browser.command
+                script = browser.script
 
-        def command(path, body):
-            status, payload, raw = helpers.request(port, "POST", f"/session/{session}/{path}", body)
-            assert status == 200, raw
-            return payload["value"]
+                def wait_for_page(url, pixel_ratio):
+                    deadline = time.monotonic() + 30
+                    state = None
+                    while time.monotonic() < deadline:
+                        status, payload, raw = helpers.request(
+                            port,
+                            "POST",
+                            f"/session/{session}/execute/sync",
+                            {"script": "return [location.href, document.readyState, devicePixelRatio]", "args": []},
+                        )
+                        if (
+                            status == 500
+                            and payload["value"]["message"] == "WebContent was replaced while executing the command"
+                        ):
+                            continue
+                        assert status == 200, raw
+                        state = payload["value"]
+                        if state == [url, "complete", pixel_ratio]:
+                            return
+                        time.sleep(0.01)
+                    raise AssertionError(f"Expected {url} at scale {pixel_ratio}, got {state}")
 
-        def script(source, *args):
-            return command("execute/sync", {"script": source, "args": list(args)})
+                # Measure the platform's unzoomed ratio rather than assuming a particular display density.
+                baseline_ratio = script("return devicePixelRatio")
+                source_url = f"http://127.0.0.1:{server.server_port}/source"
+                target_url = f"http://localhost:{server.server_port}/blocked"
+                command("url", {"url": source_url})
+                wait_for_page(source_url, baseline_ratio * 1.8)
 
-        def wait_for_page(url, pixel_ratio):
-            deadline = time.monotonic() + 30
-            state = None
-            while time.monotonic() < deadline:
-                status, payload, raw = helpers.request(
-                    port,
-                    "POST",
-                    f"/session/{session}/execute/sync",
-                    {"script": "return [location.href, document.readyState, devicePixelRatio]", "args": []},
+                # Hold the response until the old document has been inspected. No delay determines whether
+                # navigation has started or whether it is allowed to commit.
+                script(
+                    "const a = document.createElement('a'); a.href = arguments[0]; document.body.append(a); a.click();",
+                    target_url,
                 )
-                if (
-                    status == 500
-                    and payload["value"]["message"] == "WebContent was replaced while executing the command"
-                ):
-                    continue
-                assert status == 200, raw
-                state = payload["value"]
-                if state == [url, "complete", pixel_ratio]:
-                    return
-                time.sleep(0.01)
-            raise AssertionError(f"Expected {url} at scale {pixel_ratio}, got {state}")
+                assert requested.wait(timeout=30), "Destination request did not arrive"
+                state = script("return [location.href, devicePixelRatio]")
+                assert state == [source_url, baseline_ratio * 1.8], (
+                    f"Pending navigation changed the old page's zoom: {state}"
+                )
+                release_response.set()
+                wait_for_page(target_url, baseline_ratio)
 
-        # Measure the platform's unzoomed ratio rather than assuming a particular display density.
-        baseline_ratio = script("return devicePixelRatio")
-        source_url = f"http://127.0.0.1:{server.server_port}/source"
-        target_url = f"http://localhost:{server.server_port}/blocked"
-        command("url", {"url": source_url})
-        wait_for_page(source_url, baseline_ratio * 1.8)
+                command("back", {})
+                wait_for_page(source_url, baseline_ratio * 1.8)
 
-        # Hold the response until the old document has been inspected. No delay determines whether
-        # navigation has started or whether it is allowed to commit.
-        script(
-            "const a = document.createElement('a'); a.href = arguments[0]; document.body.append(a); a.click();",
-            target_url,
-        )
-        assert requested.wait(timeout=30), "Destination request did not arrive"
-        state = script("return [location.href, devicePixelRatio]")
-        assert state == [source_url, baseline_ratio * 1.8], f"Pending navigation changed the old page's zoom: {state}"
-        release_response.set()
-        wait_for_page(target_url, baseline_ratio)
-
-        command("back", {})
-        wait_for_page(source_url, baseline_ratio * 1.8)
-
-        # A canceled navigation must also leave the source document at its saved zoom.
-        requested.clear()
-        release_response.clear()
-        script("location.href = arguments[0]", target_url)
-        assert requested.wait(timeout=30), "Canceled destination request did not arrive"
-        script("window.stop()")
-        state = script("return [location.href, devicePixelRatio]")
-        assert state == [source_url, baseline_ratio * 1.8], f"Canceled navigation changed zoom: {state}"
-        release_response.set()
-        print("PASS: site zoom follows the committed document")
-    finally:
-        cleanup(
-            release_response.set,
-            lambda: helpers.request(port, "DELETE", f"/session/{session}") if session is not None else None,
-            lambda: stop_process(process),
-            server.shutdown,
-            server.server_close,
-        )
+                # A canceled navigation must also leave the source document at its saved zoom.
+                requested.clear()
+                release_response.clear()
+                script("location.href = arguments[0]", target_url)
+                assert requested.wait(timeout=30), "Canceled destination request did not arrive"
+                script("window.stop()")
+                state = script("return [location.href, devicePixelRatio]")
+                assert state == [source_url, baseline_ratio * 1.8], f"Canceled navigation changed zoom: {state}"
+                release_response.set()
+                print("PASS: site zoom follows the committed document")
+            finally:
+                cleanup(release_response.set)

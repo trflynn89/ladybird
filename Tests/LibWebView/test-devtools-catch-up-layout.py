@@ -7,11 +7,10 @@
 import argparse
 import http.server
 import tempfile
-import threading
 
 import devtools_test_utils as devtools
 
-from test_utils import cleanup
+from test_utils import running_http_server
 from test_utils import stop_process
 
 # The container generates no box, so the unit below it resolves without one: Every full layout leaves that unit's
@@ -47,9 +46,8 @@ def main():
     ladybird_binary = parser.parse_args().ladybird_binary
 
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    url = f"http://127.0.0.1:{server.server_port}/catch-up"
-    try:
+    with running_http_server(server):
+        url = f"http://127.0.0.1:{server.server_port}/catch-up"
         with tempfile.TemporaryDirectory(prefix="ladybird-devtools-") as profile:
             process, devtools_port, client = devtools.launch(ladybird_binary, profile, url)
             try:
@@ -64,11 +62,6 @@ def main():
                 print("PASS: A DevTools client's catch-up layout settles")
             finally:
                 stop_process(process)
-    finally:
-        cleanup(
-            server.shutdown,
-            server.server_close,
-        )
 
 
 if __name__ == "__main__":

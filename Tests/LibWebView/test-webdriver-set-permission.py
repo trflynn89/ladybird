@@ -6,16 +6,11 @@
 
 import argparse
 import http.server
-import json
-import tempfile
-import threading
-
-from pathlib import Path
 
 import webdriver_test_utils as helpers
 
-from test_utils import cleanup
-from test_utils import stop_process
+from test_utils import running_http_server
+from test_utils import temporary_profile
 
 
 def run_test(webdriver_binary):
@@ -30,60 +25,47 @@ def run_test(webdriver_binary):
             pass
 
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    with running_http_server(server):
+        with temporary_profile(settings={"firstRunComplete": True}) as directory:
+            with helpers.webdriver_session(webdriver_binary, "--headless", "--profile-path", directory) as browser:
+                request = browser.request
 
-    with tempfile.TemporaryDirectory() as directory:
-        config = Path(directory) / "config"
-        config.mkdir()
-        (config / "Settings.json").write_text(json.dumps({"firstRunComplete": True}))
-        process, port = helpers.launch_webdriver(webdriver_binary, "--headless", "--profile-path", directory)
-        session = None
-        try:
-            session = helpers.create_session(port)
+                def query(name):
+                    status, payload, raw = request(
+                        "execute/async",
+                        {
+                            "script": """
+                            const done = arguments[1];
+                            navigator.permissions.query({ name: arguments[0] }).then(status => done(status.state));
+                        """,
+                            "args": [name],
+                        },
+                    )
+                    assert status == 200, raw
+                    return payload["value"]
 
-            def request(path, body):
-                return helpers.request(port, "POST", f"/session/{session}/{path}", body)
-
-            def query(name):
-                status, payload, raw = request(
-                    "execute/async",
-                    {
-                        "script": """
-                        const done = arguments[1];
-                        navigator.permissions.query({ name: arguments[0] }).then(status => done(status.state));
-                    """,
-                        "args": [name],
-                    },
-                )
+                status, _, raw = request("url", {"url": f"http://127.0.0.1:{server.server_address[1]}/"})
                 assert status == 200, raw
-                return payload["value"]
 
-            status, _, raw = request("url", {"url": f"http://127.0.0.1:{server.server_address[1]}/"})
-            assert status == 200, raw
+                for state in ("denied", "granted", "prompt"):
+                    status, payload, raw = request(
+                        "permissions", {"descriptor": {"name": "geolocation"}, "state": state}
+                    )
+                    assert status == 200, raw
+                    assert payload["value"] is None, raw
+                    assert query("geolocation") == state, (state, query("geolocation"))
 
-            for state in ("denied", "granted", "prompt"):
-                status, payload, raw = request("permissions", {"descriptor": {"name": "geolocation"}, "state": state})
-                assert status == 200, raw
-                assert payload["value"] is None, raw
-                assert query("geolocation") == state, (state, query("geolocation"))
+                for body in (
+                    {"descriptor": {"name": "camera"}, "state": "granted"},
+                    {"descriptor": {"name": "geolocation"}, "state": "maybe"},
+                    {"descriptor": "geolocation", "state": "granted"},
+                    {"state": "granted"},
+                ):
+                    status, payload, raw = request("permissions", body)
+                    assert status == 400, raw
+                    assert payload["value"]["error"] == "invalid argument", raw
 
-            for body in (
-                {"descriptor": {"name": "camera"}, "state": "granted"},
-                {"descriptor": {"name": "geolocation"}, "state": "maybe"},
-                {"descriptor": "geolocation", "state": "granted"},
-                {"state": "granted"},
-            ):
-                status, payload, raw = request("permissions", body)
-                assert status == 400, raw
-                assert payload["value"]["error"] == "invalid argument", raw
-
-            print("PASS: Set Permission sets the current site's permission, and rejects invalid arguments")
-        finally:
-            cleanup(
-                lambda: helpers.request(port, "DELETE", f"/session/{session}") if session is not None else None,
-                lambda: stop_process(process),
-                server.shutdown,
-            )
+                print("PASS: Set Permission sets the current site's permission, and rejects invalid arguments")
 
 
 if __name__ == "__main__":

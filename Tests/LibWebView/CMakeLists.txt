@@ -220,6 +220,7 @@ if (NOT WIN32)
 endif()
 
 if (BUILD_TESTING AND NOT WIN32)
+    ladybird_python_test(test-python-test-utils.py TIMEOUT 30)
     ladybird_python_test(test-build-information.py)
     ladybird_python_test(test-webdriver-bidi-cleanup.py TIMEOUT 30)
 endif()

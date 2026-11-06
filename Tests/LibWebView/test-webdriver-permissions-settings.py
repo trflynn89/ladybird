@@ -6,49 +6,32 @@
 
 import argparse
 import json
-import tempfile
 import time
-
-from pathlib import Path
 
 import webdriver_test_utils as helpers
 
-from test_utils import cleanup
-from test_utils import stop_process
+from test_utils import temporary_profile
 
 
 def run_test(webdriver_binary):
-    with tempfile.TemporaryDirectory() as directory:
-        config = Path(directory) / "config"
-        config.mkdir()
-        (config / "Settings.json").write_text(json.dumps({"firstRunComplete": True}))
+    with temporary_profile(
+        settings={"firstRunComplete": True},
+        permissions={
+            "version": 1,
+            "decisions": [
+                {"origin": "https://example.com", "permission": "geolocation", "decision": "allow"},
+                {"origin": "https://talk.example.org", "permission": "microphone", "decision": "block"},
+                {"origin": "https://news.example.net", "permission": "notifications", "decision": "allow"},
+            ],
+            "embargoes": [],
+        },
+    ) as directory:
+        config = directory / "config"
         permissions_file = config / "Permissions.json"
-        permissions_file.write_text(
-            json.dumps(
-                {
-                    "version": 1,
-                    "decisions": [
-                        {"origin": "https://example.com", "permission": "geolocation", "decision": "allow"},
-                        {"origin": "https://talk.example.org", "permission": "microphone", "decision": "block"},
-                        {"origin": "https://news.example.net", "permission": "notifications", "decision": "allow"},
-                    ],
-                    "embargoes": [],
-                }
-            )
-        )
 
-        process, port = helpers.launch_webdriver(webdriver_binary, "--headless", "--profile-path", directory)
-        session = None
-        try:
-            session = helpers.create_session(port)
-
-            def command(path, body=None, method="POST"):
-                status, payload, raw = helpers.request(port, method, f"/session/{session}/{path}", body)
-                assert status == 200, raw
-                return payload["value"]
-
-            def script(source, *args):
-                return command("execute/sync", {"script": source, "args": list(args)})
+        with helpers.webdriver_session(webdriver_binary, "--headless", "--profile-path", directory) as browser:
+            command = browser.command
+            script = browser.script
 
             def rows(hash, permission):
                 command("url", {"url": f"about:settings#{hash}"})
@@ -114,11 +97,6 @@ def run_test(webdriver_binary):
             wait_for_saved(lambda decisions: all(entry["origin"] != "https://example.com" for entry in decisions))
 
             print("PASS: about:settings lists, changes, and removes site permissions")
-        finally:
-            cleanup(
-                lambda: helpers.request(port, "DELETE", f"/session/{session}") if session is not None else None,
-                lambda: stop_process(process),
-            )
 
 
 if __name__ == "__main__":

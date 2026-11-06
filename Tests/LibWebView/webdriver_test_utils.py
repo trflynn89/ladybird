@@ -13,6 +13,11 @@ import sys
 import threading
 import time
 
+from contextlib import contextmanager
+
+from test_utils import cleanup
+from test_utils import stop_process
+
 EVENT_TIMEOUT_SECONDS = 30
 WEBDRIVER_REQUEST_TIMEOUT_SECONDS = 60
 
@@ -69,12 +74,12 @@ def request(webdriver_port, method, path, body=None):
         connection.close()
 
 
-def create_session(webdriver_port):
+def create_session(webdriver_port, capabilities=None):
     status, payload, response_body = request(
         webdriver_port,
         "POST",
         "/session",
-        {"capabilities": {"alwaysMatch": {"ladybird:headless": True}}},
+        {"capabilities": {"alwaysMatch": {"ladybird:headless": True, **(capabilities or {})}}},
     )
     value = payload.get("value")
     session_id = value.get("sessionId") if isinstance(value, dict) else None
@@ -97,3 +102,49 @@ def request_on_connection(connection, method, path, body=None):
     except json.JSONDecodeError as error:
         raise RuntimeError(f"{method} {path} returned invalid JSON: {response_body}") from error
     return response.status, payload, response_body
+
+
+class WebDriverSession:
+    def __init__(self, process, port, capabilities=None):
+        self.process = process
+        self.port = port
+        self.capabilities = capabilities
+        self.session_id = None
+
+    def create(self):
+        self.session_id = create_session(self.port, self.capabilities)
+
+    def close(self):
+        if self.session_id is not None:
+            status, _, raw = request(self.port, "DELETE", f"/session/{self.session_id}")
+            assert status == 200, raw
+            self.session_id = None
+
+    def restart(self):
+        self.close()
+        self.create()
+
+    def request(self, path, body=None, method="POST"):
+        return request(self.port, method, f"/session/{self.session_id}/{path}", body)
+
+    def command(self, path, body=None, method="POST"):
+        status, payload, raw = self.request(path, body, method)
+        assert status == 200, raw
+        return payload["value"]
+
+    def script(self, source, *args):
+        return self.command("execute/sync", {"script": source, "args": list(args)})
+
+    def async_script(self, source, *args):
+        return self.command("execute/async", {"script": source, "args": list(args)})
+
+
+@contextmanager
+def webdriver_session(webdriver_binary, *arguments, capabilities=None, **popen_arguments):
+    process, port = launch_webdriver(webdriver_binary, *arguments, **popen_arguments)
+    session = WebDriverSession(process, port, capabilities)
+    try:
+        session.create()
+        yield session
+    finally:
+        cleanup(session.close, lambda: stop_process(process))

@@ -10,14 +10,12 @@ import socket
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 
 import webdriver_test_utils as helpers
 
 from process_test_utils import descendants_named
-from test_utils import cleanup
-from test_utils import stop_process
+from test_utils import running_http_server
 
 FRAME_COUNT = 8
 RULE_COUNT = 20000
@@ -99,12 +97,12 @@ def web_content_resident_bytes(root_pid):
 
 def measure(webdriver_binary, server_port, frame_count, kind="link"):
     with tempfile.TemporaryDirectory(prefix="ladybird-shared-sheet-") as profile:
-        process, port = helpers.launch_webdriver(
+        with helpers.webdriver_session(
             webdriver_binary, "--headless", "--expose-internals-object", f"--profile-path={profile}"
-        )
-        session = None
-        try:
-            session = helpers.create_session(port)
+        ) as browser:
+            process = browser.process
+            port = browser.port
+            session = browser.session_id
             status, _, raw = helpers.request(
                 port,
                 "POST",
@@ -150,11 +148,6 @@ def measure(webdriver_binary, server_port, frame_count, kind="link"):
             style_bytes = payload["value"]
             time.sleep(2)
             return web_content_resident_bytes(process.pid), style_bytes
-        finally:
-            cleanup(
-                lambda: helpers.request(port, "DELETE", f"/session/{session}") if session is not None else None,
-                lambda: stop_process(process),
-            )
 
 
 def main():
@@ -163,8 +156,7 @@ def main():
     webdriver_binary = parser.parse_args().webdriver_binary
 
     server = TestPageServer(("127.0.0.1", 0), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
+    with running_http_server(server):
         measured = {
             kind: (
                 measure(webdriver_binary, server.server_port, 1, kind),
@@ -172,32 +164,27 @@ def main():
             )
             for kind in ("empty", "link", "print", "own-first")
         }
-    finally:
-        cleanup(
-            server.shutdown,
-            server.server_close,
-        )
 
-    (one, _), (many, _) = measured["link"]
-    # The frames share one parse of the sheet, so the page costs little more than one frame does. Parsing the sheet
-    # once per frame would cost several times that.
-    assert many < one * 2, f"{FRAME_COUNT} frames of one sheet take {many >> 20} MiB, one frame {one >> 20} MiB"
+        (one, _), (many, _) = measured["link"]
+        # The frames share one parse of the sheet, so the page costs little more than one frame does. Parsing the sheet
+        # once per frame would cost several times that.
+        assert many < one * 2, f"{FRAME_COUNT} frames of one sheet take {many >> 20} MiB, one frame {one >> 20} MiB"
 
-    def per_extra_frame(kind):
-        (_, one), (_, many) = measured[kind]
-        return (many - one) / (FRAME_COUNT - 1)
+        def per_extra_frame(kind):
+            (_, one), (_, many) = measured[kind]
+            return (many - one) / (FRAME_COUNT - 1)
 
-    # What each further frame linking the sheet holds of style data beyond an empty frame, per rule: the document's own
-    # index of the sheet and whatever else it holds per rule.
-    empty = per_extra_frame("empty")
-    failures = []
-    for kind, budget in PER_FRAME_BYTES_PER_RULE.items():
-        bytes_per_rule = (per_extra_frame(kind) - empty) / RULE_COUNT
-        print(f"{kind}: {bytes_per_rule:.1f} B/rule per extra frame (budget {budget})")
-        if bytes_per_rule > budget:
-            failures.append(kind)
-    assert not failures, f"over their per-frame budgets: {failures}"
-    print(f"PASS: {FRAME_COUNT} frames sharing a sheet: {many >> 20} MiB, one frame: {one >> 20} MiB")
+        # What each further frame linking the sheet holds of style data beyond an empty frame, per rule: the document's own
+        # index of the sheet and whatever else it holds per rule.
+        empty = per_extra_frame("empty")
+        failures = []
+        for kind, budget in PER_FRAME_BYTES_PER_RULE.items():
+            bytes_per_rule = (per_extra_frame(kind) - empty) / RULE_COUNT
+            print(f"{kind}: {bytes_per_rule:.1f} B/rule per extra frame (budget {budget})")
+            if bytes_per_rule > budget:
+                failures.append(kind)
+        assert not failures, f"over their per-frame budgets: {failures}"
+        print(f"PASS: {FRAME_COUNT} frames sharing a sheet: {many >> 20} MiB, one frame: {one >> 20} MiB")
 
 
 if __name__ == "__main__":

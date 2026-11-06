@@ -17,6 +17,7 @@ from devtools_test_utils import launch
 from devtools_test_utils import wait_for_page
 from devtools_test_utils import wait_until
 from test_utils import cleanup
+from test_utils import running_http_server
 from test_utils import stop_process
 
 loads_lock = threading.Lock()
@@ -117,16 +118,10 @@ def main():
     ladybird_binary = parser.parse_args().ladybird_binary
 
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
+    with running_http_server(server):
         with tempfile.TemporaryDirectory(prefix="ladybird-devtools-") as directory:
             test_cross_site_navigation(ladybird_binary, Path(directory) / "navigation", server)
             test_crash_recovery(ladybird_binary, Path(directory) / "crash", server)
-    finally:
-        cleanup(
-            server.shutdown,
-            server.server_close,
-        )
 
 
 if __name__ == "__main__":

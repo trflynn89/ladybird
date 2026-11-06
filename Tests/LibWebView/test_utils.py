@@ -4,8 +4,14 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
+import json
 import subprocess
 import sys
+import tempfile
+import threading
+
+from contextlib import contextmanager
+from pathlib import Path
 
 
 def cleanup(*actions, primary_error=None):
@@ -40,3 +46,26 @@ def stop_process(process):
                 errors.append(error)
     if errors:
         raise errors[0]
+
+
+@contextmanager
+def temporary_profile(*, settings=None, permissions=None, prefix="ladybird-test-"):
+    with tempfile.TemporaryDirectory(prefix=prefix) as directory:
+        profile = Path(directory)
+        if settings is not None or permissions is not None:
+            config = profile / "config"
+            config.mkdir()
+            for name, data in (("Settings.json", settings), ("Permissions.json", permissions)):
+                if data is not None:
+                    (config / name).write_text(json.dumps(data))
+        yield profile
+
+
+@contextmanager
+def running_http_server(server):
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server
+    finally:
+        cleanup(server.shutdown, server.server_close, thread.join)

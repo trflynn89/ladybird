@@ -6,51 +6,32 @@
 
 import argparse
 import json
-import tempfile
-
-from pathlib import Path
 
 import webdriver_test_utils as helpers
 
-from test_utils import cleanup
-from test_utils import stop_process
+from test_utils import temporary_profile
 
 
 def run_test(webdriver_binary, graphical):
-    with tempfile.TemporaryDirectory() as directory:
-        config = Path(directory) / "config"
-        config.mkdir()
+    with temporary_profile(
+        settings={
+            "searchEngine": {
+                "name": "Google",
+                "custom": [{"name": "Plain custom", "url": "https://example.com/search?q=%s"}],
+            },
+            "autocompleteEngine": {"name": "Google"},
+        }
+    ) as directory:
+        config = directory / "config"
         settings_file = config / "Settings.json"
-        settings_file.write_text(
-            json.dumps(
-                {
-                    "searchEngine": {
-                        "name": "Google",
-                        "custom": [{"name": "Plain custom", "url": "https://example.com/search?q=%s"}],
-                    },
-                    "autocompleteEngine": {"name": "Google"},
-                }
-            )
-        )
         arguments = ["--profile-path", directory]
         if not graphical:
             arguments.append("--headless")
-        process, port = helpers.launch_webdriver(webdriver_binary, *arguments)
-        session = None
-        try:
-            status, payload, raw = helpers.request(
-                port, "POST", "/session", {"capabilities": {"alwaysMatch": {"ladybird:headless": not graphical}}}
-            )
-            assert status == 200, raw
-            session = payload["value"]["sessionId"]
-
-            def command(path, body=None, method="POST"):
-                status, payload, raw = helpers.request(port, method, f"/session/{session}/{path}", body)
-                assert status == 200, raw
-                return payload["value"]
-
-            def script(source, *args):
-                return command("execute/sync", {"script": source, "args": list(args)})
+        with helpers.webdriver_session(
+            webdriver_binary, *arguments, capabilities={"ladybird:headless": not graphical}
+        ) as browser:
+            command = browser.command
+            script = browser.script
 
             def change_settings(action, condition, *args):
                 command(
@@ -191,8 +172,7 @@ def run_test(webdriver_binary, graphical):
             assert "name" not in saved["searchEngine"]
             assert saved["searchEngine"]["custom"][1]["suggestionsUrl"] == "https://example.com/suggest?q=%s"
 
-            helpers.request(port, "DELETE", f"/session/{session}")
-            session = helpers.create_session(port)
+            browser.restart()
             load_settings("Custom suggestions")
             assert state()[:2] == [True, False], "Combined search preference did not survive a new browser process"
             change_settings(
@@ -205,11 +185,6 @@ def run_test(webdriver_binary, graphical):
             )
             assert state() == [True, True, "Choose a search engine to use search suggestions."]
             print("PASS: search and suggestions use one engine, migrate, and preserve the user's toggle")
-        finally:
-            cleanup(
-                lambda: helpers.request(port, "DELETE", f"/session/{session}") if session is not None else None,
-                lambda: stop_process(process),
-            )
 
 
 if __name__ == "__main__":

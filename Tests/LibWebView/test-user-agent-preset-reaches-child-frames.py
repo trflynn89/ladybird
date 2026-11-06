@@ -8,13 +8,12 @@ import argparse
 import http.server
 import json
 import tempfile
-import threading
 
 from pathlib import Path
 
 import devtools_test_utils as devtools
 
-from test_utils import cleanup
+from test_utils import running_http_server
 from test_utils import stop_process
 
 wait_until = devtools.wait_until
@@ -84,15 +83,9 @@ def main():
     global server_port
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     server_port = server.server_port
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
+    with running_http_server(server):
         with tempfile.TemporaryDirectory() as directory:
             test_user_agent_preset_reaches_child_frames(ladybird_binary, Path(directory) / "profile", server)
-    finally:
-        cleanup(
-            server.shutdown,
-            server.server_close,
-        )
 
 
 if __name__ == "__main__":

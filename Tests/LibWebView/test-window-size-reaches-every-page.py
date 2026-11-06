@@ -8,13 +8,13 @@ import argparse
 import http.server
 import json
 import tempfile
-import threading
 
 from pathlib import Path
 
 import devtools_test_utils as devtools
 
 from test_utils import cleanup
+from test_utils import running_http_server
 from test_utils import stop_process
 
 launch = devtools.launch
@@ -76,14 +76,9 @@ def main():
     ladybird_binary = parser.parse_args().ladybird_binary
 
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
+    with running_http_server(server):
         with tempfile.TemporaryDirectory() as directory:
             test_window_size_reaches_every_page(ladybird_binary, Path(directory) / "profile", server)
-    finally:
-        cleanup(
-            server.shutdown,
-        )
 
 
 if __name__ == "__main__":

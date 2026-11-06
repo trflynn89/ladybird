@@ -9,17 +9,13 @@ import http.server
 import json
 import struct
 import sys
-import tempfile
-import threading
 import time
 import zlib
 
-from pathlib import Path
-
 import webdriver_test_utils as helpers
 
-from test_utils import cleanup
-from test_utils import stop_process
+from test_utils import running_http_server
+from test_utils import temporary_profile
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -79,163 +75,157 @@ def png_pixel(png, x, y):
 
 
 def run_test(default):
-    with tempfile.TemporaryDirectory() as directory:
-        config = Path(directory) / "config"
-        config.mkdir()
-        (config / "Settings.json").write_text(
-            json.dumps(
-                {
-                    "appearance": {"websiteColorScheme": "light"},
-                    "content": {"enableForceDark": default, "forceDarkPerHost": {"localhost": not default}},
-                }
-            )
-        )
+    with temporary_profile(
+        settings={
+            "appearance": {"websiteColorScheme": "light"},
+            "content": {"enableForceDark": default, "forceDarkPerHost": {"localhost": not default}},
+        }
+    ) as directory:
+        config = directory / "config"
         server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        threading.Thread(target=server.serve_forever, daemon=True).start()
-        # The pixels are colors the display list carries, which take no GPU to draw. The GPU of a CI machine can refuse
-        # every submission of the Compositor, which would leave the screenshots showing earlier colors.
-        process, port = helpers.launch_webdriver(
-            sys.argv[1], "--headless", "--force-cpu-painting", "--profile-path", directory
-        )
-        session = None
-        try:
-            session = helpers.create_session(port)
+        with running_http_server(server):
+            # The pixels are colors the display list carries, which take no GPU to draw. The GPU of a CI machine can refuse
+            # every submission of the Compositor, which would leave the screenshots showing earlier colors.
+            with helpers.webdriver_session(
+                sys.argv[1], "--headless", "--force-cpu-painting", "--profile-path", directory
+            ) as browser:
+                port = browser.port
+                session = browser.session_id
 
-            def command(method, path, body=None):
-                status, payload, raw = helpers.request(port, method, f"/session/{session}/{path}", body)
-                return status, payload, raw
+                def command(method, path, body=None):
+                    status, payload, raw = helpers.request(port, method, f"/session/{session}/{path}", body)
+                    return status, payload, raw
 
-            def wait_for_page(url):
-                deadline = time.monotonic() + 30
-                state = None
-                while time.monotonic() < deadline:
-                    status, payload, raw = command(
-                        "POST", "execute/sync", {"script": "return [location.href, document.readyState]", "args": []}
-                    )
-                    if (
-                        status == 500
-                        and payload["value"]["message"] == "WebContent was replaced while executing the command"
-                    ):
-                        continue
+                def wait_for_page(url):
+                    deadline = time.monotonic() + 30
+                    state = None
+                    while time.monotonic() < deadline:
+                        status, payload, raw = command(
+                            "POST",
+                            "execute/sync",
+                            {"script": "return [location.href, document.readyState]", "args": []},
+                        )
+                        if (
+                            status == 500
+                            and payload["value"]["message"] == "WebContent was replaced while executing the command"
+                        ):
+                            continue
+                        assert status == 200, raw
+                        state = payload["value"]
+                        if state == [url, "complete"]:
+                            return
+                        time.sleep(0.01)
+                    raise AssertionError(f"Expected {url}, got {state}")
+
+                def assert_force_dark(description, expected, check_initial=True):
+                    status, payload, raw = command("GET", "screenshot")
                     assert status == 200, raw
-                    state = payload["value"]
-                    if state == [url, "complete"]:
-                        return
-                    time.sleep(0.01)
-                raise AssertionError(f"Expected {url}, got {state}")
+                    screenshot = base64.b64decode(payload["value"])
+                    color = png_pixel(screenshot, 10, 10)
+                    iframe_color = png_pixel(screenshot, 110, 110)
+                    assert (max(color) < 128) == expected, f"{description} expected dark={expected}, got {color}"
+                    assert (max(iframe_color) < 128) == expected, f"{description} iframe painted {iframe_color}"
+                    status, payload, raw = command(
+                        "POST",
+                        "execute/sync",
+                        {
+                            "script": "return window.initialDark"
+                            if check_initial
+                            else "return matchMedia('(prefers-color-scheme: dark)').matches",
+                            "args": [],
+                        },
+                    )
+                    assert status == 200, raw
+                    assert payload["value"] == expected, (
+                        f"{description} initial color preference was {payload['value']}"
+                    )
 
-            def assert_force_dark(description, expected, check_initial=True):
-                status, payload, raw = command("GET", "screenshot")
+                source_url = f"http://127.0.0.1:{server.server_port}/source"
+                target_url = f"http://localhost:{server.server_port}/target"
+
+                status, _, raw = command("POST", "url", {"url": source_url})
                 assert status == 200, raw
-                screenshot = base64.b64decode(payload["value"])
-                color = png_pixel(screenshot, 10, 10)
-                iframe_color = png_pixel(screenshot, 110, 110)
-                assert (max(color) < 128) == expected, f"{description} expected dark={expected}, got {color}"
-                assert (max(iframe_color) < 128) == expected, f"{description} iframe painted {iframe_color}"
-                status, payload, raw = command(
-                    "POST",
-                    "execute/sync",
-                    {
-                        "script": "return window.initialDark"
-                        if check_initial
-                        else "return matchMedia('(prefers-color-scheme: dark)').matches",
-                        "args": [],
-                    },
+                wait_for_page(source_url)
+                assert_force_dark("The tab's first page", default)
+
+                # A cross-site navigation moves the tab into a page of another process.
+                status, _, raw = command("POST", "url", {"url": target_url})
+                assert status == 200, raw
+                wait_for_page(target_url)
+                assert_force_dark("A cross-site navigation's page", not default)
+
+                status, _, raw = command("POST", "back", {})
+                assert status == 200, raw
+                wait_for_page(source_url)
+                assert_force_dark("A cross-site traversal's page", default)
+                status, _, raw = command("POST", "url", {"url": target_url + "-same-host"})
+                assert status == 200, raw
+                wait_for_page(target_url + "-same-host")
+                status, _, raw = command("POST", "url", {"url": target_url + "-same-host-next"})
+                assert status == 200, raw
+                wait_for_page(target_url + "-same-host-next")
+                assert_force_dark("Same-host navigation", not default)
+                status, _, raw = command("POST", "refresh", {})
+                assert status == 200, raw
+                wait_for_page(target_url + "-same-host-next")
+                assert_force_dark("Reload", not default)
+                print(f"PASS: per-host force-dark across navigation (default={default})")
+
+                def evaluate(script):
+                    status, payload, raw = command("POST", "execute/sync", {"script": script, "args": []})
+                    assert status == 200, raw
+                    return payload["value"]
+
+                def wait_for_condition(script):
+                    deadline = time.monotonic() + 10
+                    while time.monotonic() < deadline:
+                        if evaluate(script):
+                            return
+                        time.sleep(0.01)
+                    raise AssertionError(f"Condition did not become true: {script}")
+
+                status, payload, raw = command("GET", "window")
+                assert status == 200, raw
+                site_handle = payload["value"]
+                status, payload, raw = command("POST", "window/new", {"type": "tab"})
+                assert status == 200, raw
+                settings_handle = payload["value"]["handle"]
+
+                def switch_to(handle):
+                    status, _, raw = command("POST", "window", {"handle": handle})
+                    assert status == 200, raw
+
+                switch_to(settings_handle)
+                status, _, raw = command("POST", "url", {"url": "about:settings"})
+                assert status == 200, raw
+                wait_for_page("about:settings")
+                wait_for_condition("return document.querySelector('#force-dark-sites button') !== null")
+                assert evaluate(
+                    "return document.querySelector('#force-dark-sites').textContent.includes('localhost: ' + "
+                    + ("'Off'" if default else "'On'")
+                    + ")"
                 )
-                assert status == 200, raw
-                assert payload["value"] == expected, f"{description} initial color preference was {payload['value']}"
-
-            source_url = f"http://127.0.0.1:{server.server_port}/source"
-            target_url = f"http://localhost:{server.server_port}/target"
-
-            status, _, raw = command("POST", "url", {"url": source_url})
-            assert status == 200, raw
-            wait_for_page(source_url)
-            assert_force_dark("The tab's first page", default)
-
-            # A cross-site navigation moves the tab into a page of another process.
-            status, _, raw = command("POST", "url", {"url": target_url})
-            assert status == 200, raw
-            wait_for_page(target_url)
-            assert_force_dark("A cross-site navigation's page", not default)
-
-            status, _, raw = command("POST", "back", {})
-            assert status == 200, raw
-            wait_for_page(source_url)
-            assert_force_dark("A cross-site traversal's page", default)
-            status, _, raw = command("POST", "url", {"url": target_url + "-same-host"})
-            assert status == 200, raw
-            wait_for_page(target_url + "-same-host")
-            status, _, raw = command("POST", "url", {"url": target_url + "-same-host-next"})
-            assert status == 200, raw
-            wait_for_page(target_url + "-same-host-next")
-            assert_force_dark("Same-host navigation", not default)
-            status, _, raw = command("POST", "refresh", {})
-            assert status == 200, raw
-            wait_for_page(target_url + "-same-host-next")
-            assert_force_dark("Reload", not default)
-            print(f"PASS: per-host force-dark across navigation (default={default})")
-
-            def evaluate(script):
-                status, payload, raw = command("POST", "execute/sync", {"script": script, "args": []})
-                assert status == 200, raw
-                return payload["value"]
-
-            def wait_for_condition(script):
-                deadline = time.monotonic() + 10
-                while time.monotonic() < deadline:
-                    if evaluate(script):
-                        return
-                    time.sleep(0.01)
-                raise AssertionError(f"Condition did not become true: {script}")
-
-            status, payload, raw = command("GET", "window")
-            assert status == 200, raw
-            site_handle = payload["value"]
-            status, payload, raw = command("POST", "window/new", {"type": "tab"})
-            assert status == 200, raw
-            settings_handle = payload["value"]["handle"]
-
-            def switch_to(handle):
-                status, _, raw = command("POST", "window", {"handle": handle})
-                assert status == 200, raw
-
-            switch_to(settings_handle)
-            status, _, raw = command("POST", "url", {"url": "about:settings"})
-            assert status == 200, raw
-            wait_for_page("about:settings")
-            wait_for_condition("return document.querySelector('#force-dark-sites button') !== null")
-            assert evaluate(
-                "return document.querySelector('#force-dark-sites').textContent.includes('localhost: ' + "
-                + ("'Off'" if default else "'On'")
-                + ")"
-            )
-            evaluate("document.querySelector('#enable-force-dark').click()")
-            wait_for_condition(
-                "return document.querySelector('#enable-force-dark').checked === " + str(not default).lower()
-            )
-            switch_to(site_handle)
-            assert_force_dark("Explicit choice survives a global toggle", not default, check_initial=False)
-            switch_to(settings_handle)
-            evaluate("document.querySelector('#enable-force-dark').click()")
-            wait_for_condition(
-                "return document.querySelector('#enable-force-dark').checked === " + str(default).lower()
-            )
-            evaluate("document.querySelector('#force-dark-sites button').click()")
-            wait_for_condition("return document.querySelector('#force-dark-sites button') === null")
-            switch_to(site_handle)
-            wait_for_condition("return matchMedia('(prefers-color-scheme: dark)').matches === " + str(default).lower())
-            assert_force_dark("Reset updates an already-open page", default, check_initial=False)
-            saved = json.loads((config / "Settings.json").read_text())["content"]
-            assert "localhost" not in saved["forceDarkPerHost"]
-            print(f"PASS: settings toggle and per-host reset (default={default})")
-        finally:
-            cleanup(
-                lambda: helpers.request(port, "DELETE", f"/session/{session}") if session is not None else None,
-                lambda: stop_process(process),
-                server.shutdown,
-                server.server_close,
-            )
+                evaluate("document.querySelector('#enable-force-dark').click()")
+                wait_for_condition(
+                    "return document.querySelector('#enable-force-dark').checked === " + str(not default).lower()
+                )
+                switch_to(site_handle)
+                assert_force_dark("Explicit choice survives a global toggle", not default, check_initial=False)
+                switch_to(settings_handle)
+                evaluate("document.querySelector('#enable-force-dark').click()")
+                wait_for_condition(
+                    "return document.querySelector('#enable-force-dark').checked === " + str(default).lower()
+                )
+                evaluate("document.querySelector('#force-dark-sites button').click()")
+                wait_for_condition("return document.querySelector('#force-dark-sites button') === null")
+                switch_to(site_handle)
+                wait_for_condition(
+                    "return matchMedia('(prefers-color-scheme: dark)').matches === " + str(default).lower()
+                )
+                assert_force_dark("Reset updates an already-open page", default, check_initial=False)
+                saved = json.loads((config / "Settings.json").read_text())["content"]
+                assert "localhost" not in saved["forceDarkPerHost"]
+                print(f"PASS: settings toggle and per-host reset (default={default})")
 
 
 for default in (True, False):
