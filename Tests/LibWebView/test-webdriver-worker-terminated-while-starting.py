@@ -5,9 +5,6 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
-import os
-import shlex
-import subprocess
 import tempfile
 import time
 
@@ -15,6 +12,8 @@ from pathlib import Path
 
 import webdriver_test_utils as helpers
 
+from process_test_utils import descendants_named
+from process_test_utils import isolated_environment
 from test_utils import cleanup
 from test_utils import stop_process
 
@@ -25,34 +24,9 @@ TERMINATE_DELAYS_MS = list(range(0, 600, 25))
 CRASH_REPORT_GRACE_SECONDS = 2
 
 
-def descendants_named(root_pid, process_name):
-    rows = subprocess.check_output(["ps", "-axo", "pid=,ppid=,command="], text=True).splitlines()
-    children = {}
-    for row in rows:
-        fields = row.strip().split(None, 2)
-        pid, parent = fields[:2]
-        command = fields[2] if len(fields) == 3 else ""
-        children.setdefault(int(parent), []).append((int(pid), command))
-    pending = [root_pid]
-    descendants = []
-    while pending:
-        for pid, command in children.get(pending.pop(), []):
-            pending.append(pid)
-            arguments = shlex.split(command)
-            if arguments and Path(arguments[0]).name == process_name:
-                descendants.append(pid)
-    return descendants
-
-
 def run_test(webdriver_binary):
     with tempfile.TemporaryDirectory(prefix="ladybird-worker-terminated-") as temporary:
-        environment = os.environ.copy()
-        for variable, directory in (
-            ("XDG_DATA_HOME", "data"),
-            ("XDG_CONFIG_HOME", "config"),
-            ("XDG_CACHE_HOME", "cache"),
-        ):
-            environment[variable] = str(Path(temporary) / directory)
+        environment = isolated_environment(temporary)
         webdriver, port = helpers.launch_webdriver(webdriver_binary, "--headless", env=environment)
         try:
             session = helpers.create_session(port)

@@ -12,6 +12,7 @@ import time
 
 import webdriver_test_utils as helpers
 
+from process_test_utils import descendants_named
 from test_utils import cleanup
 from test_utils import stop_process
 
@@ -49,19 +50,7 @@ def thread_count(pid):
 
 
 def web_content_threads(root_pid):
-    output = subprocess.run(["ps", "-axo", "pid=,ppid=,command="], capture_output=True, text=True).stdout
-    processes = [line.split(None, 2) for line in output.splitlines()]
-    children = {}
-    for pid, ppid, command in processes:
-        children.setdefault(int(ppid), []).append((int(pid), command))
-    total = 0
-    pending = [root_pid]
-    while pending:
-        for pid, command in children.get(pending.pop(), []):
-            pending.append(pid)
-            if command.split()[0].endswith("/WebContent"):
-                total += thread_count(pid)
-    return total
+    return sum(thread_count(pid) for pid in descendants_named(root_pid, "WebContent"))
 
 
 def main():

@@ -5,7 +5,6 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
-import os
 import tempfile
 import time
 
@@ -13,6 +12,7 @@ from pathlib import Path
 
 import webdriver_test_utils as webdriver
 
+from process_test_utils import isolated_environment
 from test_utils import cleanup
 from test_utils import stop_process
 
@@ -47,14 +47,8 @@ def write_browser_report(reports_directory):
 
 def run_test(webdriver_binary):
     with tempfile.TemporaryDirectory(prefix="ladybird-browser-crash-") as temporary:
-        environment = os.environ.copy()
+        environment = isolated_environment(temporary)
         environment.pop("LADYBIRD_SOURCE_DIR", None)
-        for variable, directory in (
-            ("XDG_DATA_HOME", "data"),
-            ("XDG_CONFIG_HOME", "config"),
-            ("XDG_CACHE_HOME", "cache"),
-        ):
-            environment[variable] = str(Path(temporary) / directory)
         reports_directory = Path(temporary) / "data/Ladybird/CrashReports"
 
         report = write_browser_report(reports_directory)

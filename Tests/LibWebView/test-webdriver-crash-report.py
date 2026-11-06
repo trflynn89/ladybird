@@ -7,9 +7,7 @@
 import argparse
 import os
 import re
-import shlex
 import signal
-import subprocess
 import tempfile
 import time
 
@@ -17,6 +15,8 @@ from pathlib import Path
 
 import webdriver_test_utils as helpers
 
+from process_test_utils import descendants
+from process_test_utils import isolated_environment
 from test_utils import cleanup
 from test_utils import stop_process
 
@@ -37,36 +37,19 @@ def wait_for_compositor(port, session):
 
 
 def crash_helper(webdriver_pid, process_name):
-    rows = subprocess.check_output(["ps", "-axo", "pid=,ppid=,command="], text=True).splitlines()
-    children = {}
-    for row in rows:
-        fields = row.strip().split(None, 2)
-        pid, parent = fields[:2]
-        command = fields[2] if len(fields) == 3 else ""
-        children.setdefault(int(parent), []).append((int(pid), command))
-    pending = [webdriver_pid]
     targets = []
-    while pending:
-        for pid, command in children.get(pending.pop(), []):
-            pending.append(pid)
-            arguments = shlex.split(command)
-            if arguments and Path(arguments[0]).name == process_name:
-                assert "--crash-report-fd" in arguments, f"{process_name} has no capture descriptor"
-                assert "--disable-sandbox" not in arguments, f"{process_name} is not sandboxed"
-                targets.append(pid)
+    for pid, arguments in descendants(webdriver_pid):
+        if arguments and Path(arguments[0]).name == process_name:
+            assert "--crash-report-fd" in arguments, f"{process_name} has no capture descriptor"
+            assert "--disable-sandbox" not in arguments, f"{process_name} is not sandboxed"
+            targets.append(pid)
     assert len(targets) == 1, f"Expected one {process_name} child, found {len(targets)}"
     os.kill(targets[0], signal.SIGSEGV)
 
 
 def run_test(webdriver_binary, process_name):
     with tempfile.TemporaryDirectory(prefix="ladybird-crash-report-") as temporary:
-        environment = os.environ.copy()
-        for variable, directory in (
-            ("XDG_DATA_HOME", "data"),
-            ("XDG_CONFIG_HOME", "config"),
-            ("XDG_CACHE_HOME", "cache"),
-        ):
-            environment[variable] = str(Path(temporary) / directory)
+        environment = isolated_environment(temporary)
         webdriver, port = helpers.launch_webdriver(webdriver_binary, "--headless", env=environment)
         try:
             status, payload, body = helpers.request(

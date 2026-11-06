@@ -15,6 +15,7 @@ import time
 
 import webdriver_test_utils as helpers
 
+from process_test_utils import descendants_named
 from test_utils import cleanup
 from test_utils import stop_process
 
@@ -93,18 +94,7 @@ def resident_bytes(pid):
 
 
 def web_content_resident_bytes(root_pid):
-    output = subprocess.run(["ps", "-axo", "pid=,ppid=,command="], capture_output=True, text=True).stdout
-    children = {}
-    for pid, ppid, command in (line.split(None, 2) for line in output.splitlines()):
-        children.setdefault(int(ppid), []).append((int(pid), command))
-    largest = 0
-    pending = [root_pid]
-    while pending:
-        for pid, command in children.get(pending.pop(), []):
-            pending.append(pid)
-            if command.split()[0].endswith("/WebContent"):
-                largest = max(largest, resident_bytes(pid))
-    return largest
+    return max((resident_bytes(pid) for pid in descendants_named(root_pid, "WebContent")), default=0)
 
 
 def measure(webdriver_binary, server_port, frame_count, kind="link"):
