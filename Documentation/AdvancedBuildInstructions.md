@@ -41,6 +41,7 @@ There are some optional features that can be enabled during compilation that are
 - `ENABLE_CLANG_PLUGINS`: enables Clang plugins which analyze the code for programming mistakes. See [Clang Plugins](#clang-plugins) below.
 - `ENABLE_CLANG_PLUGINS_INVALID_FUNCTION_MEMBERS`: makes the Clang plugins also detect invalid function types as members of GC-allocated objects. Only applies with `ENABLE_CLANG_PLUGINS`.
 - `BUILD_SHARED_LIBS`: builds shared libraries instead of static ones. Enabled by default, and disabled by the `Distribution` preset.
+- `LADYBIRD_BUNDLED_QT`: selects a shared Qt SDK to install alongside Ladybird in a Linux Distribution build. See [Packaging for Ubuntu 24.04](#packaging-for-ubuntu-2404).
 - `ENABLE_GUI_TARGETS`: builds the browser, its helper processes and the tests that need them. Enabled by default.
 - `LADYBIRD_ENABLE_CCACHE`: compiles through ccache when it is installed. Enabled by default.
 - `LAGOM_USE_LINKER`: sets the linker to use, such as `lld` or `mold`, instead of the compiler's default. On Linux and the BSDs, LLD or mold is picked automatically when one of them is installed.
@@ -78,6 +79,42 @@ $ cmake -B Build/ladybird -DPROCESS_DEBUG=ON
 
 For more information on how the CMake cache works, see the CMake guide for [Running CMake](https://cmake.org/runningcmake/). Additional context is available in the CMake documentation for
 [variables](https://cmake.org/cmake/help/latest/manual/cmake-language.7.html#variables) and [set()](https://cmake.org/cmake/help/latest/command/set.html#set-cache-entry).
+
+## Packaging for Ubuntu 24.04
+
+Ubuntu 24.04 ships Qt 6.4. Build a shared Qt SDK on 24.04 and bundle it with the Distribution build so APT
+can install the package on the stock system. Use the [Ubuntu build prerequisites](BuildInstructionsLadybird.md#debianubuntu)
+with Clang 22, LLVM 22, and CMake 4.3 or later. Replace the distribution's Qt development packages with the
+following SDK build dependencies.
+
+```sh
+sudo apt install dpkg-dev file g++-14 libatspi2.0-dev libdbus-1-dev libegl-dev libfontconfig-dev libfreetype-dev \
+    libgl-dev libharfbuzz-dev libicu-dev libjpeg-dev libpcre2-dev libpng-dev libssl-dev libudev-dev libvulkan-dev \
+    libx11-xcb-dev libxcb-cursor-dev libxcb-image0-dev libxcb-keysyms1-dev libxcb-randr0-dev libxcb-render-util0-dev \
+    libxcb-shape0-dev libxcb-sync-dev libxcb-util-dev libxcb-xfixes0-dev libxcb-xinput-dev libxcb-xkb-dev \
+    libxext-dev libxkbcommon-dev libxkbcommon-x11-dev libxrender-dev libzstd-dev patchelf wayland-protocols zlib1g-dev
+```
+
+From the Ladybird source directory, build Qt and then use the normal Distribution and CPack targets.
+
+```sh
+Meta/Docker/ci/build-qt.sh Build/qt-ubuntu-24.04
+Meta/ladybird.py vcpkg --preset Distribution
+
+export CC=clang-22 CXX=clang++-22
+cmake --preset Distribution -B Build/ubuntu-24.04 \
+    -DLADYBIRD_BUNDLED_QT="$PWD/Build/qt-ubuntu-24.04/install" \
+    -DCMAKE_READELF="$(command -v llvm-readelf-22)"
+cmake --build Build/ubuntu-24.04 --target ladybird_symbol_files
+cpack --config Build/ubuntu-24.04/CPackConfig.cmake -G DEB -B Build/ubuntu-24.04/packages \
+    -D 'CPACK_COMPONENTS_ALL=ladybird_Runtime;ladybird_SystemIntegration;ladybird_SystemSymbols'
+```
+
+The package installs Qt's shared libraries and plugins under `/opt/ladybird/lib` and `/opt/ladybird/plugins`.
+An interface-compatible Qt build can replace them in those directories. Use the matching plugins from that Qt build.
+The Qt license notice is part of `about:licenses`. The Qt module attribution records are installed under
+`/opt/ladybird/share/doc/ladybird/qt`. For a release, make the exact source archives from
+`Build/qt-ubuntu-24.04/downloads` and the SDK build script available alongside the binary artifacts.
 
 ## Tests
 

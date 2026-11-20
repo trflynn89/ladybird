@@ -51,6 +51,40 @@ install(TARGETS ${ladybird_helper_processes}
     DESTINATION ${ladybird_helper_install_dir}
 )
 
+if (LADYBIRD_BUNDLED_QT)
+    set_property(TARGET ladybird APPEND PROPERTY INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+    set_property(TARGET ladybird PROPERTY INSTALL_RPATH_USE_LINK_PATH FALSE)
+    set_property(TARGET ladybird PROPERTY BUILD_WITH_INSTALL_RPATH FALSE)
+
+    # Inspect the build executable, whose runtime path still points to the Qt SDK. Deploy only Qt libraries;
+    # CPack discovers the system dependencies of the installed executables, libraries and plugins.
+    qt_generate_deploy_script(
+        TARGET ladybird
+        OUTPUT_SCRIPT deploy_qt
+        CONTENT "
+qt_deploy_runtime_dependencies(
+    EXECUTABLE \"$<TARGET_FILE:ladybird>\"
+    GENERATE_QT_CONF
+    NO_TRANSLATIONS
+    PRE_INCLUDE_REGEXES \"^libQt6\"
+    PRE_EXCLUDE_REGEXES \".*\"
+    INCLUDE_PLUGINS qxcb qwayland qoffscreen
+    INCLUDE_PLUGIN_TYPES position wayland-shell-integration wayland-graphics-integration-client xcbglintegrations
+    EXCLUDE_PLUGIN_TYPES egldeviceintegrations generic printsupport sqldrivers
+)
+"
+    )
+    install(SCRIPT "${deploy_qt}" COMPONENT ladybird_Runtime)
+    install(DIRECTORY "${LADYBIRD_BUNDLED_QT}/share/LadybirdQt/"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/ladybird/qt"
+        COMPONENT ladybird_Runtime
+        PATTERN "LICENSES.txt" EXCLUDE)
+    install(DIRECTORY "${LADYBIRD_BUNDLED_QT}/sbom/"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/ladybird/qt"
+        COMPONENT ladybird_Runtime
+        FILES_MATCHING PATTERN "*.spdx")
+endif()
+
 include("${LADYBIRD_SOURCE_DIR}/Meta/CMake/get_linked_lagom_libraries.cmake")
 foreach (application IN LISTS ladybird_applications)
   get_linked_lagom_libraries("${application}" "${application}_lagom_libraries")

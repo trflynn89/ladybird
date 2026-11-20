@@ -283,6 +283,8 @@ def generate(args: argparse.Namespace) -> str:
 
     output = ["\n".join(introduction) + "\n"]
     output.append(section("Ladybird", read_text(args.source_dir / "LICENSE")))
+    if args.qt_licenses:
+        output.append(section("Qt", read_text(args.qt_licenses)))
 
     for port in ports:
         output.append(section(f"{port.name} {port.version}", port.copyright))
@@ -302,6 +304,7 @@ def main() -> int:
     parser.add_argument("--source-dir", type=pathlib.Path, default=LADYBIRD_SOURCE_DIR)
     parser.add_argument("--vcpkg-installed-dir", type=pathlib.Path)
     parser.add_argument("--vcpkg-triplet")
+    parser.add_argument("--qt-licenses", type=pathlib.Path)
     parser.add_argument("--cargo", default="cargo")
     parser.add_argument("--rust-target")
     parser.add_argument("--offline", action="store_true")

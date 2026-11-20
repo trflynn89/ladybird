@@ -15,6 +15,15 @@ set(licenses_dependencies
     "${LADYBIRD_SOURCE_DIR}/Cargo.lock"
 )
 
+if (LADYBIRD_BUNDLED_QT)
+    set(qt_licenses_file "${LADYBIRD_BUNDLED_QT}/share/LadybirdQt/LICENSES.txt")
+    if (NOT EXISTS "${qt_licenses_file}")
+        message(FATAL_ERROR "Missing Qt license notices at ${qt_licenses_file}. Build the SDK with Meta/Docker/ci/build-qt.sh.")
+    endif()
+    list(APPEND licenses_arguments --qt-licenses "${qt_licenses_file}")
+    list(APPEND licenses_dependencies "${qt_licenses_file}")
+endif()
+
 if (NOT "${VCPKG_INSTALLED_DIR}" STREQUAL "" AND NOT "${VCPKG_TARGET_TRIPLET}" STREQUAL "")
     list(APPEND licenses_arguments
         --vcpkg-installed-dir "${VCPKG_INSTALLED_DIR}"
