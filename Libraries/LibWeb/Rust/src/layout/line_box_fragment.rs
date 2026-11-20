@@ -83,6 +83,10 @@ pub(crate) struct BlockEllipsisText {
 pub(crate) struct LineBoxFragmentData {
     pub(crate) record: inline_content::FragmentRecord,
     pub(crate) glyphs: Option<GlyphData>,
+    pub(super) bidi_position: Option<bidi::Position>,
+    /// The advances contributed by margins, borders and padding on either side of this fragment in logical order.
+    pub(super) bidi_edges: (CssPixels, CssPixels),
+    pub(super) bidi_edges_on_left: CssPixels,
     pub(crate) insert_position: f32,
     pub(crate) current_insert_direction: u8,
     pub(crate) has_text_overflow_ellipsis: bool,
@@ -175,6 +179,9 @@ impl LineBoxFragmentData {
         let mut fragment = Self {
             record,
             glyphs,
+            bidi_position: None,
+            bidi_edges: Default::default(),
+            bidi_edges_on_left: Default::default(),
             insert_position: 0.0,
             current_insert_direction: direction::LTR,
             has_text_overflow_ellipsis: false,

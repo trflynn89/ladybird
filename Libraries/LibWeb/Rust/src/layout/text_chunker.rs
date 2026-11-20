@@ -161,7 +161,6 @@ unsafe extern "C" {
         start: *mut usize,
         end: *mut usize,
     );
-    safe fn unicode_layout_bidirectional_class(code_point: u32) -> u8;
     safe fn unicode_layout_line_break_class(code_point: u32) -> u8;
     safe fn unicode_layout_joining_type(code_point: u32) -> u8;
     safe fn unicode_layout_code_point_has_emoji_property(code_point: u32) -> bool;
@@ -268,51 +267,6 @@ pub(crate) fn joining_context(text: &[u16], range: std::ops::Range<usize>) -> li
     }
 }
 
-// Classifies a code point for direction-run splitting: strong LTR/RTL, direction-neutral Common, or ContextDependent
-// (resolved from surrounding runs).
-fn text_type_for_code_point(code_point: u32) -> u8 {
-    use line_box_fragment::{
-        GLYPH_TEXT_TYPE_COMMON as C, GLYPH_TEXT_TYPE_CONTEXT_DEPENDENT as X, GLYPH_TEXT_TYPE_LTR as L,
-        GLYPH_TEXT_TYPE_RTL as R,
-    };
-
-    // Each ASCII character has a statically known bidi class.
-    #[rustfmt::skip]
-    const ASCII_TEXT_TYPES: [u8; 128] = [
-        // 0x00-0x0F: Control characters (BN=Common, S/B/WS=ContextDependent)
-        C, C, C, C, C, C, C, C, C, X, X, X, X, X, C, C,
-        // 0x10-0x1F: Control characters
-        C, C, C, C, C, C, C, C, C, C, C, C, X, X, X, X,
-        // 0x20-0x2F: Space and punctuation
-        X, C, C, X, X, X, C, C, C, C, C, X, X, X, X, X,
-        // 0x30-0x3F: Digits and punctuation
-        X, X, X, X, X, X, X, X, X, X, X, C, C, C, C, C,
-        // 0x40-0x4F: @ and uppercase letters
-        C, L, L, L, L, L, L, L, L, L, L, L, L, L, L, L,
-        // 0x50-0x5F: Uppercase letters and punctuation
-        L, L, L, L, L, L, L, L, L, L, L, C, C, C, C, C,
-        // 0x60-0x6F: ` and lowercase letters
-        C, L, L, L, L, L, L, L, L, L, L, L, L, L, L, L,
-        // 0x70-0x7F: Lowercase letters and punctuation
-        L, L, L, L, L, L, L, L, L, L, L, C, C, C, C, C,
-    ];
-    if let Some(&text_type) = ASCII_TEXT_TYPES.get(code_point as usize) {
-        return text_type;
-    }
-
-    match unicode_layout_bidirectional_class(code_point) {
-        // LibUnicode's BidiClass, in declaration order: AN, B, CS, NSM, EN, ES, ET, S, WS.
-        0 | 1 | 3..=7 | 21 | 22 => X,
-        // BN, FSI, ON, PDF, PDI.
-        2 | 8 | 13..=15 => C,
-        // L, LRE, LRI, LRO.
-        9..=12 => L,
-        // R, AL, RLE, RLI, RLO.
-        16..=20 => R,
-        _ => unreachable!("invalid bidi class"),
-    }
-}
-
 // Stand-ins for the Unicode library's segmenters and the host's code point facts, which a unit test links through a
 // document's render state but never reaches.
 #[cfg(test)]
@@ -370,11 +324,6 @@ mod unicode_test_stubs {
     }
 
     #[unsafe(no_mangle)]
-    extern "C" fn unicode_layout_bidirectional_class(_code_point: u32) -> u8 {
-        unreachable!("no unit test segments text");
-    }
-
-    #[unsafe(no_mangle)]
     extern "C" fn unicode_layout_line_break_class(_code_point: u32) -> u8 {
         unreachable!("no unit test segments text");
     }
@@ -400,7 +349,7 @@ pub(crate) struct TextChunk {
     pub has_breaking_tab: bool,
     pub is_all_whitespace: bool,
     pub can_break_after: bool,
-    pub text_type: u8,
+    pub bidi_level: u8,
 }
 
 pub(crate) struct TextChunkInputs<'text> {
@@ -415,7 +364,7 @@ pub(crate) struct TextChunkInputs<'text> {
     pub font_variant_emoji: u8,
     pub should_wrap_lines: bool,
     pub should_respect_linebreaks: bool,
-    pub unidirectional_ltr: bool,
+    pub bidi_levels: Option<&'text [u8]>,
     /// Whether the text is vertical text in mixed orientation, where some characters are typeset upright and others
     /// sideways.
     pub splits_at_orientation_changes: bool,
@@ -846,7 +795,7 @@ fn ascii_line_break_at_whitespace_or_text_edge(text: &[u16], index: usize) -> Op
 struct PendingChunk {
     start: usize,
     font_index: u16,
-    text_type: u8,
+    bidi_level: u8,
     is_upright: bool,
     broken_on_tab: bool,
 }
@@ -1130,7 +1079,7 @@ struct TextChunker<'text> {
     break_after_preserved_tabs: bool,
     should_wrap_lines: bool,
     should_respect_linebreaks: bool,
-    unidirectional_ltr: bool,
+    bidi_levels: Option<&'text [u8]>,
     splits_at_orientation_changes: bool,
     current_index: usize,
     /// The fonts of the chunks, each once, which the chunks name by index.
@@ -1178,7 +1127,7 @@ impl<'text> TextChunker<'text> {
                 && inputs.should_wrap_lines,
             should_wrap_lines: inputs.should_wrap_lines,
             should_respect_linebreaks: inputs.should_respect_linebreaks,
-            unidirectional_ltr: inputs.unidirectional_ltr,
+            bidi_levels: inputs.bidi_levels,
             splits_at_orientation_changes: inputs.splits_at_orientation_changes,
             current_index: 0,
             fonts: Vec::new(),
@@ -1193,11 +1142,8 @@ impl<'text> TextChunker<'text> {
         code_point_at(self.text, self.current_index)
     }
 
-    fn current_text_type(&self) -> u8 {
-        if self.unidirectional_ltr {
-            return line_box_fragment::GLYPH_TEXT_TYPE_LTR;
-        }
-        text_type_for_code_point(self.current_code_point())
+    fn current_bidi_level(&self) -> u8 {
+        self.bidi_levels.map_or(0, |levels| levels[self.current_index])
     }
 
     fn current_code_point_is_upright(&self) -> bool {
@@ -1376,7 +1322,7 @@ impl<'text> TextChunker<'text> {
         end: usize,
         break_flags: ChunkBreakFlags,
         font_index: u16,
-        text_type: u8,
+        bidi_level: u8,
     ) -> Option<TextChunk> {
         let length_in_code_units = end - start;
         if length_in_code_units == 0 {
@@ -1396,7 +1342,7 @@ impl<'text> TextChunker<'text> {
             has_breaking_tab: break_flags.has_breaking_tab,
             is_all_whitespace,
             can_break_after: break_flags.can_break_after,
-            text_type,
+            bidi_level,
         })
     }
 
@@ -1412,13 +1358,14 @@ impl<'text> TextChunker<'text> {
             let mut pending = PendingChunk {
                 start: self.current_index,
                 font_index: self.index_of_font(expected_font),
-                text_type: self.current_text_type(),
+                bidi_level: self.current_bidi_level(),
                 is_upright: self.current_code_point_is_upright(),
                 broken_on_tab: false,
             };
 
             while self.current_index < self.text.len() {
                 code_point = self.current_code_point();
+                let ends_bidi_paragraph = self.current_bidi_level() == bidi::PARAGRAPH_SEPARATOR_LEVEL;
 
                 if code_point == '\t' as u32 {
                     if let Some(chunk) = self.try_commit_chunk_at_cursor(&pending, false) {
@@ -1438,8 +1385,8 @@ impl<'text> TextChunker<'text> {
                     return Some(chunk);
                 }
 
-                if self.should_respect_linebreaks && code_point == '\n' as u32 {
-                    // Newline encountered, and we're supposed to preserve them.
+                if (self.should_respect_linebreaks && code_point == u32::from(b'\n')) || ends_bidi_paragraph {
+                    // A preserved newline or a separator between resolved bidi paragraphs ends the line.
                     // If we have accumulated some code points in the current chunk, commit them now and continue with
                     // the newline next time.
                     if let Some(chunk) = self.try_commit_chunk_at_cursor(&pending, false) {
@@ -1457,7 +1404,7 @@ impl<'text> TextChunker<'text> {
                             can_break_after: false,
                         },
                         pending.font_index,
-                        pending.text_type,
+                        pending.bidi_level,
                     );
                     return Some(chunk.expect("newline chunk must be non-empty"));
                 }
@@ -1484,7 +1431,7 @@ impl<'text> TextChunker<'text> {
                 // Tabs can advance the cursor past the text. Split shaping runs at direction changes independently
                 // of line wrapping, while keeping the direction lookup inside the text.
                 if self.current_index < self.text.len()
-                    && pending.text_type != self.current_text_type()
+                    && pending.bidi_level != self.current_bidi_level()
                     && let Some(chunk) = self.try_commit_chunk_at_cursor(&pending, can_break_at_current_position)
                 {
                     return Some(chunk);
@@ -1522,7 +1469,7 @@ impl<'text> TextChunker<'text> {
                                 can_break_after: false,
                             },
                             space_font_index,
-                            pending.text_type,
+                            pending.bidi_level,
                         ) {
                             return Some(chunk);
                         }
@@ -1551,7 +1498,7 @@ impl<'text> TextChunker<'text> {
                         can_break_after: false,
                     },
                     pending.font_index,
-                    pending.text_type,
+                    pending.bidi_level,
                 ) {
                     return Some(chunk);
                 }
@@ -1575,7 +1522,7 @@ impl<'text> TextChunker<'text> {
                 can_break_after,
             },
             pending.font_index,
-            pending.text_type,
+            pending.bidi_level,
         )
     }
 }
@@ -1591,7 +1538,7 @@ pub(crate) fn text_chunks(
     node: Node,
     should_wrap_lines: bool,
     should_respect_linebreaks: bool,
-    unidirectional_ltr: bool,
+    bidi_levels: Option<&[u8]>,
 ) -> std::sync::Arc<super::rendered_text::CachedTextChunks> {
     let parent_style = StyleValues::for_node(pass, pass.parent(node));
     let frozen_font_list = parent_style.frozen_font_list();
@@ -1599,7 +1546,6 @@ pub(crate) fn text_chunks(
     let key = super::rendered_text::TextChunkCacheKey {
         should_wrap_lines,
         should_respect_linebreaks,
-        unidirectional_ltr,
         white_space_collapse: parent_style.white_space_collapse(),
         word_break: parent_style.word_break(),
         line_break: parent_style.line_break(),
@@ -1618,7 +1564,7 @@ pub(crate) fn text_chunks(
         ) && parent_style.text_orientation() == text_orientation::MIXED,
     };
     let text = &pass.text_content(node).text;
-    pass.text_chunks(node, &key, || ChunkedText {
+    let make_chunks = || ChunkedText {
         frozen_font_list_held_for_memo_key: Some(parent_style.frozen_font_list_ref()),
         ..chunk_text(TextChunkInputs {
             text,
@@ -1631,10 +1577,16 @@ pub(crate) fn text_chunks(
             font_variant_emoji: key.font_variant_emoji,
             should_wrap_lines,
             should_respect_linebreaks,
-            unidirectional_ltr,
+            bidi_levels,
             splits_at_orientation_changes: key.splits_at_orientation_changes,
         })
-    })
+    };
+    // These levels also depend on the surrounding nodes, outside the text chunk cache's key.
+    if bidi_levels.is_some() {
+        std::sync::Arc::new(super::rendered_text::CachedTextChunks::new(key.clone(), make_chunks()))
+    } else {
+        pass.text_chunks(node, &key, make_chunks)
+    }
 }
 
 // Tabs occupy one UTF-16 code unit each. Other preserved whitespace is split below by next_chunk().

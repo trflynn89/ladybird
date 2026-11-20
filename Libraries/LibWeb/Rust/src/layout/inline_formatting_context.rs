@@ -264,7 +264,8 @@ fn apply_text_overflow_at_right_edge(
     // NB: Content can only reach as far as leaves room for the ellipsis before the edge.
     let content_right_limit = right_edge - ellipsis.inline_size();
     let mut line_has_visible_content = false;
-    for index in 0..line.fragments.len() {
+    let order = line.fragment_indices_in_visual_order();
+    for (position, &index) in order.iter().enumerate() {
         let fragment_start = line.fragments[index].inline_offset;
         if fragment_start + line.fragments[index].inline_length <= content_right_limit {
             line_has_visible_content = true;
@@ -303,7 +304,8 @@ fn apply_text_overflow_at_right_edge(
             ellipsis_fragment_inline_length: original_inline_length,
             ellipsis_fragment_inline_length_lost_on_left: None,
         });
-        for later in &mut line.fragments[index + 1..] {
+        for &later in &order[position + 1..] {
+            let later = &mut line.fragments[later];
             later.is_fully_truncated = true;
             later.is_hidden_by_text_overflow = true;
         }
@@ -329,7 +331,8 @@ fn apply_text_overflow_at_left_edge(
     // NB: Content can only start as far left as leaves room for the ellipsis after the edge.
     let content_left_limit = left_edge + ellipsis_inline_size;
     let mut line_has_visible_content = false;
-    for index in (0..line.fragments.len()).rev() {
+    let order = line.fragment_indices_in_visual_order();
+    for (position, &index) in order.iter().enumerate().rev() {
         let fragment_start = line.fragments[index].inline_offset;
         if fragment_start >= content_left_limit {
             line_has_visible_content = true;
@@ -367,7 +370,8 @@ fn apply_text_overflow_at_left_edge(
             (fragment.inline_offset - ellipsis_inline_size).max(left_edge)
         };
         let elided_inline_length = line.inline_length;
-        for earlier in &mut line.fragments[..index] {
+        for &earlier in &order[..position] {
+            let earlier = &mut line.fragments[earlier];
             earlier.is_fully_truncated = true;
             earlier.is_hidden_by_text_overflow = true;
         }
@@ -547,7 +551,8 @@ fn apply_block_ellipsis(
     // For bidi purposes, the block overflow ellipsis must be treated as an anonymous inline with unicode-bidi:
     // isolate, with the same embedding level as the bidi paragraph, and which inherits direction from the bidi
     // paragraph.
-    let ellipsis_precedes_content = line.direction == direction::RTL
+    let ellipsis_precedes_content = context.bidi_paragraphs.is_empty()
+        && line.direction == direction::RTL
         && line
             .visible_fragments()
             .next_back()
@@ -650,6 +655,7 @@ pub(crate) fn apply_to_fragments(
 
     let mut running_diff = CssPixels::default();
     // Expand spaces in increasing inline-coordinate order, including when logical order was mirrored for placement.
+    let order = line.bidi_reordered.then(|| line.fragment_indices_in_visual_order());
     let fragment_count = line.fragments.len();
     for index in 0..fragment_count {
         let index = if atomic_items_are_right_to_left {
@@ -657,6 +663,7 @@ pub(crate) fn apply_to_fragments(
         } else {
             index
         };
+        let index = order.as_ref().map_or(index, |order| order[index]);
         let fragment = &mut line.fragments[index];
         if fragment.is_fully_truncated {
             continue;
@@ -1373,6 +1380,7 @@ pub(crate) struct InlineFormattingContext<'context> {
     pub(crate) fragmented_inlines_in_pre_order: Vec<Node>,
     pub(crate) current_line_start: Cell<fragmentation::LinePosition>,
     pub(crate) atomic_items_are_right_to_left: bool,
+    pub(super) bidi_paragraphs: std::sync::Arc<[bidi::Paragraph]>,
     inline_boxes_continued_from_previous_fragment: Vec<Node>,
     inline_boxes_continued_in_next_fragment: RefCell<Vec<Node>>,
     block_axis_float_clearance: Cell<CssPixels>,
@@ -1427,6 +1435,7 @@ impl<'context> InlineFormattingContext<'context> {
             fragmented_inlines_in_pre_order: Vec::new(),
             current_line_start: Cell::new(fragmentation::LinePosition::default()),
             atomic_items_are_right_to_left: false,
+            bidi_paragraphs: Default::default(),
             inline_boxes_continued_from_previous_fragment: Vec::new(),
             inline_boxes_continued_in_next_fragment: RefCell::new(Vec::new()),
             block_axis_float_clearance: Cell::new(CssPixels::default()),
@@ -1963,6 +1972,7 @@ impl<'context> InlineFormattingContext<'context> {
                 block_level_box: None,
                 uses_last_line_alignment: None,
                 placed_inline_start: CssPixels::default(),
+                bidi_reordered: false,
             };
             fragment_start = fragment_end;
             let line_item_start = item_index;
@@ -2787,6 +2797,7 @@ impl<'context> InlineFormattingContext<'context> {
                 item_state.leading_border += item.border_start;
                 item_state.leading_padding += item.padding_start;
                 item_state.leading_right_to_left_end_margin += item.entered_right_to_left_end_margin;
+                item_state.bidi_leading_edges_on_left += item.bidi_start_edges_on_left;
                 let zero = CssPixels::default();
                 if item.margin_end != zero || item.border_end != zero || item.padding_end != zero {
                     // NB: A box that ends here started on this line, so its start edges come before its end edges.
@@ -2796,6 +2807,7 @@ impl<'context> InlineFormattingContext<'context> {
                         std::mem::take(&mut item_state.leading_border),
                         std::mem::take(&mut item_state.leading_padding),
                     );
+                    item_state.bidi_leading_edges_on_left = CssPixels::default();
                     line_builder.append_end_edges_of_collapsed_whitespace(
                         item.node,
                         item.margin_end,
@@ -2819,10 +2831,12 @@ impl<'context> InlineFormattingContext<'context> {
                 item.border_start += item_state.leading_border;
                 item.padding_start += item_state.leading_padding;
                 item.entered_right_to_left_end_margin += item_state.leading_right_to_left_end_margin;
+                item.bidi_start_edges_on_left += item_state.bidi_leading_edges_on_left;
                 item_state.leading_margin = CssPixels::default();
                 item_state.leading_border = CssPixels::default();
                 item_state.leading_padding = CssPixels::default();
                 item_state.leading_right_to_left_end_margin = CssPixels::default();
+                item_state.bidi_leading_edges_on_left = CssPixels::default();
             }
 
             match item.type_ {
@@ -2846,6 +2860,7 @@ impl<'context> InlineFormattingContext<'context> {
                     let continuation = iterator.next_unbreakable_run_inline_size(self);
                     let position = iterator.forced_break_position(&item);
                     line_builder.add_struts_of_inline_boxes_around(position.node, CssPixels::default());
+                    line_builder.set_bidi_paragraph_direction(&item, iterator.prepared_content());
                     line_builder.break_line(line_builder::ForcedBreak::Yes, Some(position), continuation);
                     if !item.node.is_invalid() && self.clear_floating_boxes(item.node) {
                         line_builder.did_introduce_clearance(self.block_axis_float_clearance.get());
@@ -2877,13 +2892,14 @@ impl<'context> InlineFormattingContext<'context> {
                     if self.stops_at_line_clamp_point(line_builder, &mut state_at_clamp_point) {
                         break;
                     }
-                    line_builder.append_box(&item);
+                    line_builder.append_box(&item, iterator.prepared_content());
                 }
                 inline_level_iterator::ItemType::BlockLevelBox => {
                     item_state.leading_margin += item.margin_start;
                     item_state.leading_border += item.border_start;
                     item_state.leading_padding += item.padding_start;
                     item_state.leading_right_to_left_end_margin += item.entered_right_to_left_end_margin;
+                    item_state.bidi_leading_edges_on_left += item.bidi_start_edges_on_left;
                     // https://drafts.csswg.org/css2/#anonymous-block-level
                     // NB: The inline boxes around the block-level box are broken around it, so they're on the line
                     //     before it and on the line after it.
@@ -3408,16 +3424,13 @@ impl<'context> InlineFormattingContext<'context> {
                 }
             }
         }
-        if self.parent.has_line_clamp() {
+        if self.parent.has_line_clamp() || !self.bidi_paragraphs.is_empty() {
             line_builder.update_last_line(false);
         }
         let line_count = self.line_data().line_boxes.len();
-        for line_index in reused_line_count..line_count {
-            if self.line_data().line_boxes[line_index]
-                .inline_length_before_block_ellipsis
-                .is_none()
-            {
-                self.line_data_mut().line_boxes[line_index].trim_trailing_whitespace();
+        for line in &mut self.line_data_mut().line_boxes[reused_line_count..] {
+            if !line.bidi_reordered && line.inline_length_before_block_ellipsis.is_none() {
+                line.trim_trailing_whitespace();
             }
         }
         if self.text_overflow_applies() {
@@ -4056,6 +4069,7 @@ struct InlineItemRunState {
     leading_border: CssPixels,
     leading_padding: CssPixels,
     leading_right_to_left_end_margin: CssPixels,
+    bidi_leading_edges_on_left: CssPixels,
     collapsed_whitespace_node: Node,
     previous_text_item_allows_overflow_break_after: bool,
     whitespace_measured_next_run: bool,

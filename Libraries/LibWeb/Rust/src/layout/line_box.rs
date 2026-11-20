@@ -94,6 +94,7 @@ pub(crate) struct LineBoxData {
     pub(crate) uses_last_line_alignment: Option<bool>,
     /// Where the line box starts, past any floats, once the line is placed.
     pub(crate) placed_inline_start: CssPixels,
+    pub(super) bidi_reordered: bool,
     pub(crate) record: inline_content::LineRecord,
 }
 
@@ -122,6 +123,7 @@ impl LineBoxData {
             block_level_box: None,
             uses_last_line_alignment: None,
             placed_inline_start: CssPixels::default(),
+            bidi_reordered: false,
             record: inline_content::LineRecord {
                 direction,
                 writing_mode,
@@ -148,7 +150,7 @@ impl LineBoxData {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn add_fragment(
+    pub(super) fn add_fragment(
         &mut self,
         layout_node: Node,
         start: usize,
@@ -165,7 +167,13 @@ impl LineBoxData {
         facts: line_box_fragment::FragmentBuildFacts,
         text_align_is_justify: bool,
         trailing_whitespace: line_box_fragment::TrailingWhitespace,
+        bidi: Option<(bidi::Position, &bidi::Paragraph)>,
+        bidi_edges_on_left: CssPixels,
     ) {
+        let bidi_position = bidi.map(|(position, _)| position);
+        if let Some((_, paragraph)) = bidi {
+            self.record.direction = bidi::direction_of_level(paragraph.base_level);
+        }
         let can_merge = glyphs.as_ref().is_some_and(|glyphs| {
             !text_align_is_justify
                 && self.fragments.last().is_some_and(|last| {
@@ -175,12 +183,24 @@ impl LineBoxData {
                             last_glyphs.font == *glyphs.font && last_glyphs.is_upright == glyphs.is_upright
                         })
                         && last.start + last.length_in_code_units == start
+                        && match (last.bidi_position, bidi) {
+                            (None, None) => true,
+                            (Some(previous), Some((position, paragraph))) => {
+                                previous.paragraph == position.paragraph
+                                    && previous.offset + last.length_in_code_units == position.offset
+                                    && paragraph.shaping_level_at(previous.offset)
+                                        == paragraph.shaping_level_at(position.offset)
+                            }
+                            _ => false,
+                        }
                 })
         });
         if can_merge {
             let last = self.fragments.last_mut().unwrap();
             last.length_in_code_units += length;
             last.append_glyph_run(&glyphs.unwrap(), content_inline_size, start - last.start);
+            last.bidi_edges.1 += trailing_size + trailing_margin;
+            last.bidi_edges_on_left += bidi_edges_on_left;
             if trailing_whitespace.length_in_code_units == length {
                 last.trailing_whitespace += trailing_whitespace;
             } else {
@@ -203,6 +223,9 @@ impl LineBoxData {
                 facts,
             );
             fragment.trailing_whitespace = trailing_whitespace;
+            fragment.bidi_position = bidi_position;
+            fragment.bidi_edges = (leading_margin + leading_size, trailing_size + trailing_margin);
+            fragment.bidi_edges_on_left = bidi_edges_on_left;
             self.push_fragment(fragment);
         }
         self.record.inline_length += inline_advance(
@@ -215,6 +238,100 @@ impl LineBoxData {
         self.block_length = self
             .block_length
             .max(content_block_size + border_box_block_start + border_box_block_end);
+    }
+
+    pub(super) fn reorder_bidi_fragments(&mut self, paragraphs: &[bidi::Paragraph]) {
+        if self.bidi_reordered {
+            return;
+        }
+        let Some(first) = self.visible_fragments().find_map(|fragment| fragment.bidi_position) else {
+            return;
+        };
+        let paragraph = &paragraphs[first.paragraph];
+        if paragraph.is_unidirectional_ltr {
+            return;
+        }
+        let end = self
+            .visible_fragments()
+            .filter_map(|fragment| {
+                let position = fragment.bidi_position?;
+                debug_assert_eq!(position.paragraph, first.paragraph);
+                Some(position.offset + fragment.length_in_code_units.max(1))
+            })
+            .max()
+            .unwrap();
+        let (indices, trailing_whitespace_start) = paragraph.visual_indices(first.offset..end);
+        let visual_index = |position: bidi::Position| i64::from(indices[position.offset - first.offset]) * 2;
+        let is_rtl = |position: bidi::Position| {
+            let level = if position.offset >= trailing_whitespace_start {
+                paragraph.base_level
+            } else {
+                paragraph.level_at(position.offset)
+            };
+            bidi::direction_of_level(level) == direction::RTL
+        };
+
+        // Keep the fragments in logical order for DOM ranges and inline box ownership. Only their positions go into
+        // visual order. Offsets in the paragraph include the zero-width controls between inline boxes.
+        let mut logical_end = self.indent;
+        let mut anchor = None;
+        let mut order: Vec<_> = self
+            .fragments
+            .iter()
+            .enumerate()
+            .filter(|(_, fragment)| !fragment.is_fully_truncated)
+            .map(|(index, fragment)| {
+                let position = fragment.bidi_position;
+                let (key, reversed) = if fragment.is_block_ellipsis {
+                    if self.direction == direction::RTL {
+                        (i64::MIN, true)
+                    } else {
+                        (i64::MAX, false)
+                    }
+                } else if let Some(position) = position {
+                    anchor = Some(position);
+                    (visual_index(position), is_rtl(position))
+                } else if let Some(previous) = anchor {
+                    let reversed = is_rtl(previous);
+                    (visual_index(previous) + if reversed { -1 } else { 1 }, reversed)
+                } else {
+                    let reversed = is_rtl(first);
+                    (visual_index(first) + if reversed { 1 } else { -1 }, reversed)
+                };
+                let before = fragment.inline_offset - logical_end;
+                let after = fragment.bidi_edges.1;
+                logical_end = fragment.inline_offset + fragment.inline_length + after;
+                let advance = before + fragment.inline_length + after;
+                let gap = before - fragment.bidi_edges.0;
+                let left = fragment.bidi_edges_on_left + if reversed { CssPixels::default() } else { gap };
+                (
+                    key,
+                    if reversed { usize::MAX - index } else { index },
+                    index,
+                    left,
+                    advance,
+                )
+            })
+            .collect();
+        order.sort_unstable_by_key(|&(key, tie, ..)| (key, tie));
+        let mut offset = self.indent;
+        if self.direction == direction::RTL {
+            // Edges of collapsed whitespace can advance the line without emitting a fragment.
+            offset += (self.inline_length - logical_end).max(CssPixels::default());
+        }
+        for (_, _, index, left, advance) in order {
+            self.fragments[index].inline_offset = offset + left;
+            offset += advance;
+        }
+        self.bidi_reordered = true;
+    }
+
+    pub(super) fn fragment_indices_in_visual_order(&self) -> Vec<usize> {
+        let mut indices: Vec<_> = (0..self.fragments.len()).collect();
+        if self.bidi_reordered {
+            indices.sort_by_key(|&index| self.fragments[index].inline_offset);
+        }
+        indices
     }
 
     pub(crate) fn advance_inline_length(&mut self, inline_size: CssPixels) {
@@ -302,7 +419,8 @@ impl LineBoxData {
             //     ideographic space, is trimmed to nothing rather than removed, so a line with nothing else on it stays.
             let is_all_trailing_whitespace = fragment.length_in_code_units > 0
                 && fragment.trailing_whitespace.length_in_code_units == fragment.length_in_code_units;
-            if is_all_trailing_whitespace && !fragment.is_justifiable_whitespace() {
+            let carries_bidi_edges = fragment.bidi_position.is_some() && fragment.bidi_edges != Default::default();
+            if is_all_trailing_whitespace && (!fragment.is_justifiable_whitespace() || carries_bidi_edges) {
                 let fragment_trailing_whitespace = fragment.trailing_whitespace;
                 whitespace_inline_size += fragment_trailing_whitespace.inline_size;
                 if should_remove {

@@ -49,6 +49,8 @@ pub(crate) struct Item {
     pub(crate) border_end: CssPixels,
     pub(crate) margin_start: CssPixels,
     pub(crate) margin_end: CssPixels,
+    pub(super) bidi_start_edges_on_left: CssPixels,
+    pub(super) bidi_end_edges_on_left: CssPixels,
     pub(crate) entered_right_to_left_end_margin: CssPixels,
     pub(crate) exited_right_to_left_end_margin: CssPixels,
     pub(crate) is_collapsible_whitespace: bool,
@@ -58,7 +60,7 @@ pub(crate) struct Item {
     atomic: Option<Box<AtomicItemMetrics>>,
 }
 
-const _: () = assert!(size_of::<Item>() == 96);
+const _: () = assert!(size_of::<Item>() == 104);
 
 #[derive(Clone, Debug)]
 pub(crate) struct OwnedGlyphRun {
@@ -260,6 +262,8 @@ impl Item {
             border_end: CssPixels::default(),
             margin_start: CssPixels::default(),
             margin_end: CssPixels::default(),
+            bidi_start_edges_on_left: CssPixels::default(),
+            bidi_end_edges_on_left: CssPixels::default(),
             entered_right_to_left_end_margin: CssPixels::default(),
             exited_right_to_left_end_margin: CssPixels::default(),
             is_collapsible_whitespace: false,
@@ -278,6 +282,18 @@ impl Item {
             "an item is read against the content it was resolved from"
         );
         prepared_item
+    }
+
+    pub(super) fn bidi_position(&self, prepared: &PreparedInlineContent) -> Option<bidi::Position> {
+        let mut position = prepared
+            .bidi_positions
+            .get(self.prepared_item_index as usize)
+            .copied()
+            .flatten()?;
+        if self.type_ == ItemType::Text {
+            position.offset += self.offset_in_node - self.prepared_item(prepared).offset_in_node();
+        }
+        Some(position)
     }
 
     /// The glyphs of a text item, read against the content the item was resolved from.
@@ -567,6 +583,7 @@ impl Item {
             fragment.margin_start = CssPixels::default();
             fragment.border_start = CssPixels::default();
             fragment.padding_start = CssPixels::default();
+            fragment.bidi_start_edges_on_left = CssPixels::default();
             fragment.entered_right_to_left_end_margin = CssPixels::default();
             fragment.can_break_before = false;
         }
@@ -574,6 +591,7 @@ impl Item {
             fragment.margin_end = CssPixels::default();
             fragment.border_end = CssPixels::default();
             fragment.padding_end = CssPixels::default();
+            fragment.bidi_end_edges_on_left = CssPixels::default();
             fragment.exited_right_to_left_end_margin = CssPixels::default();
             fragment.trailing_whitespace = Default::default();
         }
@@ -693,6 +711,7 @@ impl Item {
         prefix.margin_start = self.margin_start;
         prefix.border_start = self.border_start;
         prefix.padding_start = self.padding_start;
+        prefix.bidi_start_edges_on_left = self.bidi_start_edges_on_left;
         prefix.entered_right_to_left_end_margin = self.entered_right_to_left_end_margin;
         prefix.can_break_before = self.can_break_before;
         prefix.owned_glyph_run = Some(Box::new(prefix_glyphs));
@@ -708,6 +727,7 @@ impl Item {
         self.margin_start = CssPixels::default();
         self.border_start = CssPixels::default();
         self.padding_start = CssPixels::default();
+        self.bidi_start_edges_on_left = CssPixels::default();
         self.entered_right_to_left_end_margin = CssPixels::default();
         self.can_break_before = false;
     }
@@ -956,44 +976,6 @@ struct TextNodeContext<'pass> {
     is_generated_for_pseudo_element: bool,
     produces_line_box_fragment_when_empty: bool,
     is_text_control_text: bool,
-    last_known_direction: Option<u8>,
-    /// The direction of the first chunk with a strong direction from the chunk at the first index on, which is the
-    /// chunk at the second index.
-    next_known_direction: std::cell::Cell<Option<(usize, usize, Option<u8>)>>,
-    /// The direction each bracket that is open at this point in the paragraph took, if it took one.
-    open_bracket_directions: std::cell::RefCell<Vec<Option<u8>>>,
-}
-
-impl TextNodeContext<'_> {
-    /// The direction of the first chunk with a strong direction among the chunks not yet taken.
-    fn next_known_direction(&self) -> Option<u8> {
-        // NB: The answer holds until the chunk that gave it is taken, so a run of neutral chunks looks ahead once.
-        if let Some((from, until, direction)) = self.next_known_direction.get()
-            && (from..=until).contains(&self.next_chunk_index)
-        {
-            return direction;
-        }
-        let found = self
-            .chunks
-            .iter()
-            .enumerate()
-            .skip(self.next_chunk_index)
-            .find_map(|(index, chunk)| {
-                // NB: A preserved newline ends the paragraph, and the text after it has no say in this one.
-                if self.should_respect_linebreaks && chunk.has_breaking_newline {
-                    return Some((index, None));
-                }
-                matches!(
-                    chunk.text_type,
-                    line_box_fragment::GLYPH_TEXT_TYPE_LTR | line_box_fragment::GLYPH_TEXT_TYPE_RTL
-                )
-                .then_some((index, Some(chunk.text_type)))
-            });
-        let (until, direction) = found.unwrap_or((usize::MAX, None));
-        self.next_known_direction
-            .set(Some((self.next_chunk_index, until, direction)));
-        direction
-    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1009,7 +991,7 @@ struct InlineContentPreparer<'pass> {
     current_node: Node,
     next_node: Node,
     text_node_context: Option<TextNodeContext<'pass>>,
-    is_unidirectional_left_to_right: bool,
+    bidi: bidi::InlineContent,
     walks_within_item: bool,
     previous_chunk_can_break_after: bool,
     /// The text of the text node before the current one, when nothing but inline box boundaries and out-of-flow
@@ -1085,6 +1067,9 @@ impl PreparedInlineContent {
         atomic_sizing: AtomicInlineSizing,
     ) -> InlineLevelIterator {
         context.atomic_items_are_right_to_left = self.orders_atomic_items_right_to_left(context);
+        if !context.atomic_items_are_right_to_left {
+            context.bidi_paragraphs = self.bidi_paragraphs.clone();
+        }
         let (entered_box_model_nodes, empty_inline_boxes, items) = RunItemResolver {
             context,
             prepared: &self,
@@ -1129,7 +1114,7 @@ impl<'pass> InlineContentPreparer<'pass> {
             next_node: pass.first_child(block_container),
             current_node: NodeSlotId::INVALID,
             text_node_context: None,
-            is_unidirectional_left_to_right: false,
+            bidi: bidi::InlineContent::default(),
             walks_within_item: false,
             previous_chunk_can_break_after: false,
             previous_text: None,
@@ -1140,14 +1125,28 @@ impl<'pass> InlineContentPreparer<'pass> {
             code_unit_before_previous_text: None,
             code_unit_before_text: None,
         };
-        preparer.is_unidirectional_left_to_right = preparer.compute_is_unidirectional_left_to_right();
+        if !preparer.compute_is_unidirectional_left_to_right() {
+            preparer.bidi = bidi::InlineContent::resolve(&pass, block_container);
+        }
         preparer.skip_to_next();
         while let Some(item) = preparer.prepare_next_item() {
             preparer.buffers.items.push(item);
         }
-        let prepared = preparer
+        let bidi_positions = if preparer.bidi.paragraphs.is_empty() {
+            Box::default()
+        } else {
+            preparer
+                .buffers
+                .items
+                .iter()
+                .map(|item| preparer.bidi.position(item.node(), item.offset_in_node()))
+                .collect()
+        };
+        let mut prepared = preparer
             .buffers
             .take_prepared_inline_content(super::fc_run_cache::run_root_validity(&pass, block_container));
+        prepared.bidi_positions = bidi_positions;
+        prepared.bidi_paragraphs = preparer.bidi.paragraphs.into();
         pass.return_inline_content_preparation_buffers(preparer.buffers);
         prepared
     }
@@ -1182,7 +1181,13 @@ impl<'pass> InlineContentPreparer<'pass> {
 
     fn compute_is_unidirectional_left_to_right(&mut self) -> bool {
         let containing_block = self.block_container;
-        if self.style(containing_block).direction() == direction::RTL {
+        let style = self.style(containing_block);
+        if style.direction() == direction::RTL
+            || matches!(
+                style.unicode_bidi(),
+                unicode_bidi::PLAINTEXT | unicode_bidi::BIDI_OVERRIDE | unicode_bidi::ISOLATE_OVERRIDE
+            )
+        {
             return false;
         }
 
@@ -1259,21 +1264,9 @@ impl<'pass> InlineContentPreparer<'pass> {
     }
 
     fn next_inline_node_in_pre_order(&mut self, current: Node, stay_within: Node) -> Node {
-        let first_child = self.pass.first_child(current);
-        let current_facts = self.facts(current);
-        if !first_child.is_invalid() {
-            let child_facts = self.facts(first_child);
-            let current_style = self.style(current);
-            if (child_facts.is_inline()
-                || child_facts.is_inline_flow_interrupting_block()
-                || self.is_out_of_flow(first_child))
-                && current_style.display().is_flow_inside()
-                && !current_facts.is_inline_flow_interrupting_block()
-                && !current_facts.is_atomic_inline()
-                && (!current_facts.is_box() || !self.is_out_of_flow(current))
-            {
-                return first_child;
-            }
+        let child = bidi::first_inline_child(&self.pass, current);
+        if !child.is_invalid() {
+            return child;
         }
 
         let mut node = current;
@@ -1338,10 +1331,7 @@ impl<'pass> InlineContentPreparer<'pass> {
     fn enter_text_node(&mut self, text_node: Node) {
         let style = self.style(self.pass.parent(text_node));
         let should_wrap_lines = style.text_wrap_mode() == text_wrap_mode::WRAP;
-        let should_respect_linebreaks = matches!(
-            style.white_space_collapse(),
-            white_space_collapse::PRESERVE | white_space_collapse::PRESERVE_BREAKS | white_space_collapse::BREAK_SPACES
-        );
+        let should_respect_linebreaks = bidi::preserves_newlines(style.white_space_collapse());
         let should_collapse_whitespace = matches!(
             style.white_space_collapse(),
             white_space_collapse::COLLAPSE | white_space_collapse::PRESERVE_BREAKS
@@ -1351,7 +1341,7 @@ impl<'pass> InlineContentPreparer<'pass> {
             text_node,
             should_wrap_lines,
             should_respect_linebreaks,
-            self.is_unidirectional_left_to_right,
+            self.bidi.levels_for_node(text_node).as_deref(),
         );
         let facts = self.facts(text_node);
         self.text_node_context = Some(TextNodeContext {
@@ -1370,58 +1360,7 @@ impl<'pass> InlineContentPreparer<'pass> {
             is_generated_for_pseudo_element: facts.is_generated_for_pseudo_element(),
             produces_line_box_fragment_when_empty: facts.produces_line_box_fragment_when_empty(),
             is_text_control_text: facts.is_text_control_text(),
-            last_known_direction: None,
-            next_known_direction: Default::default(),
-            open_bracket_directions: Default::default(),
         });
-    }
-
-    fn resolve_text_direction_from_context(&self, context: &TextNodeContext<'_>) -> u8 {
-        let next_known_direction = context.next_known_direction();
-        if let (Some(last), Some(next)) = (context.last_known_direction, next_known_direction)
-            && last != next
-        {
-            return match self.style(self.block_container).direction() {
-                direction::LTR => line_box_fragment::GLYPH_TEXT_TYPE_LTR,
-                direction::RTL => line_box_fragment::GLYPH_TEXT_TYPE_RTL,
-                _ => unreachable!(),
-            };
-        }
-        context
-            .last_known_direction
-            .or(next_known_direction)
-            .unwrap_or(line_box_fragment::GLYPH_TEXT_TYPE_CONTEXT_DEPENDENT)
-    }
-
-    // https://www.unicode.org/reports/tr9/#N1
-    // A sequence of NIs takes the direction of the surrounding strong text if the text on both sides has the same
-    // direction.
-    // NB: Otherwise the sequence keeps its neutral type, which takes the direction of the fragment it lands in.
-    // FIXME: Look at the strong text in the other text nodes of the paragraph as well.
-    fn direction_of_strong_text_around(&self, context: &TextNodeContext<'_>, neutral_text: &[u16]) -> Option<u8> {
-        let next_known_direction = context.next_known_direction();
-        let direction_of_text_around = context
-            .last_known_direction
-            .filter(|last| Some(*last) == next_known_direction);
-
-        // NB: The two brackets of a pair get one direction, as in https://www.unicode.org/reports/tr9/#N0. So a
-        //     closing bracket takes what its opening bracket took: the direction of the strong text before the pair
-        //     and at the start of it, where those agree.
-        // FIXME: Look at all the strong text inside the pair, and pair brackets across text nodes.
-        let mut open_bracket_directions = context.open_bracket_directions.borrow_mut();
-        let mut direction_of_first_bracket = None;
-        for code_unit in neutral_text {
-            let direction = match u8::try_from(*code_unit) {
-                Ok(b'(' | b'[' | b'{') => {
-                    open_bracket_directions.push(direction_of_text_around);
-                    direction_of_text_around
-                }
-                Ok(b')' | b']' | b'}') => open_bracket_directions.pop().flatten(),
-                _ => continue,
-            };
-            direction_of_first_bracket.get_or_insert(direction);
-        }
-        direction_of_first_bracket.unwrap_or(direction_of_text_around)
     }
 
     /// The text node's next item, or none once it has no more and the preparer has moved past it.
@@ -1461,7 +1400,7 @@ impl<'pass> InlineContentPreparer<'pass> {
                 has_breaking_tab: false,
                 is_all_whitespace: true,
                 can_break_after: false,
-                text_type: line_box_fragment::GLYPH_TEXT_TYPE_COMMON,
+                bidi_level: 0,
             };
             let first_available_font = text_context
                 .style
@@ -1508,7 +1447,7 @@ impl<'pass> InlineContentPreparer<'pass> {
                 || next.has_breaking_newline
                 || next.has_breaking_tab
                 || next.font_index != chunk.font_index
-                || next.text_type != chunk.text_type
+                || next.bidi_level != chunk.bidi_level
                 || next.start != chunk.start + chunk.length
                 || text_is_set_upright(
                     text_context.writing_mode,
@@ -1536,36 +1475,15 @@ impl<'pass> InlineContentPreparer<'pass> {
         }
         is_last_chunk = text_context.next_chunk_index >= chunks.len();
 
-        let mut text_type = chunk.text_type;
-        if matches!(
-            text_type,
-            line_box_fragment::GLYPH_TEXT_TYPE_LTR | line_box_fragment::GLYPH_TEXT_TYPE_RTL
-        ) {
-            text_context.last_known_direction = Some(text_type);
-        }
-        if text_context.should_respect_linebreaks && chunk.has_breaking_newline {
-            is_last_chunk = true;
-            if chunk.is_all_whitespace {
-                text_type = line_box_fragment::GLYPH_TEXT_TYPE_END_PADDING;
-            }
-        }
-        if text_type == line_box_fragment::GLYPH_TEXT_TYPE_CONTEXT_DEPENDENT {
-            text_type = self.resolve_text_direction_from_context(&text_context);
-        } else if text_type == line_box_fragment::GLYPH_TEXT_TYPE_COMMON
-            && let Some(direction) = self.direction_of_strong_text_around(
-                &text_context,
-                &text_context.text[chunk.start..chunk.start + chunk.length],
-            )
-        {
-            text_type = direction;
-        }
-        if text_context.should_respect_linebreaks && chunk.has_breaking_newline {
-            // NB: The strong text before a preserved newline has no say in the paragraph after it either.
-            text_context.last_known_direction = None;
-            text_context.open_bracket_directions.borrow_mut().clear();
+        if chunk.has_breaking_newline {
             self.text_node_context = Some(text_context);
             return Some(PreparedItem::newline(text_node, chunk.start));
         }
+        let text_type = if bidi::direction_of_level(chunk.bidi_level) == direction::RTL {
+            line_box_fragment::GLYPH_TEXT_TYPE_RTL
+        } else {
+            line_box_fragment::GLYPH_TEXT_TYPE_LTR
+        };
 
         let full_text = text_context.text;
         let mut shaped_start = chunk.start;
@@ -2013,6 +1931,9 @@ impl<'context> RunItemResolver<'_, 'context> {
                 item.border_end = edge.border;
                 item.padding_end = edge.padding;
             }
+            if edge.is_low {
+                item.bidi_start_edges_on_left = edge.margin + edge.border + edge.padding;
+            }
             if !edge.is_start
                 && items.last().is_some_and(|last| {
                     last.type_ == ItemType::ForcedBreak && is_ancestor(edge.node, self.forced_break_owner)
@@ -2047,7 +1968,13 @@ impl<'context> RunItemResolver<'_, 'context> {
         } else {
             (sides.margin_right, sides.border_right, sides.padding_right)
         };
-        let physical = if is_start != self.context().atomic_items_are_right_to_left {
+        let physical = if !self.context().bidi_paragraphs.is_empty() {
+            ExtraBoxMetrics {
+                margin,
+                border,
+                padding,
+            }
+        } else if is_start != self.context().atomic_items_are_right_to_left {
             ExtraBoxMetrics {
                 margin: sides.margin_left,
                 border: sides.border_left,
@@ -2166,10 +2093,16 @@ impl<'context> RunItemResolver<'_, 'context> {
                 item.margin_start += edge.physical.margin;
                 item.border_start += edge.physical.border;
                 item.padding_start += edge.physical.padding;
+                if edge.is_low {
+                    item.bidi_start_edges_on_left += edge.margin + edge.border + edge.padding;
+                }
             } else if !edge.takes_leading_metrics && add_trailing_metrics {
                 item.margin_end += edge.physical.margin;
                 item.border_end += edge.physical.border;
                 item.padding_end += edge.physical.padding;
+                if edge.is_low {
+                    item.bidi_end_edges_on_left += edge.margin + edge.border + edge.padding;
+                }
             } else {
                 return true;
             }
@@ -2376,7 +2309,22 @@ impl<'context> RunItemResolver<'_, 'context> {
                 box_cells: Some(box_cells),
             }));
         }
-        if self.context().atomic_items_are_right_to_left {
+        let position = self.prepared.bidi_positions.get(item_index).copied().flatten();
+        let is_rtl = position
+            .and_then(|position| {
+                self.context()
+                    .bidi_paragraphs
+                    .get(position.paragraph)
+                    .map(|paragraph| bidi::direction_of_level(paragraph.level_at(position.offset)) == direction::RTL)
+            })
+            .unwrap_or(false);
+        let physical_left = item.margin_start + item.border_start + item.padding_start;
+        if is_rtl {
+            item.bidi_end_edges_on_left = physical_left;
+        } else {
+            item.bidi_start_edges_on_left = physical_left;
+        }
+        if self.context().atomic_items_are_right_to_left || is_rtl {
             std::mem::swap(&mut item.margin_start, &mut item.margin_end);
             std::mem::swap(&mut item.border_start, &mut item.border_end);
             std::mem::swap(&mut item.padding_start, &mut item.padding_end);
@@ -2506,6 +2454,9 @@ impl InlineLevelIterator {
             });
         if let Some((items, entered_box_model_nodes, empty_inline_boxes, prepared)) = shared {
             context.atomic_items_are_right_to_left = prepared.orders_atomic_items_right_to_left(context);
+            if !context.atomic_items_are_right_to_left {
+                context.bidi_paragraphs = prepared.bidi_paragraphs.clone();
+            }
             for node in entered_box_model_nodes.iter() {
                 lay_out_entered_inline_box(context, *node);
             }

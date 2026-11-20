@@ -19,6 +19,8 @@ pub(crate) struct PreparedInlineContent {
     pub(super) tab_stops: Box<[PreparedTabStop]>,
     /// Prepared item indices paired with UTF-16 offsets in their text nodes, ordered by item and then offset.
     pub(super) soft_wraps: Box<[(u32, u32)]>,
+    pub(super) bidi_positions: Box<[Option<bidi::Position>]>,
+    pub(super) bidi_paragraphs: Arc<[bidi::Paragraph]>,
 }
 
 const _: () = {
@@ -224,6 +226,8 @@ impl InlineContentPreparationBuffers {
             fonts: self.fonts.drain(..).collect(),
             tab_stops: self.tab_stops.drain(..).collect(),
             soft_wraps: self.soft_wraps.drain(..).collect(),
+            bidi_positions: Box::default(),
+            bidi_paragraphs: Arc::default(),
         }
     }
 }
@@ -281,6 +285,8 @@ impl PreparedInlineContent {
             .or_else(|| first_difference("font", &self.fonts, &fresh.fonts))
             .or_else(|| first_difference("tab stop", &self.tab_stops, &fresh.tab_stops))
             .or_else(|| first_difference("soft wrap", &self.soft_wraps, &fresh.soft_wraps))
+            .or_else(|| first_difference("bidi position", &self.bidi_positions, &fresh.bidi_positions))
+            .or_else(|| first_difference("bidi paragraph", &self.bidi_paragraphs, &fresh.bidi_paragraphs))
     }
 }
 

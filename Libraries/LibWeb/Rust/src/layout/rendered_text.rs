@@ -154,7 +154,6 @@ pub(crate) fn enroll_text_after_language_change(arena: &mut LayoutNodeArena, roo
 pub(crate) struct TextChunkCacheKey {
     pub(crate) should_wrap_lines: bool,
     pub(crate) should_respect_linebreaks: bool,
-    pub(crate) unidirectional_ltr: bool,
     pub(crate) white_space_collapse: u8,
     pub(crate) word_break: u8,
     pub(crate) line_break: u8,
@@ -175,6 +174,10 @@ pub(crate) struct CachedTextChunks {
 }
 
 impl CachedTextChunks {
+    pub(crate) fn new(key: TextChunkCacheKey, chunks: super::text_chunker::ChunkedText) -> Self {
+        Self { key, chunks }
+    }
+
     pub(crate) fn font_of(&self, chunk: &super::text_chunker::TextChunk) -> &libgfx_rust::font::FontHandle {
         self.chunks.font_of(chunk)
     }
@@ -279,10 +282,7 @@ impl TextMemos {
         // A nested measurement can request a different key while an iterator
         // still uses the previous chunks. Keep the chunks and their fonts alive
         // until that iterator finishes, even if this snapshot is replaced.
-        let entry = Arc::new(CachedTextChunks {
-            key: key.clone(),
-            chunks: compute(),
-        });
+        let entry = Arc::new(CachedTextChunks::new(key.clone(), compute()));
         self.chunks.with_row_mut(index, |memo| {
             *memo = Some(ChunksOfText {
                 rendered: rendered.clone(),
@@ -588,7 +588,6 @@ mod tests {
         let mut key = TextChunkCacheKey {
             should_wrap_lines: true,
             should_respect_linebreaks: false,
-            unidirectional_ltr: true,
             white_space_collapse: 0,
             word_break: 0,
             line_break: crate::css::css_enums::line_break::LOOSE,
@@ -646,7 +645,6 @@ mod tests {
         let key = TextChunkCacheKey {
             should_wrap_lines: true,
             should_respect_linebreaks: false,
-            unidirectional_ltr: true,
             white_space_collapse: 0,
             word_break: 0,
             line_break: crate::css::css_enums::line_break::AUTO,
@@ -665,7 +663,7 @@ mod tests {
             has_breaking_tab: false,
             is_all_whitespace: false,
             can_break_after: true,
-            text_type: 0,
+            bidi_level: 0,
         };
         let font = unsafe { libgfx_rust::font::FontHandle::intern(std::ptr::dangling()) };
         let chunked_hello = || ChunkedText {
@@ -737,7 +735,7 @@ mod tests {
     fn kept_prepared_inline_content_goes_with_an_epoch_bump_or_a_freed_slot_and_survives_a_fork() {
         use crate::layout::LayoutPass;
         use crate::layout::fc_run_cache::run_root_validity;
-        use crate::layout::prepared_inline_content::PreparedInlineContent;
+        use crate::layout::prepared_inline_content::InlineContentPreparationBuffers;
         use crate::layout::run_state::LayoutScratch;
         use std::sync::Arc;
 
@@ -751,14 +749,7 @@ mod tests {
                 &LayoutPass::for_test(arena, scratch, &host_findings_outside_runs),
                 block,
             );
-            let prepared = Arc::new(PreparedInlineContent {
-                validity,
-                items: Box::default(),
-                box_events: Box::default(),
-                fonts: Box::default(),
-                tab_stops: Box::default(),
-                soft_wraps: Box::default(),
-            });
+            let prepared = Arc::new(InlineContentPreparationBuffers::default().take_prepared_inline_content(validity));
             scratch.prepared_inline_content_memos().keep(block, prepared.clone());
             (validity, Arc::downgrade(&prepared))
         };

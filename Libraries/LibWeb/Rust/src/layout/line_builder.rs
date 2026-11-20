@@ -515,7 +515,11 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
     }
 
     /// Appends the box of `item`, an element item, to the current line.
-    pub(crate) fn append_box(&mut self, item: &inline_level_iterator::Item) {
+    pub(crate) fn append_box(
+        &mut self,
+        item: &inline_level_iterator::Item,
+        prepared: &prepared_inline_content::PreparedInlineContent,
+    ) {
         let node = item.node;
         let leading_size = item.border_start + item.padding_start;
         let trailing_size = item.padding_end + item.border_end;
@@ -530,6 +534,7 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
         let fragment_index = self.line(line_index).fragments.len();
         let fragment_facts = self.fragment_facts(node);
         let text_align_is_justify = may_justify_lines(self.containing_style());
+        let bidi = self.bidi_for_position(item.bidi_position(prepared));
         self.line_mut(line_index).add_fragment(
             node,
             0,
@@ -546,6 +551,8 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
             fragment_facts,
             text_align_is_justify,
             line_box_fragment::TrailingWhitespace::default(),
+            bidi,
+            item.bidi_start_edges_on_left + item.bidi_end_edges_on_left,
         );
         {
             let mut line = self.line_mut(line_index);
@@ -563,6 +570,7 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
             item.border_end + item.padding_end,
             item.margin_start,
             item.margin_end,
+            item.bidi_start_edges_on_left + item.bidi_end_edges_on_left,
         );
     }
 
@@ -573,6 +581,7 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
         trailing_size: CssPixels,
         leading_margin: CssPixels,
         trailing_margin: CssPixels,
+        bidi_edges_on_left: CssPixels,
     ) {
         self.prepare_to_append_inline_content();
         let line_index = self.ensure_last_line_index();
@@ -594,6 +603,8 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
             facts,
             false,
             line_box_fragment::TrailingWhitespace::default(),
+            None,
+            bidi_edges_on_left,
         );
         self.max_block_size_on_current_line = self.max_block_size_on_current_line.max(block_size);
     }
@@ -662,7 +673,7 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
         for (node, inline_offset) in nodes {
             // NB: The line has already advanced past these edges, so each fragment goes back to where its node was.
             let distance = self.line(self.line_count() - 1).inline_length - inline_offset;
-            self.append_empty_fragment(node, none, none, none - distance, distance);
+            self.append_empty_fragment(node, none, none, none - distance, distance, none);
         }
     }
 
@@ -687,6 +698,8 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
             content_block_size,
             glyphs,
             item.trailing_whitespace,
+            item.bidi_position(prepared),
+            item.bidi_start_edges_on_left + item.bidi_end_edges_on_left,
         );
         // https://drafts.csswg.org/css-overflow-4/#block-ellipsis
         // AD-HOC: Block ellipses displace content at soft wraps. Legacy clamping preserves glyph-based truncation
@@ -704,7 +717,7 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn append_text_chunk(
+    fn append_text_chunk(
         &mut self,
         node: Node,
         offset_in_node: usize,
@@ -717,27 +730,14 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
         content_block_size: CssPixels,
         glyphs: line_box_fragment::ItemGlyphRun<'_>,
         trailing_whitespace: line_box_fragment::TrailingWhitespace,
+        bidi_position: Option<bidi::Position>,
+        bidi_edges_on_left: CssPixels,
     ) {
         self.prepare_to_append_inline_content();
         let line_index = self.ensure_last_line_index();
-        let has_strong_direction = |text_type| matches!(text_type, GLYPH_TEXT_TYPE_LTR | GLYPH_TEXT_TYPE_RTL);
-        if self.containing_style().unicode_bidi() == unicode_bidi::PLAINTEXT
-            && !self.line(line_index).fragments.iter().any(|fragment| {
-                fragment
-                    .glyphs
-                    .as_ref()
-                    .is_some_and(|glyphs| has_strong_direction(glyphs.text_type))
-            })
-            && has_strong_direction(glyphs.text_type)
-        {
-            self.line_mut(line_index).direction = if glyphs.text_type == GLYPH_TEXT_TYPE_RTL {
-                direction::RTL
-            } else {
-                direction::LTR
-            };
-        }
         let facts = self.fragment_facts(node);
         let text_align_is_justify = may_justify_lines(self.containing_style());
+        let bidi = self.bidi_for_position(bidi_position);
         self.line_mut(line_index).add_fragment(
             node,
             offset_in_node,
@@ -754,9 +754,29 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
             facts,
             text_align_is_justify,
             trailing_whitespace,
+            bidi,
+            bidi_edges_on_left,
         );
         let line_block_length = self.line(line_index).block_length;
         self.max_block_size_on_current_line = self.max_block_size_on_current_line.max(line_block_length);
+    }
+
+    fn bidi_for_position(&self, position: Option<bidi::Position>) -> Option<(bidi::Position, &bidi::Paragraph)> {
+        let position = position?;
+        Some((position, self.context().bidi_paragraphs.get(position.paragraph)?))
+    }
+
+    pub(super) fn set_bidi_paragraph_direction(
+        &mut self,
+        item: &inline_level_iterator::Item,
+        prepared: &prepared_inline_content::PreparedInlineContent,
+    ) {
+        let Some((_, paragraph)) = self.bidi_for_position(item.bidi_position(prepared)) else {
+            return;
+        };
+        let direction = bidi::direction_of_level(paragraph.base_level);
+        let line_index = self.ensure_last_line_index();
+        self.line_mut(line_index).direction = direction;
     }
 
     /// Puts `box_`, an inline box that holds no in-flow content, at the end of the current line, for the line to take
@@ -1349,11 +1369,13 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
         }
 
         // Mirroring must use the retained line width, so discarded trailing spaces don't become leading gaps.
-        if self.context().atomic_items_are_right_to_left
+        if (self.context().atomic_items_are_right_to_left || !self.context().bidi_paragraphs.is_empty())
             && self.line(line_index).inline_length_before_block_ellipsis.is_none()
         {
             self.line_mut(line_index).trim_trailing_whitespace();
         }
+        self.line_mut(line_index)
+            .reorder_bidi_fragments(&self.context().bidi_paragraphs);
 
         let current_line_block_size = if self.line(line_index).inline_length_before_block_ellipsis.is_some() {
             self.line(line_index)
